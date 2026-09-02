@@ -9,6 +9,9 @@ server/data/cache/
 # client/fixtures.example.json.
 client/fixtures.local.json
 
+# Scratch work against the Yahoo API: a throwaway probe and what it dumps.
+tools/
+
 # Playwright MCP scratch output from browser checks
 .playwright-mcp/
 
