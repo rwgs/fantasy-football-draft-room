@@ -8,9 +8,9 @@
 // Two things here are not cached at all. A draft in progress is the one piece
 // of data in this app that is stale the moment it is read.
 
-import { cached } from './cache.js';
-import { buildBoard } from './board.js';
-import { joinKey, normPos, normTeam } from './names.js';
+import { cached } from '../../cache.js';
+import { buildBoard } from '../../board.js';
+import { joinKey, normPos, normTeam } from '../../names.js';
 
 const BASE = 'https://api.sleeper.app/v1';
 const USERS_MAX_AGE_MS = 60 * 60 * 1000;

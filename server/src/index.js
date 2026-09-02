@@ -11,8 +11,7 @@ import express from 'express';
 import cors from 'cors';
 import { ADP_SOURCES, FORMATS, buildBoard, nearestSize } from './board.js';
 import { parseRankings } from './rankings.js';
-import { importLeague } from './sleeperLeague.js';
-import { draftPicks, draftState, leagueSetup, leagueUsers } from './sleeperDraft.js';
+import { PLATFORM_NAMES, platformFor } from './platforms/index.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5178;
@@ -25,22 +24,38 @@ app.use(cors());
 app.use(express.json({ limit: '4mb' }));
 app.use(express.text({ limit: '4mb', type: ['text/csv', 'text/plain'] }));
 
-/** A Sleeper league or draft ID is a long run of digits and nothing else. */
-const IS_ID = /^\d{6,25}$/;
-
 /**
- * Read an ID out of the path, or answer 400 and return null.
+ * Read the platform and the ID out of the path, or answer and return null.
  *
  * Every one of these IDs is pasted into an upstream URL, so it is checked here
  * rather than trusted. Express decodes a path parameter before this sees it,
  * which is what makes the check worth doing: without it an encoded slash walks
  * the upstream path instead of naming a league.
+ *
+ * What counts as an ID belongs to the platform. Sleeper writes a long run of
+ * digits and Yahoo writes a league key with dots in it, so a single rule here
+ * would have to be loose enough to admit both and would stop being a check.
+ *
+ * The platform name is never echoed back. It is path input, and the reply lists
+ * the names that do exist instead.
  */
-function readId(req, res) {
+function readTarget(req, res) {
+  const platform = platformFor(req.params.platform);
+  if (!platform) {
+    res.status(404).json({
+      error: 'No league platform by that name. This service reads: '
+        + PLATFORM_NAMES.join(', ') + '.',
+    });
+    return null;
+  }
+
   const id = String(req.params.id || '').trim();
-  if (IS_ID.test(id)) return id;
-  res.status(400).json({ error: 'A Sleeper ID is a long run of digits. Check the one you sent.' });
-  return null;
+  if (!platform.isValidId(id)) {
+    res.status(400).json({ error: platform.idHint });
+    return null;
+  }
+
+  return { platform, id };
 }
 
 function readQuery(q) {
@@ -56,7 +71,13 @@ function readQuery(q) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, year: DEFAULT_YEAR, formats: FORMATS, adpSources: ADP_SOURCES });
+  res.json({
+    ok: true,
+    year: DEFAULT_YEAR,
+    formats: FORMATS,
+    adpSources: ADP_SOURCES,
+    platforms: PLATFORM_NAMES,
+  });
 });
 
 /** The merged draft board for one scoring format and league size. */
@@ -161,23 +182,29 @@ app.post('/api/notes', async (req, res) => {
   }
 });
 
-/** Read a real Sleeper league and return draft settings that match it. */
-app.get('/api/sleeper/league/:id', async (req, res) => {
-  const id = readId(req, res);
-  if (!id) return;
+/**
+ * Read a real league and return draft settings that match it.
+ *
+ * The platform is a path segment, so `/api/sleeper/league/<id>` is the same URL
+ * it has always been and every one of these routes answers for whichever
+ * platform gets added next without being touched again.
+ */
+app.get('/api/:platform/league/:id', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
   try {
-    res.json(await importLeague(id, req.query.force === '1'));
+    res.json(await target.platform.importLeague(target.id, req.query.force === '1'));
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }
 });
 
 /** Who is in a league, so you can say which team is yours. */
-app.get('/api/sleeper/league/:id/users', async (req, res) => {
-  const id = readId(req, res);
-  if (!id) return;
+app.get('/api/:platform/league/:id/users', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
   try {
-    res.json(await leagueUsers(id, req.query.force === '1'));
+    res.json(await target.platform.leagueUsers(target.id, req.query.force === '1'));
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }
@@ -187,22 +214,24 @@ app.get('/api/sleeper/league/:id/users', async (req, res) => {
  * Everything about a real league in one answer: the seats and their team names,
  * the keepers declared so far, and the state of the draft.
  */
-app.get('/api/sleeper/league/:id/setup', async (req, res) => {
-  const id = readId(req, res);
-  if (!id) return;
+app.get('/api/:platform/league/:id/setup', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
   try {
-    res.json(await leagueSetup(id, readQuery(req.query), req.query.force === '1'));
+    res.json(await target.platform.leagueSetup(
+      target.id, readQuery(req.query), req.query.force === '1',
+    ));
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }
 });
 
 /** Whether a draft has opened, and who sits in which slot. */
-app.get('/api/sleeper/draft/:id', async (req, res) => {
-  const id = readId(req, res);
-  if (!id) return;
+app.get('/api/:platform/draft/:id', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
   try {
-    res.json(await draftState(id));
+    res.json(await target.platform.draftState(target.id));
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }
@@ -212,12 +241,12 @@ app.get('/api/sleeper/draft/:id', async (req, res) => {
  * Every pick made in a real draft so far, mapped onto this board.
  * Never cached: a draft in progress is stale the moment it is read.
  */
-app.get('/api/sleeper/draft/:id/picks', async (req, res) => {
-  const id = readId(req, res);
-  if (!id) return;
+app.get('/api/:platform/draft/:id/picks', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
   try {
     res.set('cache-control', 'no-store');
-    res.json(await draftPicks(id, readQuery(req.query)));
+    res.json(await target.platform.draftPicks(target.id, readQuery(req.query)));
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }

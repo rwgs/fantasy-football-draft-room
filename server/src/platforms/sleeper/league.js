@@ -11,7 +11,7 @@
 // quietly dropped. A league that imports with a wrong roster is worse than one
 // that refuses to import.
 
-import { cached } from './cache.js';
+import { cached } from '../../cache.js';
 
 const BASE = 'https://api.sleeper.app/v1';
 const MAX_AGE_MS = 30 * 60 * 1000;
