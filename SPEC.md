@@ -152,12 +152,15 @@ browser cannot call directly, cache them, and join them.
 
 ## Unresolved questions
 
-- Whether Yahoo's `draftresults` populates during a live draft rather than only
-  after it completes. The library documentation says it does; this has not been
-  confirmed against a real draft. Answered by running `tools/yahoo/probe.mjs`
-  mid-draft. The draft assistant mode for Yahoo depends on it entirely.
+- Whether a client reconnecting partway through a Yahoo draft is sent the picks
+  it missed. Not observed: the socket was already open every time it was
+  watched. It decides only what a mid-draft reload costs, because the bridge
+  loads with the page and is there from the first pick.
+- Whether a real Yahoo draft behaves like a mock one. Every observation so far
+  comes from the mock lobby. Answered by watching one real draft, and it must be
+  answered before draft day rather than during it.
 - Whether Yahoo exposes any equivalent of pre-draft traded picks. Nothing found
-  so far. Answered by the same probe.
-- Whether the upstream project wants Yahoo support at all, given that Yahoo
-  gates API access behind human approval. Answered by the upstream maintainer.
-  See `DECISIONS.md`.
+  so far, and nothing in the draft room suggests it.
+- Whether the upstream project wants Yahoo support at all, now that it needs a
+  userscript rather than an API key. Answered by the upstream maintainer. See
+  `DECISIONS.md`.

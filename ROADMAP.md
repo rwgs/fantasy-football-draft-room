@@ -81,37 +81,40 @@ verified rather than inferred from a clean rename diff.
 
 - The self-test itself. That is the point of the phase.
 
-## Phase 5: Yahoo, read-only — blocked
+## Phase 5: Yahoo, read-only, through the browser
 
 ### Outcome
 
-A Yahoo league can be loaded and a Yahoo draft followed, for a user holding
-their own approved Yahoo credentials. Sleeper remains the default and keeps
-needing no credentials.
+A Yahoo draft is followed pick by pick, by a user who has installed a
+userscript. No account, no API key and no approval from Yahoo. Sleeper remains
+the default and keeps needing no userscript either.
 
 ### Included work
 
-- OAuth 2.0 authorization code flow, with the client secret in the user's own
-  `server/.env` and the refresh token held locally.
-- A `yahoo` platform directory implementing the five methods.
-- Joining Yahoo picks onto the board by name, position and team, since Yahoo's
-  player keys mean nothing to this board.
-- A platform selector in the client, and honest documentation of what Yahoo
-  costs a user.
+- `main` merged into `yahoo-platform`, which was cut before the planning
+  documents existed.
+- A userscript matching the draft room, which reads the pool and the draft
+  socket with the browser's own cookies and posts decoded picks to the service.
+- A `yahoo` platform directory implementing the five methods, holding what the
+  bridge posts in memory only.
+- Joining Yahoo picks onto the board by name, position and team, which the pool
+  endpoint supports as it stands.
+- A platform selector in the client, and honest documentation of what a
+  userscript costs a user and how it can break.
 
 ### Dependencies and risks
 
-- **Blocked on Yahoo approving API access.** Applied 2026-09-01; no published
-  turnaround. Nothing in this phase can be built or tested until it lands.
-- The live `draftresults` question in `SPEC.md` is unanswered. If it only
-  populates after a draft completes, the assistant mode does not work for Yahoo
-  and this phase delivers league import alone.
+- No longer blocked on Yahoo. The draft room never touches the API that was
+  applied for; see the 2026-09-04 entry in `DECISIONS.md`.
+- The frame format is undocumented and unpromised. A Yahoo deploy can break the
+  bridge with no warning, mid-draft.
 - Name matching moves onto the critical path of a live draft, where a miss puts
   a hole in the board rather than a footnote in an import.
-- Traded picks and pre-draft draft state look absent from Yahoo. Expect to lose
-  them rather than to find them.
-- Yahoo's JSON is a mechanical conversion of XML, nesting everything in
-  `{"0": ..., "count": n}` pseudo-arrays.
+- Every observation so far comes from a mock room, not a real league.
+- Whether a reconnecting client is sent the picks it missed is unobserved, so a
+  mid-draft reload is of unknown cost.
+- Traded picks and pre-draft draft state still look absent. Expect to lose them
+  rather than to find them.
 
 ### Exit criteria
 
@@ -122,10 +125,10 @@ needing no credentials.
 
 ### Validation
 
-- `tools/yahoo/probe.mjs` against a real league, before any implementation, to
-  replace guesses about the schema with the schema.
+- The frames captured in `tools/yahoo/` decoded offline, so the pick decode is
+  checked without needing a draft to be running.
 - The `engine:test` suites, extended to cover Yahoo where fixtures allow.
-- Manual: a real draft, followed live.
+- Manual: a live mock beside the app, then a real draft, followed live.
 
 ## Phase 6: Release readiness
 
@@ -135,15 +138,19 @@ The Yahoo work is fit to publish, or a decision is recorded not to publish it.
 
 ### Included work
 
-- `README.md` and the repository description corrected. Both currently promise
-  "no account, no API keys", which stops being true for a Yahoo user.
+- `README.md` and the repository description checked. "No account, no API keys"
+  survives the browser route, but following a Yahoo draft needs a userscript
+  installed, and that has to be said where the promise is made.
+- The userscript documented for what it is: code running on somebody else's
+  page, against a format nobody promised, which Yahoo can break without notice.
 - `CHANGELOG.md` entry.
-- Security review of the OAuth flow and token storage.
+- Security review of the ingestion route and its cross-origin allowance, and a
+  check that no Yahoo session can reach the service.
 - The upstream question in `DECISIONS.md` resolved.
 
 ### Dependencies and risks
 
-- Depends on Phase 5, and on Yahoo's answer about redistribution.
+- Depends on Phase 5.
 
 ### Exit criteria
 

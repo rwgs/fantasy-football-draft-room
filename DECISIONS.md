@@ -9,9 +9,114 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-04 Yahoo is read through the browser, not through the Fantasy Sports API
+
+Status: Accepted. Supersedes the consequences of the 2026-09-01 entry below.
+
+### Decision
+
+A Yahoo draft is followed by a userscript running in the user's own draft room
+tab. It reads Yahoo's `pub-api` and the draft socket with the cookies the
+browser already holds, and posts plain picks to the local service. The Fantasy
+Sports API and its OAuth flow are set aside until a key arrives, and may never
+be needed.
+
+### Why
+
+The draft room does not use the API this project applied for. It uses
+`pub-api.fantasysports.yahoo.com/fantasy/v3/`, which authenticates with the
+browser's session cookie and nothing else. Verified rather than inferred: the
+same URLs answer 200 inside the room and, from anywhere without the cookie,
+
+    HTTP 403  {"description": "Unable to retrieve cookie."}
+
+That removes the wall the 2026-09-01 entry was built around. There is no
+application, no human review and no unpublished turnaround, because there is no
+registered application at all — only someone reading their own league in their
+own browser.
+
+### What was observed
+
+Against a live 14-team mock draft on 2026-09-04, using the tools in
+`tools/yahoo/`. Everything here was watched happening, not read in a document.
+
+- **Picks arrive only over a websocket**, as pipe-delimited text.
+  `0|<overall>|<playerId>|<teamId>|<slot>|<cost>` is a pick,
+  `D|<overall>|<teamId>|<seconds>` hands over the clock, `C|<n>` is a heartbeat.
+  Yahoo pushes its own pick grades on `G|` and value labels on
+  `O|draft-labels|` down the same socket.
+- **`teamId` is the draft slot.** Round 8 of a 14-team snake runs picks 99 to
+  112 in reverse, so slot 13 takes pick 100 and slot 10 takes pick 103. The
+  captured frames say exactly that, so pick order needs no second lookup.
+- **No REST endpoint carries draft state.** `players/nfl/<league>` stays at 1195
+  entries with drafted players still in it and no field marking them gone;
+  `percent-drafted` and `average-pick` are historical ADP. `draftstatus` carries
+  only a websocket address. `draftresults`, `draft`, `picks` and `draftpicks` do
+  not exist. The socket is the only live source.
+- **The player pool joins onto this board unchanged.** Entries carry `fname`,
+  `lname`, `display_pos` and `team_abbr` as separate fields, so
+  `joinKey(fname + ' ' + lname, display_pos, team_abbr)` works with `names.js`
+  exactly as it stands. The abbreviated names on screen are a display style, not
+  the data. Defences still join on team, which is why their naming does not
+  matter.
+- **The room URL says which seat is yours.** `/draftclient/f1/<league>/<team>`
+  names the league and the reader's own team, and team is slot. Sleeper cannot
+  do this — it makes you pick your manager from a list and cannot publish the
+  order until minutes before the draft — so the Yahoo assistant needs no such
+  step at all.
+- **The room URL carries a one-time `auth` token.** Reloading it does not
+  reconnect, it leaves the draft. A userscript therefore attaches to the room as
+  the lobby opened it and can never navigate there itself.
+- **The DOM is not usable.** Class names are build-hashed, names are shown
+  abbreviated, and there is no cohesive pick list to read.
+
+### Rejected alternatives
+
+- **Scraping the draft room DOM.** Rejected on the evidence above: hashed class
+  names break at Yahoo's next deploy, and `C. Olave` cannot be joined by
+  `forenamesAgree`, which needs three shared opening letters.
+- **The service calling `pub-api` with an exported cookie.** It would work, and
+  it would put a user's Yahoo session on a server. That is the one thing
+  `AGENTS.md` refuses outright, and it would trade this project's central
+  promise for a convenience.
+- **Waiting for the API key.** Set aside rather than rejected. If it arrives it
+  is worth comparing, particularly for pre-draft league import, but nothing now
+  waits on it.
+- **A packaged browser extension.** Rejected for now: a userscript needs no
+  store listing, no review and no signing, and it is one file a user can read
+  before running. Revisit only if distribution demands it.
+
+### Consequences
+
+- Yahoo support stops being author-only. Anyone who can install a userscript can
+  use it, which reverses the central consequence of the 2026-09-01 entry.
+- The README's "no account, no API keys" stays true. It gains a different
+  caveat instead: following a Yahoo draft needs a userscript installed, which is
+  a real setup step even though it is not a credential.
+- A userscript is a new kind of artifact for this repository — code that runs on
+  a third party's page, versioned against markup and a protocol neither
+  documented nor promised. It needs its own home, its own note in `README.md`,
+  and an honest statement that Yahoo can break it without warning.
+- The platform registry gets its second entry, which is what Phase 3 left
+  pending.
+- The Yahoo session never leaves the browser, so the service holds no
+  credential and stays as safe to run as it is today.
+
+### Still unverified, and what it would cost
+
+- **Whether a client reconnecting mid-draft is sent the picks it missed.** Not
+  observed: the socket was already open every time it was watched. It decides
+  only what happens if the tab reloads mid-draft, because a userscript running
+  at `document-start` is present from the first pick.
+- **Whether a real Yahoo draft behaves like a mock.** Every observation above
+  comes from the mock lobby. This is cheap to recheck and must happen before
+  draft day.
+
 ## 2026-09-01 Yahoo support is for its author, not for the project's users
 
-Status: Accepted.
+Status: Superseded by the 2026-09-04 entry above. Its reading of Yahoo's OAuth
+flow still holds; its conclusion that Yahoo support cannot reach ordinary users
+does not, because the draft room never uses that API.
 
 ### Decision
 

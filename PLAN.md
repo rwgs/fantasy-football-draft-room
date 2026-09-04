@@ -1,136 +1,121 @@
-# Yahoo league support
+# Following a Yahoo draft through the browser
 
 Approach for the change currently in flight. Replaced when the next non-trivial
 change begins, so anything that must outlive this change is promoted first.
 
-Branch: `yahoo-platform`. Phase 3 of `ROADMAP.md` is committed; Phase 4 is the
-next actionable step and Phase 5 is blocked.
+Branch: `yahoo-platform`. It is **behind `main`**: it was cut before the
+planning documents existed, so all seven show as deleted against it. Merging
+`main` into it is the first step and is needed before it can ever merge back.
+
+What Yahoo does and does not offer is settled and recorded in the 2026-09-04
+entry of `DECISIONS.md`. This document is only how the software is built on top
+of it.
 
 ## Problem
 
-The tool reads exactly one league platform. Loading a real league — its roster
-shape, scoring, seats, team names, keepers and traded picks — works for Sleeper
-and for nothing else, and the draft assistant follows a Sleeper draft or no
-draft at all. A user who plays in Yahoo gets the mock draft room, their own
-rankings and the grade, and none of the features that make the tool worth
-running during an actual draft.
+The draft assistant follows a Sleeper draft or no draft at all. A Yahoo user
+gets the mock room, their rankings, their notes and the grade, and none of the
+live features that make the tool worth running while an actual draft happens.
 
-Sleeper is also wired straight through the service's routes, so there is no
-place a second platform could be added without duplicating them.
+The Fantasy Sports API was the obvious way in and it is gated behind a human
+review with no published turnaround. The draft room does not use that API, so
+the tool does not have to either.
 
-## Constraints discovered
+## What the design is forced into
 
-Each of these was verified this session rather than assumed.
+Three constraints decide the shape, and none of them is a preference.
 
-- **Most of the app is already platform-neutral.** "Sleeper" names two unrelated
-  things here: a *data feed* (`server/src/sources/sleeper.js`, projections and
-  ADP) and a *league platform*. Only the second is coupled. The board, rankings,
-  notes, engine and grading are untouched by this work, and a Yahoo user keeps
-  the Sleeper data feed either way. Verified by reading the imports.
-
-- **Yahoo requires OAuth 2.0 with a confidential client.** Consumer key and
-  secret, tokens expiring in 3600 seconds, refresh tokens for renewal. The
-  secret cannot live in the browser, so the token exchange is server-side.
-  Verified from Yahoo's OAuth 2.0 guide.
-
-- **Yahoo API access is gated behind human review.** "Fantasy Sports" does not
-  appear in the permissions list when registering an application; access comes
-  from a reviewed application instead. This is the constraint that shaped the
-  whole approach, and it was expensive to discover — it is invisible until you
-  reach the registration form and find the permission missing. Verified from
-  `https://sports.yahoo.com/developer/access/` and from the registration form
-  itself. Applied 2026-09-01.
-
-- **Yahoo's `draftresults` is documented to populate mid-draft**: "if this is
-  called during the draft this includes the players that have been drafted thus
-  far." Each pick carries `pick`, `round`, `cost`, `team_key` and `player_id`.
-  Verified from library documentation only, **not** against a real draft. The
-  assistant mode depends on it entirely.
-
-- **Yahoo player keys are useless to this board.** Sleeper's pick payloads carry
-  Sleeper player IDs, which *are* the board's IDs, so the join is direct
-  (`server/src/platforms/sleeper/draft.js`). Yahoo's `nfl.p.12345` means
-  nothing here, so every Yahoo pick has to go through the name, position and
-  team matching in `server/src/names.js`.
-
-- **Traded picks and pre-draft draft state appear absent from Yahoo.** No
-  equivalent of Sleeper's `traded_picks` was found, nor of a draft order that
-  can be read before the draft opens.
-
-- **Yahoo's JSON is a mechanical conversion of its XML**, nesting collections in
-  `{"0": {...}, "count": n}` pseudo-arrays.
+- **Only the browser can read a Yahoo draft.** `pub-api` answers a session
+  cookie and refuses everything else. The service has no cookie and must never
+  hold one, so the code that reads Yahoo runs in the user's tab and nothing
+  else can.
+- **Only the browser can resolve a pick.** A pick frame names a player by a
+  Yahoo ID, and the only thing that maps that ID to a person is the pool
+  endpoint, which needs the same cookie. So the userscript resolves each pick to
+  a name, position and team before sending it. The service is handed people, not
+  identifiers.
+- **Picks exist only as they happen.** Nothing on Yahoo lists the picks made so
+  far. A userscript running at `document-start` sees the socket open and every
+  frame after it, which is why it must load with the page rather than be
+  switched on partway through.
 
 ## Approach
 
-Three steps, in order, each landing on its own.
+Four steps, in order, each landing on its own.
 
-**1. Extract the seam. Committed as `9aa1d4b`.** Move
-`server/src/sleeperLeague.js` and `server/src/sleeperDraft.js` into
-`server/src/platforms/sleeper/` unchanged, add an adapter exposing the five
-methods those files already provide, and add an explicit registry. Change the
-routes in `server/src/index.js` to take the platform as a path segment, which
-keeps every existing URL working and leaves `client/src/api.ts` untouched. Move
-ID validation onto the platform. Reuse `cached()`, `buildBoard()` and the
-`names.js` helpers exactly as they are.
+**1. Catch the branch up.** Merge `main` into `yahoo-platform`, bringing the
+planning documents and the two commits that followed. No behaviour changes.
+Phase 4 of `ROADMAP.md` — the fixtures that prove the seam — is still worth
+closing first, because a regression in the moved Sleeper code is much cheaper to
+find now than underneath a second platform.
 
-**2. Close the verification gap.** Populate `client/fixtures.local.json` and run
-the full self-test, so step 1 is proven rather than inferred.
+**2. The userscript.** One file, `userscript/yahoo-draft-bridge.user.js`,
+matching the draft room at `document-start`. It replaces `window.WebSocket` with
+a wrapper that passes everything through untouched and copies each frame aside,
+which has to happen before Yahoo's bundle constructs its socket. It fetches the
+pool and the seats once, keeps an ordered list of picks decoded from `0|`
+frames, and posts them to the service. It reads the league and the user's own
+team off the room's own URL, so it cannot be pointed at the wrong league and
+never has to ask which seat is yours.
 
-**3. Implement Yahoo, once approved.** Run `tools/yahoo/probe.mjs` against a
-real league first and design from the dumped JSON rather than from the notes
-above. Then a `yahoo` platform directory implementing the same five methods,
-an OAuth callback route, the secret in the user's own `server/.env`, and picks
-joined through `names.js`.
+**3. The Yahoo platform.** `server/src/platforms/yahoo/`, implementing the same
+five methods as Sleeper and registered as the second entry. It holds what the
+bridge posts in memory only, never on disk: a draft in progress is stale the
+moment it is read, and a cache would be a second copy of somebody's league
+sitting in a file. `draftPicks` joins the posted people onto the board with
+`joinKey` exactly as Sleeper's does, and returns the same `LivePicks` shape, so
+nothing downstream of it can tell the two platforms apart.
+
+**4. The platform selector.** `client/src/api.ts` hard-codes `/sleeper/` in
+five places. Thread the platform through those calls and add the choice to the
+setup screen. This is the only part of the client that changes.
 
 ## Trade-offs
 
-- **A registry with one entry.** Until step 3 lands, this is an abstraction with
-  a single implementation, and its justification is pending. Accepted because
-  the alternative — extracting the seam and implementing Yahoo in one diff —
-  mixes a provable refactor with unprovable new network code.
+- **One route accepts a cross-origin POST.** `AGENTS.md` records that the client
+  sees one origin and never meets CORS. The bridge posts from
+  `football.fantasysports.yahoo.com`, so the ingestion route needs a narrow
+  allowance naming that origin alone. A userscript manager's own request API
+  would avoid it and tie the script to one manager; the allowance is the smaller
+  cost. The route stays loopback-only, where anything able to reach it is
+  already running on the machine.
 
-- **The seam is shaped around Sleeper.** The five methods are Sleeper's, and
-  Yahoo may not fit them: it has no traded picks and no readable pre-draft
-  state. Expect the interface to bend when the second implementation arrives.
-  Deliberately not designed around a Yahoo shape that has not been observed yet.
+- **The bridge is versioned against something nobody promised.** Yahoo can
+  change the frame format in a deploy and the script stops working, with no
+  deprecation and no warning. This is stated plainly to users rather than
+  discovered by them mid-draft, and the decode is kept in one small function so
+  that a break is cheap to fix.
 
-- **Yahoo support helps almost nobody.** See `DECISIONS.md`. The honest position
-  is that this is a personal feature in a public repository, and it will be
-  documented as one.
+- **A userscript is a setup step.** It is not a credential and not an account,
+  so the README's promise survives, but "install this in Tampermonkey" is real
+  friction that Sleeper does not ask for. Sleeper stays the default.
 
-- **Surviving risk:** if `draftresults` turns out not to populate live, the
-  assistant mode — the reason to build this — does not work for Yahoo, and the
-  phase delivers league import alone. This is known and unresolved, and it is
-  cheap to check the moment access is granted.
+- **The seam bends here.** Sleeper is pulled by the service; Yahoo is pushed to
+  it. The five methods still fit, but `draftPicks` reads from memory rather than
+  fetching, and `leagueSetup` answers from what was posted. If the fit turns
+  out to be forced, the interface is what changes, not the Yahoo code.
 
 ## Verification
 
-**Automated.**
+**The decode is testable without a draft.** `tools/yahoo/dump/` holds real
+captured frames from a 14-team mock, including 111 picks. Decoding that file and
+checking the picks against the pool is a check that runs offline and fails
+loudly, and it is the first thing to write.
 
-- `npm run typecheck` — catches a broken import or a changed shape after the
-  move. Run, clean.
-- `npm --prefix client run lint` — run; warnings unchanged from baseline and all
-  pre-existing in `App.tsx`.
-- `npm run engine:test` — run, all checks passed, **but two suites skipped**.
-  See below.
+**Automated.** `npm run typecheck`, `npm --prefix client run lint`, and
+`npm run engine:test` with the data service up. The Yahoo path adds no suite
+that can run without a live draft, which is why the frame fixture above matters.
 
-**Manual, and run.** Against the service on the refactored code: a malformed ID
-returns the original 400 and message; a well-formed ID Sleeper does not hold
-returns the upstream 400; an unknown platform returns 404 listing the known
-names; an encoded-slash traversal attempt is still refused; the untouched board
-route still answers 200. `/api/health` reporting `platforms` was used to confirm
-the service under test was the new code and not a stale process on port 5178 —
-which it initially was, invalidating the first run of these checks.
+**Manual, and required.** A live mock with the app open beside it: every pick in
+the room appears on the board, in the right slot, against the right seat, and no
+pick is reported unmatched. Then the same against a real league before draft
+day, because everything known so far comes from mock rooms.
 
-**Not verified, and the specific failure it would catch.** The self-test suites
-"Following a real draft" and "Reading a real league" skip without
-`client/fixtures.local.json`. They are the only automated checks that call
-`importLeague`, `leagueUsers`, `leagueSetup`, `draftState` or `draftPicks` — in
-other words, every function this change moved. A regression inside those
-functions would pass everything that was run. The rename similarity of 98% and
-99% shows the files were not meaningfully edited, which is evidence but not a
-test. Closing this is the current task in `TASKS.md`.
+**Known gaps, carried deliberately.**
 
-**Cannot be verified in this environment.** Nothing about Yahoo, until access is
-approved. No Yahoo endpoint answers without it, so every Yahoo statement in this
-document is from documentation rather than observation, and is marked as such.
+- Whether a reconnecting client is sent the picks it missed is unobserved. It
+  decides only what a mid-draft reload does, since the script loads with the
+  page.
+- Phase 4's fixtures are still absent, so the Sleeper code this builds beside is
+  proven by a rename diff rather than by a test.
+- No Yahoo observation yet comes from a real draft.
