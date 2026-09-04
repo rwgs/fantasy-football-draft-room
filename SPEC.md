@@ -152,10 +152,6 @@ browser cannot call directly, cache them, and join them.
 
 ## Unresolved questions
 
-- Whether a client reconnecting partway through a Yahoo draft is sent the picks
-  it missed. Not observed: the socket was already open every time it was
-  watched. It decides only what a mid-draft reload costs, because the bridge
-  loads with the page and is there from the first pick.
 - Whether a real Yahoo draft behaves like a mock one. Every observation so far
   comes from the mock lobby. Answered by watching one real draft, and it must be
   answered before draft day rather than during it.

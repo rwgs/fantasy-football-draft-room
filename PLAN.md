@@ -34,10 +34,12 @@ Three constraints decide the shape, and none of them is a preference.
   endpoint, which needs the same cookie. So the userscript resolves each pick to
   a name, position and team before sending it. The service is handed people, not
   identifiers.
-- **Picks exist only as they happen.** Nothing on Yahoo lists the picks made so
-  far. A userscript running at `document-start` sees the socket open and every
-  frame after it, which is why it must load with the page rather than be
-  switched on partway through.
+- **The socket has to be hooked before it is built.** Nothing lists the picks
+  over HTTP, and the only chance to wrap `WebSocket` is before Yahoo's bundle
+  constructs one, so the script runs at `document-start` or not at all. What it
+  does not have to do is remember anything: the server replays every pick made
+  so far in a `P|` frame on connect, so a reloaded tab catches itself up and a
+  crash mid-draft costs nothing.
 
 ## Approach
 
@@ -115,9 +117,6 @@ day, because everything known so far comes from mock rooms.
 
 **Known gaps, carried deliberately.**
 
-- Whether a reconnecting client is sent the picks it missed is unobserved. It
-  decides only what a mid-draft reload does, since the script loads with the
-  page.
 - Phase 4's fixtures are still absent, so the Sleeper code this builds beside is
   proven by a rename diff rather than by a test.
 - No Yahoo observation yet comes from a real draft.

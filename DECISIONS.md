@@ -111,10 +111,11 @@ repeated here.
 
 ### Still unverified, and what it would cost
 
-- **Whether a client reconnecting mid-draft is sent the picks it missed.** Not
-  observed: the socket was already open every time it was watched. It decides
-  only what happens if the tab reloads mid-draft, because a userscript running
-  at `document-start` is present from the first pick.
+- ~~**Whether a client reconnecting mid-draft is sent the picks it missed.**~~
+  Answered later the same day, after this entry was written: yes. The server
+  replays every pick in a `P|` frame on connect, observed on a reconnect into a
+  draft 91 picks deep. A reloaded tab catches itself up, so the bridge needs to
+  remember nothing across a crash. See `docs/yahoo-draft-protocol.md`.
 - **Whether a real Yahoo draft behaves like a mock.** Every observation above
   comes from the mock lobby. This is cheap to recheck and must happen before
   draft day.

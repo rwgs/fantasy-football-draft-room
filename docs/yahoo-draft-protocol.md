@@ -86,16 +86,25 @@ Frames are pipe-delimited text, one record per frame.
 
 | Frame | Meaning |
 |---|---|
-| `H\|S\|30\|0\|0\|0` | Settings. `S` is snake and `30` the seconds per pick — both **inferred**, and both agree with the order and clock actually seen. The three zeros are unknown |
-| `R\|<team>\|<team>\|…` | **The entire draft order**, one entry per pick, in pick order. **Observed** as `1..14, 14..1, 1..14` for a 14-team snake |
+| `H\|S\|30\|0\|0\|<started>` | Settings. `S` is snake and `30` the seconds per pick — both **inferred**, and both agree with the order and clock actually seen. The last field is **observed** to be `0` before a draft opens and `1` on reconnecting to one in progress. The middle two zeros are unknown |
+| `R\|<team>\|<team>\|…` | **The entire draft order**, one entry per pick, in pick order. **Observed** at exactly 210 entries for a 14-team, 15-round league, running `1..14, 14..1, …` |
 | `Q` | Unknown. No payload |
-| `A\|14=1\|13=1\|12=0\|…` | One flag per seat. Autopick, **inferred** from nothing but the shape |
-| `P` | Unknown. No payload |
+| `A\|14=0\|13=2\|12=0\|11=1\|…` | One value per seat. **Observed** taking `0`, `1` and `2`, so it is not a boolean and the obvious "autopick on/off" reading is wrong. Meaning unknown |
+| `P\|<overall>=<player>,<team>,<cost>\|…` | **Every pick made so far.** Empty on a draft that has not started, which is why it first appeared as a bare `P`. See below |
 | `w\|3600\|20` | Unknown. `3600` looks like a limit in seconds |
 
-`R|` is the important one: the order is given, not implied. A league with
-keepers, traded picks or a custom order should be read from here rather than
-derived, and deriving it would be silently wrong for exactly those leagues.
+Two of these carry the state a client needs to catch up, and both are
+**observed**, on a reconnect into a draft 91 picks deep.
+
+`R|` gives the order rather than implying it. A league with keepers, traded
+picks or a custom order should be read from here, and deriving the order from a
+snake would be silently wrong for exactly those leagues.
+
+`P|` replays the picks. Its records are `<overall>=<playerId>,<teamId>,<cost>` —
+the same fields as a live `0|` pick in a more compact form, so one decoder
+handles both with a little care about the ordering of the fields. This is what
+makes a mid-draft reload survivable: a client reconnects and is told everything
+it missed, so nothing has to be remembered across a crash.
 
 ### Sent while the draft runs
 
@@ -106,9 +115,10 @@ derived, and deriving it would be silently wrong for exactly those leagues.
 | `C\|<seconds>` | Clock ticking down. **Observed** counting 30, 24, 18 |
 | `J\|<team>` | A manager connected. **Inferred** from timing |
 | `L\|<team>` | A manager disconnected. **Inferred** from timing |
-| `G\|[…]` | Yahoo's own grade for the last pick, as JSON: `letterGrade`, `score`, weighted components with explanations |
-| `O\|draft-labels\|<overall>\|[…]` | Yahoo's own value labels, as JSON: `BEST_VALUE` and similar, with a `reason` and `signals` |
+| `G\|[…]` | Yahoo's own grade for a pick, as JSON: `letterGrade`, `score`, weighted components with explanations |
+| `g\|[…]` | Yahoo's own grade for each **team**, as JSON: `teamId`, `score`, `letterGrade`, `pickCount`, `basis`. Lowercase, and a different frame from `G\|` |
 | `5\|<n>`, `X\|<n>`, `6\|…` | Unknown, single numeric payload |
+| `O\|draft-labels\|<overall>\|[…]` | Yahoo's own value labels, as JSON: `BEST_VALUE` and similar, with a `reason` and `signals` |
 
 `playerId` matches `id` in `players/nfl/<league>`, which is how a pick becomes a
 person. `rosterSlot` is the slot filled, including flex as `W/R/T`. `cost` was
@@ -159,11 +169,10 @@ alternative is testing it during a draft.
 
 ## Still unknown
 
-- **Whether a client reconnecting mid-draft is sent the picks it missed.** The
-  connect sequence above came from a draft starting at pick 1, so there was
-  nothing to replay. It decides what a mid-draft reload costs.
-- **What `Q`, `P`, `w|`, `5|`, `X|` and `6|` are.** None is needed to read picks.
-- **What the `H|` zeros mean**, and whether `S` becomes something else for an
-  auction or a linear draft.
+- **What `Q`, `w|`, `5|`, `X|` and `6|` are.** None is needed to read picks.
+- **What `A|` means**, now that it is known not to be a boolean.
+- **What the two middle `H|` zeros mean**, and whether `S` becomes something
+  else for an auction or a linear draft.
+- **What `cost` holds in an auction.** It was `0` in every snake draft watched.
 - **Whether a real league behaves like a mock.** Every observation here is from
   the mock lobby, and this must be rechecked before a real draft.
