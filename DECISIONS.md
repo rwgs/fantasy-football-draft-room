@@ -37,17 +37,24 @@ own browser.
 
 ### What was observed
 
-Against a live 14-team mock draft on 2026-09-04, using the tools in
-`tools/yahoo/`. Everything here was watched happening, not read in a document.
+Against live 14-team mocks on 2026-09-04, using the tools in `tools/yahoo/`.
+Everything here was watched happening, not read in a document. The frame-by-frame
+reference is `docs/yahoo-draft-protocol.md`; only what bears on the decision is
+repeated here.
 
 - **Picks arrive only over a websocket**, as pipe-delimited text.
   `0|<overall>|<playerId>|<teamId>|<slot>|<cost>` is a pick,
-  `D|<overall>|<teamId>|<seconds>` hands over the clock, `C|<n>` is a heartbeat.
-  Yahoo pushes its own pick grades on `G|` and value labels on
-  `O|draft-labels|` down the same socket.
-- **`teamId` is the draft slot.** Round 8 of a 14-team snake runs picks 99 to
-  112 in reverse, so slot 13 takes pick 100 and slot 10 takes pick 103. The
-  captured frames say exactly that, so pick order needs no second lookup.
+  `D|<overall>|<teamId>|<seconds>` hands over the clock, `C|<n>` is the clock
+  ticking. Yahoo pushes its own pick grades on `G|` and value labels on
+  `O|draft-labels|` down the same socket. Reading picks means filtering for `0|`
+  and ignoring the other nine frame types, so Yahoo changing them cannot break
+  it.
+- **The draft order is sent on connect**, as `R|` followed by one team per pick
+  in pick order. It does not have to be derived, and deriving it would be
+  silently wrong for any league whose order is not a plain snake. `teamId` did
+  independently match the slot a plain snake predicts — round 8 of 14 runs picks
+  99 to 112 in reverse, and the frames put slot 13 on pick 100 — but that is now
+  a cross-check rather than the mechanism.
 - **No REST endpoint carries draft state.** `players/nfl/<league>` stays at 1195
   entries with drafted players still in it and no field marking them gone;
   `percent-drafted` and `average-pick` are historical ADP. `draftstatus` carries

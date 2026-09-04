@@ -7,9 +7,9 @@ Branch: `yahoo-platform`. It is **behind `main`**: it was cut before the
 planning documents existed, so all seven show as deleted against it. Merging
 `main` into it is the first step and is needed before it can ever merge back.
 
-What Yahoo does and does not offer is settled and recorded in the 2026-09-04
-entry of `DECISIONS.md`. This document is only how the software is built on top
-of it.
+Why the approach is what it is sits in the 2026-09-04 entry of `DECISIONS.md`,
+and what Yahoo actually sends is catalogued in `docs/yahoo-draft-protocol.md`.
+This document is only how the software is built on top of both.
 
 ## Problem
 
@@ -56,7 +56,9 @@ which has to happen before Yahoo's bundle constructs its socket. It fetches the
 pool and the seats once, keeps an ordered list of picks decoded from `0|`
 frames, and posts them to the service. It reads the league and the user's own
 team off the room's own URL, so it cannot be pointed at the wrong league and
-never has to ask which seat is yours.
+never has to ask which seat is yours, and it takes the draft order from the
+`R|` frame the server sends on connect rather than deriving it, which is the
+only reading that stays right for a league whose order is not a plain snake.
 
 **3. The Yahoo platform.** `server/src/platforms/yahoo/`, implementing the same
 five methods as Sleeper and registered as the second entry. It holds what the

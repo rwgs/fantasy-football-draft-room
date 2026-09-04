@@ -134,6 +134,10 @@ under test is the one that just started rather than assuming the port is free.
 - `PLAN.md` for the approach behind the change currently in flight.
 - `DECISIONS.md` before changing an area it constrains, and before proposing an
   approach it already rejected.
+- `docs/` for reference material: things that are true about the world rather
+  than decisions about this project. `docs/yahoo-draft-protocol.md` is what a
+  Yahoo draft room sends and when, none of which Yahoo documents. Read it when a
+  task points at it, not by default.
 - `README.md` is where a human or an agent arriving cold starts, and it owns none
   of the above. It links to these documents, and to the files it describes,
   rather than restating them: an explanation kept away from what it explains
