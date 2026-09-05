@@ -9,6 +9,68 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-05 The room's lean stays an absolute surplus
+
+Status: Accepted. Reopens if the forecast is ever shown to mispredict a run at a
+scarce position in a real draft.
+
+### Decision
+
+`observedLean` keeps counting a raw surplus of picks against a no-lean room and
+scaling it by half a round, the same denominator for every position. It is not
+changed to a relative measure, and scarce positions get no correction.
+
+### Why
+
+Reviewed because the reading under-states a scarce position badly. Recovering a
+dial that was actually set, twelve teams, six seeds, three rounds in:
+
+    RB  +4 reads 4.2    -4 reads -2.6
+    WR  +4 reads 3.5    -4 reads -3.5
+    QB  +4 reads 2.6    -4 reads -0.9
+    TE  +4 reads 3.7    -4 reads -1.0
+
+The quarterback fade is the worst of them and it is arithmetic rather than a
+fault. A no-lean room takes about two quarterbacks in three rounds, so the
+largest surplus a fade can produce is minus two, which is minus 1.67 on a dial
+that runs to five. **A fade of something nobody drafts cannot be observed**, and
+no scaling recovers information that was never in the sample.
+
+Relative surplus was measured as the alternative and is worse. Divided by its
+own expectation, the same dial reads four times higher at a scarce position than
+an abundant one, and it is not stable with depth either:
+
+    dial +2, relative surplus     3 rounds   5 rounds   8 rounds
+      RB                              0.11       0.09       0.12
+      QB                              0.46       0.30       0.18
+
+The absolute measure is also the right currency for the job. The lean is fed
+back into the dials to simulate the rest of the round, and what decides whether
+a player survives is how many players actually leave the board, not how unusual
+their position's share was.
+
+The reading is monotonic and correctly ordered at every depth and every position
+tested, so it never says forcing when a room is fading. That is the property the
+forecast depends on.
+
+### What this costs, and where it shows
+
+`LEAN_WORTH_SAYING` is 1.2, so a hard fade of quarterbacks or tight ends is not
+put into words until about the fifth round. That is a sentence not shown rather
+than a number that is wrong, and it is least useful exactly when it is missing:
+quarterbacks are barely being drafted in the first three rounds anyway.
+
+The reading also inflates with depth, because the surplus accumulates while the
+denominator does not: a dial of +2 reads 1.6 after three rounds and 3.6 after
+eight, and +3, +4 and +5 are indistinguishable by then. Left alone because the
+forecast only ever runs to your next pick, and because the computer teams' own
+roster need already pulls them off a position they have filled.
+
+### Also
+
+`engine:test` reads the quarterback lean at four rounds rather than three, for
+the reason above. Do not fold it back to match the other positions.
+
 ## 2026-09-05 The panel is a bookmarklet, not part of the bridge
 
 Status: Accepted. Supersedes the shipping half of the entry below, which put the
