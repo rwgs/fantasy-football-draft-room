@@ -102,6 +102,10 @@ npm run start            # the data service alone, on 5178, in the foreground.
 npm run serve            # say what is on 5178, offer to restart or stop it
 npm run serve -- status  # or start, stop, restart. Windows: .\serve.ps1 status
 
+.\dev.ps1                # Windows: bring both halves up, and say what was already
+.\dev.ps1 status         # up. Stopping stays with serve.ps1 and the client's window.
+.\capture.ps1            # record a Yahoo draft room. See docs/yahoo-draft-protocol.md
+
 npm run typecheck        # tsc against both the app and the test config
 npm --prefix client run lint    # oxlint
 npm run engine:test      # the engine self-test. See below: needs the service up.

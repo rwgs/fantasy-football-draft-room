@@ -454,6 +454,8 @@ place so the client never has to guess whether two records name the same player.
 | `npm start` | the data service, without reload |
 | `npm run serve` | what is on 5178, and the choice to restart or stop it |
 | `npm run serve -- restart` | also `start`, `stop`, `status`. Windows: `.\serve.ps1 restart` |
+| `.\dev.ps1` | Windows: both halves up, reporting whatever was already running. `status` to report only |
+| `.\capture.ps1` | Windows: record a Yahoo draft room to `tools/yahoo/dump`. Start it before joining |
 | `npm run build` | a production bundle in `client/dist`. Not needed to run it |
 | `npm run typecheck` | TypeScript, app and tests |
 | `npm run engine:test` | run the draft engine against a live board |
