@@ -114,8 +114,12 @@ that seat back out of the connect burst:
     A|14=1|13=1|12=1|11=1|10=0|9=1|8=1|7=1|6=0|5=0|4=1|3=1|2=1|1=1
          ^ the seat known to be autopicking
 
-Three seats read `0` in a room where most were bots, which fits `0` meaning a
-manager still picking for themselves, though that half is inference.
+Three seats read `0`, late in a room that had been filling with autopickers for
+an hour. That agrees with the seat counts at the top of this document, which
+read `0` as a manager still acting — seven of fourteen at one open, eight of
+fourteen ninety-one picks later, in rooms of real people. Counting zeros as live
+seats was an inference when it was written; `1` being autopick is now observed
+directly, and the two readings are the same reading.
 
 **`2` remains unknown.** It has appeared once across every capture taken, on a
 seat whose state nothing independent established. So this is a three-state field
