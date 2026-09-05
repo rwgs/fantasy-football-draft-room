@@ -182,6 +182,24 @@ input[type='checkbox'] { accent-color: var(--gold); width: 15px; height: 15px; m
   border-bottom: 1px solid var(--line-soft);
 }
 
+/* The ADP behind the pool, changeable while a real draft is followed. It sits
+   in a hint line and reads as part of it until you go near it, because it is
+   telling you what you are looking at first and offering to change it second. */
+.adp-pick {
+  /* A select is as wide as its longest option, which leaves the short ones
+     stranded from the arrow. Where this is understood it sizes to the choice
+     actually showing; where it is not, the old full width is no worse. */
+  field-sizing: content;
+  font: inherit;
+  color: var(--chalk-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 1px 4px;
+  cursor: pointer;
+}
+.adp-pick:hover, .adp-pick:focus { border-color: var(--line); color: var(--chalk); outline: none; }
+
 /* Position colour, applied by a data attribute so one rule covers all six. */
 [data-pos='QB'] { --pos: var(--qb); }
 [data-pos='RB'] { --pos: var(--rb); }

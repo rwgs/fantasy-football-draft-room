@@ -14,7 +14,7 @@ import type {
   AppMode, Board, CpuConfig, LeagueConfig, LeagueImport, LeagueSetup, NoteSet,
   Overrides, PendingKeeper, Platform, Position, PresetPick, RankingSet, RosterSlots, SavedLeague,
 } from '../engine/types';
-import { POSITIONS } from '../engine/types';
+import { ADP_SOURCES, POSITIONS } from '../engine/types';
 
 const SCORING = [
   { id: 'half-ppr', label: 'Half PPR' },
@@ -22,12 +22,6 @@ const SCORING = [
   { id: 'standard', label: 'Standard' },
   { id: '2qb', label: 'Superflex / 2QB' },
   { id: 'dynasty', label: 'Dynasty' },
-];
-
-const ADP_SOURCES = [
-  { id: 'sleeper', label: 'Sleeper, then Fantasy Football Calculator' },
-  { id: 'ffc', label: 'Fantasy Football Calculator, then Sleeper' },
-  { id: 'blend', label: 'The mean of both' },
 ];
 
 const DRAFT_TYPES = [

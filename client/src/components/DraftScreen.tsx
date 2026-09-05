@@ -13,7 +13,8 @@ import type { DraftEngine } from '../engine/draft';
 import { fetchDraftPicks } from '../api';
 import { maskTeam } from '../anon';
 import { livePresets, offBoardPlayer } from '../engine/live';
-import type { AppMode, Board, Platform } from '../engine/types';
+import { ADP_SOURCES } from '../engine/types';
+import type { AppMode, Board, Platform, Player } from '../engine/types';
 
 /** How often the assistant asks Sleeper for new picks. */
 const POLL_MS = 8000;
@@ -38,6 +39,12 @@ interface Props {
   rankingEntries: import('../engine/types').RankingEntry[] | null;
   /** What you wrote about a player, by player id. Null when you wrote none. */
   notes: Map<string, string> | null;
+  /**
+   * Which ADP the app is asking for, which is not yet which one the board
+   * holds. The two differ for as long as the new board is in flight.
+   */
+  adpSource: string;
+  onAdpSource: (next: string) => void;
   onEngine: (next: DraftEngine) => void;
   onFinish: () => void;
   onLeave: () => void;
@@ -54,7 +61,7 @@ function label(overall: number, teams: number): string {
 export default function DraftScreen(props: Props) {
   const {
     engine, board, pace, mode, anonymous, draftId, platform, rankingEntries, notes,
-    onEngine, onFinish, onLeave,
+    adpSource, onAdpSource, onEngine, onFinish, onLeave,
   } = props;
 
   const [queue, setQueue] = useState<string[]>([]);
@@ -62,7 +69,12 @@ export default function DraftScreen(props: Props) {
   const [paused, setPaused] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [liveAt, setLiveAt] = useState<number | null>(null);
-  const [unknownPicks, setUnknownPicks] = useState(0);
+  /**
+   * Players the real draft took who this board does not hold. Kept rather
+   * than counted because a rebuild needs them back: drop them and every pick
+   * after one of them sits a slot out of place.
+   */
+  const [offBoard, setOffBoard] = useState<Player[]>([]);
   /**
    * Entering the room's picks yourself instead of reading them off a feed.
    *
@@ -135,7 +147,10 @@ export default function DraftScreen(props: Props) {
         const live = await fetchDraftPicks(platform, draftId, {
           scoring: state.league.scoring,
           teams: state.league.teams,
-          adpSource: state.league.adpSource,
+          // The board in hand, not the one the engine was built from. Which
+          // players are off it is answered against the board about to be used,
+          // or a player missing from only one of the two lands twice.
+          adpSource: board.meta.adpSource,
           year: state.league.year,
         });
         if (!alive) return;
@@ -143,7 +158,7 @@ export default function DraftScreen(props: Props) {
         const presets = livePresets(live.picks);
         const extras = live.picks.filter((p) => p.offBoard).map(offBoardPlayer);
 
-        setUnknownPicks(extras.length);
+        setOffBoard(extras);
         setLiveError(null);
         setLiveAt(Date.now());
 
@@ -151,7 +166,7 @@ export default function DraftScreen(props: Props) {
         if (current.state.picks.length === presets.length) return;
 
         onEngine(runPresetsOnly(createDraft(
-          current.state.league,
+          { ...current.state.league, adpSource: board.meta.adpSource },
           current.state.cpu,
           [...board.players, ...extras],
           rankingEntries,
@@ -166,7 +181,37 @@ export default function DraftScreen(props: Props) {
     const timer = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(timer); };
   }, [assistant, draftId, platform, paused, manual, board, rankingEntries,
-    state.league.scoring, state.league.teams, state.league.adpSource, state.league.year]);
+    state.league.scoring, state.league.teams, state.league.year]);
+
+  /*
+   * A different ADP is a different board, and the engine keeps its own copy of
+   * the pool. Every pick that has happened is handed back as settled, so what
+   * changes is only what the players left are worth, never what was taken.
+   *
+   * The poll above would arrive at the same place on its next tick, but it does
+   * not run while the draft is paused or is being entered by hand, and the
+   * choice has to land in those too. Waiting on the board rather than on what
+   * was asked for means the swap happens once, when the new numbers are here.
+   */
+  useEffect(() => {
+    if (!assistant) return;
+    const current = engineRef.current;
+    if (current.state.league.adpSource === board.meta.adpSource) return;
+
+    onEngine(runPresetsOnly(createDraft(
+      { ...current.state.league, adpSource: board.meta.adpSource },
+      current.state.cpu,
+      [...board.players, ...offBoard],
+      rankingEntries,
+      current.state.picks.map((p) => ({
+        overall: p.overall,
+        playerId: p.playerId,
+        // A pick entered by hand is one you relayed from the real room, which
+        // is what the engine already calls manual.
+        source: p.preset ?? ('manual' as const),
+      })),
+    )));
+  }, [assistant, board, offBoard, rankingEntries, onEngine]);
 
   // Run the room. One pick per tick so the board reads like a draft, or the
   // whole gap at once when the pace is set to instant.
@@ -366,16 +411,31 @@ export default function DraftScreen(props: Props) {
               {available.length + ' available'}
             </h2>
             <span className="hint">
-              {board.meta.formatLabel + ' · ' + board.meta.adpSourceLabel}
+              {board.meta.formatLabel + ' · '}
+              {/* Nothing is simulated here, so the ADP is only a lens on a real
+                  room and can be changed without making any pick incoherent.
+                  A mock draft would be running on it, so it stays in settings. */}
+              {assistant ? (
+                <select
+                  className="adp-pick"
+                  aria-label="Which ADP"
+                  value={adpSource}
+                  onChange={(e) => onAdpSource(e.target.value)}
+                >
+                  {ADP_SOURCES.map((s) => (
+                    <option key={s.id} value={s.id}>{s.short}</option>
+                  ))}
+                </select>
+              ) : board.meta.adpSourceLabel}
               {assistant && liveAt
                 ? ' · read ' + Math.max(0, Math.round((Date.now() - liveAt) / 1000)) + 's ago'
                 : ''}
             </span>
           </div>
 
-          {assistant && unknownPicks > 0 && (
+          {assistant && offBoard.length > 0 && (
             <p className="hint" style={{ padding: '6px 12px', color: 'var(--te)' }}>
-              {unknownPicks + ' real pick' + (unknownPicks === 1 ? ' is' : 's are')
+              {offBoard.length + ' real pick' + (offBoard.length === 1 ? ' is' : 's are')
                 + ' of players this board does not hold, so those slots read as open.'}
             </p>
           )}

@@ -796,6 +796,8 @@ export default function App() {
           platform={activePlatform}
           rankingEntries={rankings?.entries ?? null}
           notes={notes}
+          adpSource={league.adpSource}
+          onAdpSource={(adpSource) => setLeague({ ...league, adpSource })}
           onEngine={setEngine}
           onFinish={() => setScreen('results')}
           onLeave={() => setScreen('setup')}

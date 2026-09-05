@@ -85,6 +85,16 @@ earlier session answers a health check perfectly happily while serving something
 older, and now says so instead. On Windows `.\serve.ps1 restart` avoids npm's
 `--` for passing the action through.
 
+**Change which ADP without leaving the draft.** The choice of ADP source lived
+in settings, which meant walking out of a draft to see the same room read
+against different numbers. In assistant mode it now sits in the pool header
+where the source was already named. Nothing is simulated there, so the ADP is
+only a lens on a real room: every pick that has happened stays exactly as it
+happened and only what the players left are worth changes. A mock draft is
+running on its ADP rather than looking through it, so that one still asks in
+settings. The swap lands while the draft is paused or being entered by hand
+too, which is where it is most likely to be wanted.
+
 ### Fixed
 
 **A player eligible at two positions joins the board again.** Yahoo writes dual

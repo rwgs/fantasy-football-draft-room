@@ -2,6 +2,20 @@ export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
 
 export const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 
+/**
+ * What `adpSource` may be, and what each choice is called on screen.
+ *
+ * Two namings because they answer in two places. Settings has the room to say
+ * which feed is tried second, and that is the part worth knowing when you are
+ * choosing. The draft screen says it in a line that also carries the format
+ * and how long ago the room was read, so there it is the short form.
+ */
+export const ADP_SOURCES = [
+  { id: 'sleeper', label: 'Sleeper, then Fantasy Football Calculator', short: 'Sleeper first' },
+  { id: 'ffc', label: 'Fantasy Football Calculator, then Sleeper', short: 'Fantasy Football Calculator first' },
+  { id: 'blend', label: 'The mean of both', short: 'Mean of both' },
+];
+
 export interface Player {
   id: string;
   key: string;
