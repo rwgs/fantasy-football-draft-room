@@ -9,10 +9,61 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-05 The lean is measured per round, not per draft
+
+Status: Accepted. Reverses the depth paragraph of the entry below, which left
+this alone on reasoning rather than measurement.
+
+### Decision
+
+`observedLean` divides the surplus by a denominator that grows with the rounds
+played, calibrated so three rounds reads exactly as it always did. It only ever
+slows the reading down: before three rounds the scale is unchanged, so a single
+round of picks still cannot be multiplied into a landslide.
+
+### Why
+
+The entry below argued the inflation was harmless because the forecast only runs
+to your next pick and roster need already corrects for a filled position. That
+was reasoning, and it was wrong.
+
+Measured properly, against a room whose dial was known, comparing the survival
+the forecast predicts with what that room actually does over four hundred runs:
+
+    position, dial   3 rounds        5 rounds        8 rounds
+    RB +3            .034  .034      .025 → .029     .056 → .015
+    WR +3            .028  .028      .050 → .016     .077 → .039
+    QB +4            .061  .061      .044 → .039     .052 → .022
+    TE +4            .047  .047      .017 → .014     .025 → .011
+
+Mean absolute error in survival, before and after. Better or unchanged in eleven
+of twelve, and the one that moved the wrong way, backs at five rounds, moved
+four tenths of a point. By the eighth round the error falls from about five
+points of survival to about two.
+
+The early draft is untouched by construction, which is why the three-round
+column is identical rather than merely close.
+
+### Why not a setting
+
+It was asked for as one. It is not a thing a user knows about their league, in
+the way that a roster shape or a keeper is: nobody can be asked to choose
+between an absolute and a per-round surplus, and there is no taste involved,
+only a right answer that a measurement settles. Offering it would mean shipping
+the option now known to be worse and asking somebody to find that out.
+
+### What it costs
+
+Leans past three rounds now read lower, so `describeLean` puts fewer of them
+into words late on. That is the point rather than a side effect: the sentences
+it stops saying were the ones the old scale inflated into existence.
+
 ## 2026-09-05 The room's lean stays an absolute surplus
 
-Status: Accepted. Reopens if the forecast is ever shown to mispredict a run at a
-scarce position in a real draft.
+Status: Accepted on the measure, **superseded on the depth**. The surplus is
+still absolute and still not relative, which is what this entry decided. The
+paragraph below saying its growth with depth was left alone is reversed by
+`The lean is measured per round, not per draft` above.
 
 ### Decision
 
@@ -62,9 +113,9 @@ quarterbacks are barely being drafted in the first three rounds anyway.
 
 The reading also inflates with depth, because the surplus accumulates while the
 denominator does not: a dial of +2 reads 1.6 after three rounds and 3.6 after
-eight, and +3, +4 and +5 are indistinguishable by then. Left alone because the
-forecast only ever runs to your next pick, and because the computer teams' own
-roster need already pulls them off a position they have filled.
+eight, and +3, +4 and +5 are indistinguishable by then. **This was left alone
+here and is no longer.** It was worth measuring rather than reasoning about, and
+the measurement went the other way. See the entry above.
 
 ### Also
 
