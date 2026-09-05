@@ -14,7 +14,8 @@ import { fetchDraftPicks, postRoomAdvice } from '../api';
 import { maskTeam } from '../anon';
 import { pickLabel, pickLabelWithOverall } from '../picks';
 import { livePresets, offBoardPlayer } from '../engine/live';
-import { ADP_SOURCES } from '../engine/types';
+import { replacementPoints } from '../engine/value';
+import AdpSourcePicker from './AdpSourcePicker';
 import type { AppMode, Board, Platform, Player } from '../engine/types';
 
 /** How often the assistant asks Sleeper for new picks. */
@@ -272,6 +273,20 @@ export default function DraftScreen(props: Props) {
     [engine, assistant, prior],
   );
 
+  /**
+   * What a replacement starter at each position is projected to score.
+   *
+   * The pool shows every player's points above it, which is the number that
+   * answers "is he worth taking" where the raw projection does not: 240 points
+   * is a poor starting back and an outstanding tight end, and nothing on the
+   * row said which. Measured against the whole board rather than what is left,
+   * because replacement level is a fact about the league's shape.
+   */
+  const replacement = useMemo(
+    () => replacementPoints(board.players, teams, state.league.roster),
+    [board.players, teams, state.league.roster],
+  );
+
   /** Every position priced for this pick, drawn by the panel and sent to the room. */
   const priced = useMemo(
     () => pricedPositions(
@@ -479,26 +494,24 @@ export default function DraftScreen(props: Props) {
             </h2>
             <span className="hint">
               {board.meta.formatLabel + ' · '}
-              {/* Nothing is simulated here, so the ADP is only a lens on a real
-                  room and can be changed without making any pick incoherent.
-                  A mock draft would be running on it, so it stays in settings. */}
-              {assistant ? (
-                <select
-                  className="adp-pick"
-                  aria-label="Which ADP"
-                  value={adpSource}
-                  onChange={(e) => onAdpSource(e.target.value)}
-                >
-                  {ADP_SOURCES.map((s) => (
-                    <option key={s.id} value={s.id}>{s.short}</option>
-                  ))}
-                </select>
-              ) : board.meta.adpSourceLabel}
+              {board.meta.adpSourceLabel}
               {assistant && liveAt
                 ? ' · read ' + Math.max(0, Math.round((Date.now() - liveAt) / 1000)) + 's ago'
                 : ''}
             </span>
           </div>
+
+          {/* Nothing is simulated here, so the ADP is only a lens on a real
+              room and can be changed without making any pick incoherent. A mock
+              draft would be running on it, so there it stays in settings. */}
+          {assistant && (
+            <AdpSourcePicker
+              compact
+              value={adpSource}
+              offered={board.meta.adpOffered}
+              onChange={onAdpSource}
+            />
+          )}
 
           {assistant && offBoard.length > 0 && (
             <p className="hint" style={{ padding: '6px 12px', color: 'var(--te)' }}>
@@ -518,6 +531,7 @@ export default function DraftScreen(props: Props) {
             queue={queue}
             onQueue={toggleQueue}
             formatLabel={board.meta.formatLabel}
+            replacement={replacement}
             roomOdds={room?.survival ?? null}
           />
         </div>

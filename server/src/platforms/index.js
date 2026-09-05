@@ -14,6 +14,12 @@
 // Adding one is adding a directory here and a line below. Nothing else in the
 // service knows how many there are.
 //
+// A platform may also expose `roomAdpByKey(leagueId)`, the ADP its own site
+// measures over its own drafters. Yahoo publishes one and only to a browser
+// holding the session cookie, so it arrives with the bridge's pool; Sleeper's
+// is already a feed this service fetches directly and needs no room. A board
+// offers `room` as a source only where a platform answered with one.
+//
 // A platform may also expose `ingest`, which Yahoo does and Sleeper does not.
 // Sleeper is pulled: the service asks an open feed whenever it needs to know
 // something. Yahoo cannot be pulled at all, because its draft room authenticates

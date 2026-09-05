@@ -198,7 +198,11 @@ export async function leagueSetup(leagueId) {
  */
 export async function draftPicks(leagueId, boardQuery) {
   const room = roomFor(leagueId);
-  const board = await buildBoard(boardQuery);
+  // The same board the app is looking at, room ADP included. Built without it,
+  // a board asked to price on the room would price on something else here, and
+  // the picks would be resolved against a pool ordered differently from the one
+  // on screen.
+  const board = await buildBoard({ ...boardQuery, roomAdp: adpFromPool(room) });
 
   const byKey = new Map(board.players.map((p) => [p.key, p]));
   const teams = teamCount(room);
@@ -251,27 +255,48 @@ export async function draftPicks(leagueId, boardQuery) {
 }
 
 /**
- * Yahoo's own ADP, against the ids this board uses.
+ * Yahoo's own ADP, keyed the way `names.js` keys everybody.
  *
  * The same join the picks take, run over the whole pool rather than over the
- * players already gone. It is what lets the room be modelled on how Yahoo
- * drafts rather than on how Sleeper and Fantasy Football Calculator do, and it
- * cannot be fetched here: Yahoo answers a session cookie, so it arrives from
- * the bridge or not at all.
+ * players already gone. It is what lets the room be read as how Yahoo drafts
+ * rather than how Sleeper and Fantasy Football Calculator do, and it cannot be
+ * fetched here: Yahoo answers a session cookie, so it arrives from the bridge
+ * or not at all.
+ *
+ * Keyed rather than identified because a board has to be built before it can
+ * hand out ids, and this is one of the things a board can now be built from.
+ * `joinKey` already reduces a defence to its team, which is the only join that
+ * works when nobody agrees what to call one, so nothing here is special-cased.
  *
  * Only the few hundred Yahoo reports a pick for appear. Anyone it has no
- * reading on is left out rather than sent as a null, because the client's job
- * is to compare the ones that exist, not to walk past the ones that do not.
+ * reading on is left out rather than carried as a null, because a feed with no
+ * opinion about a player should not be voting on him.
  */
-function roomAdp(room, byKey) {
-  const out = [];
+function adpFromPool(room) {
+  const out = new Map();
   for (const person of room.pool.values()) {
     if (person.adp == null) continue;
     const position = normPos(person.position);
-    const team = normTeam(person.team);
-    let player = person.name ? byKey.get(joinKey(person.name, position, team)) || null : null;
-    if (!player && position === 'DEF' && team) player = byKey.get('DEF|' + team) || null;
-    if (player) out.push({ id: player.id, adp: person.adp });
+    // A defence joins on its team and never on its name, so it needs no name to
+    // be placed. Anyone else without one has nothing to join on at all.
+    if (!person.name && position !== 'DEF') continue;
+    out.set(joinKey(person.name || '', position, normTeam(person.team)), person.adp);
+  }
+  return out.size ? out : null;
+}
+
+/** The same reading for a league nobody has necessarily posted. */
+export function roomAdpByKey(leagueId) {
+  const room = getRoom(leagueId);
+  return room ? adpFromPool(room) : null;
+}
+
+/** And against the ids a built board hands out, which is what the client wants. */
+function roomAdp(room, byKey) {
+  const out = [];
+  for (const [key, adp] of adpFromPool(room) || []) {
+    const player = byKey.get(key);
+    if (player) out.push({ id: player.id, adp });
   }
   return out;
 }
@@ -339,6 +364,7 @@ export default {
   roomState,
   putAdvice,
   readAdvice,
+  roomAdpByKey,
   isValidId: (id) => IS_ID.test(id),
   idHint: 'A Yahoo league ID is the number in your draft room address.',
   importLeague,

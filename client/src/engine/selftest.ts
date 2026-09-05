@@ -880,6 +880,95 @@ async function main() {
       tail.every((p) => Number.isFinite(p.adp) && p.adp > deepest), String(tail.length));
   }
 
+  console.log('\nChoosing which sources price the board');
+  {
+    const get = async (adpSource: string) => (await (await fetch(
+      API + '/api/board?scoring=half-ppr&teams=12&adpSource=' + encodeURIComponent(adpSource),
+    )).json()) as Board;
+
+    /*
+     * THE FOUR OLDER NAMINGS STILL MEAN WHAT THEY MEANT.
+     *
+     * They are what every saved league in somebody's browser holds, and one
+     * loaded from last season must open on the board it opened on then.
+     *
+     * `consensus` is compared only over the players a draft can reach. Past
+     * that it now takes the mean of whatever the feeds hold rather than the
+     * first of them, which is what `blend` always did: two rules that differed
+     * only in a tail nobody drafts are worth less than one rule.
+     */
+    const deepest12 = 12 * 20;
+    for (const [legacy, encoded] of [
+      ['sleeper', 'order:sleeper,ffc'],
+      ['ffc', 'order:ffc,sleeper'],
+      ['blend', 'avg:sleeper,ffc'],
+      ['consensus', 'avg:sleeper,ffc,espn'],
+    ]) {
+      const was = await get(legacy);
+      const now = await get(encoded);
+      const byKey = new Map(now.players.map((p) => [p.key, p.adp]));
+      const drafted = was.players.filter((p) => p.adp <= deepest12);
+      check(legacy + ' still means ' + encoded,
+        was.players.length === now.players.length
+          && drafted.every((p) => Math.abs((byKey.get(p.key) ?? -1) - p.adp) < 0.001)
+          && now.meta.adpSource === encoded,
+        drafted.length + ' drafted players compared, read as ' + now.meta.adpSource);
+    }
+
+    /*
+     * A CHOICE MAY NOT EMPTY A POSITION.
+     *
+     * ESPN abstains on kickers and defences, because its ranks there are the
+     * convention that you draft those two last rather than a view about
+     * anybody. So ESPN chosen on its own priced neither, and both fell off the
+     * board outright: 45 kickers and 32 defences gone, and a league starting
+     * one of each could not fill a roster from what was left.
+     *
+     * The choice decides who is asked first, not who is allowed to answer.
+     */
+    for (const feed of ['sleeper', 'ffc', 'espn']) {
+      const solo = await get('avg:' + feed);
+      const counts = solo.meta.positionCounts;
+      check(feed + ' alone still prices every position',
+        POSITIONS.every((pos) => (counts[pos] || 0) > 0),
+        POSITIONS.map((pos) => pos + ' ' + (counts[pos] || 0)).join(' '));
+    }
+
+    const espnOnly = await get('avg:espn');
+    check('a player the choice has no view on is marked, not silently renumbered',
+      espnOnly.players.filter((p) => p.position === 'K').every((p) => p.adpOutsideChoice)
+        && espnOnly.players.filter((p) => p.espnVotes).every((p) => !p.adpOutsideChoice),
+      String(espnOnly.meta.adpOutsideChoice) + ' priced from outside the choice');
+
+    /* An average is of the feeds named, and of no others. */
+    const pair = await get('avg:sleeper,espn');
+    const both = pair.players.filter((p) => !p.adpOutsideChoice
+      && p.sleeperAdp != null && p.sleeperAdp <= deepest12
+      && p.espnPick != null && p.espnVotes && p.espnPick <= deepest12);
+    check('an average is of the feeds you named and no others',
+      both.length > 100
+        && both.every((p) => Math.abs(p.adp - (p.sleeperAdp! + p.espnPick!) / 2) < 0.01),
+      both.length + ' priced by both');
+
+    /*
+     * A ROOM NOBODY IS IN IS NOT ON OFFER.
+     *
+     * The app names a room whenever it is following a draft, whatever the
+     * platform, because asking is how it learns whether that platform publishes
+     * an ADP at all. Naming one that is not there has to cost nothing.
+     */
+    const noRoom = await get('avg:sleeper,room');
+    const plain = await get('avg:sleeper');
+    check('a room nobody has posted is dropped rather than refused',
+      JSON.stringify(noRoom.meta.adpFeeds) === JSON.stringify(['sleeper'])
+        && !noRoom.meta.adpOffered.includes('room'),
+      JSON.stringify(noRoom.meta.adpFeeds) + ' of ' + JSON.stringify(noRoom.meta.adpOffered));
+    check('and the board it prices is the one without it',
+      noRoom.players.length === plain.players.length
+        && noRoom.players.every((p, i) => p.key === plain.players[i].key
+          && p.adp === plain.players[i].adp));
+  }
+
   console.log('\nEntering the picks by hand');
   {
     /*
@@ -1777,6 +1866,41 @@ async function yahooRoom() {
     JSON.stringify(withAdp.roomAdp));
   check('a player Yahoo has no reading on is left out, not sent as nothing',
     !said.has(board.players[3].id) && said.size === 3, String(said.size));
+
+  /*
+   * THAT SAME ADP, ASKED TO PRICE THE BOARD.
+   *
+   * It is the only feed here measured over the people actually in the room, and
+   * the only one no server can fetch: Yahoo answers a session cookie, so it
+   * reaches the board through the bridge or not at all. The pool posted above
+   * puts the top three players at 10, 11 and 12, which no market feed does, so
+   * a board that moved them read the room rather than a feed.
+   */
+  const roomQuery = 'scoring=half-ppr&teams=12&room=yahoo:' + LEAGUE;
+  const priced = await (await fetch(
+    API + '/api/board?' + roomQuery + '&adpSource=avg:sleeper,room')).json() as Board;
+  const feedOnly = await (await fetch(
+    API + '/api/board?scoring=half-ppr&teams=12&adpSource=avg:sleeper')).json() as Board;
+
+  check('a posted room is offered as a source', priced.meta.adpOffered.includes('room')
+    && JSON.stringify(priced.meta.adpFeeds) === JSON.stringify(['sleeper', 'room']),
+    JSON.stringify(priced.meta.adpFeeds) + ' of ' + JSON.stringify(priced.meta.adpOffered));
+  check('and only the players it prices carry its reading',
+    priced.meta.roomRanked === 3 && feedOnly.meta.roomRanked === 0,
+    priced.meta.roomRanked + ' with a room ADP, ' + feedOnly.meta.roomRanked + ' without one');
+
+  const was = new Map(feedOnly.players.map((p) => [p.key, p.adp]));
+  const readings = new Map(priced.players.map((p) => [p.key, p]));
+  const moved = priced.players.filter((p) => Math.abs((was.get(p.key) ?? 0) - p.adp) > 0.001);
+  check('a player the room has no reading on is not moved by it',
+    moved.every((p) => p.roomAdp != null), moved.length + ' moved');
+  check('and one it does price is the mean of the two', [0, 1, 2].every((i) => {
+    const p = readings.get(board.players[i].key);
+    return !!p && Math.abs(p.adp - ((p.sleeperAdp! + (10 + i)) / 2)) < 0.01;
+  }), [0, 1, 2].map((i) => {
+    const p = readings.get(board.players[i].key);
+    return p ? p.sleeperAdp + '+' + (10 + i) + '->' + p.adp : 'missing';
+  }).join(' '));
 
   const state = await (await fetch(API + '/api/yahoo/draft/' + LEAGUE)).json();
   check('the seats are counted', state.teams === 3, String(state.teams));

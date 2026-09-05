@@ -12,6 +12,38 @@ fixed.
 
 ### Added
 
+**Choose which sources price the board.** The ADP setting was four fixed
+combinations of Sleeper, Fantasy Football Calculator and ESPN. It is now a tick
+per feed plus a rule — averaged, or read in order, where the first feed that has
+heard of a player wins and the rest fill its gaps. The same control appears over
+a live draft, so a lens can be changed without restarting one.
+
+Hovering a feed says what it measures, which is the part that decides the
+choice: Sleeper and Fantasy Football Calculator both count real drafts over
+different populations, so agreeing is one measurement counted twice; ESPN's is a
+judgement and the only one that can disagree for a reason.
+
+The four older namings still mean exactly what they meant, so a saved league
+opens on the board it opened on before. `sleeper` reads as `order:sleeper,ffc`,
+`blend` as `avg:sleeper,ffc`, and so on. The self-test compares every one of
+them against the encoded form, over every player a draft can reach.
+
+**Your own Yahoo room as a fourth ADP.** Yahoo publishes what its own drafters
+do, and only to a browser holding the session cookie, so it arrives with the
+bridge's pool and can never be fetched by the service. It was already being read
+to judge which way a room leans; it can now price the board itself. Offered only
+while a Yahoo draft is being followed, and greyed out with the reason everywhere
+else.
+
+**A key on the draft screen, and a number that says whether to pick him.** The
+pool's third column was raw projected points, which is the one number on the row
+that cannot be read across positions: 240 points is a poor starting back and an
+outstanding tight end, and nothing said which. It now shows points above a
+replacement starter at the player's own position, so the six positions sort as
+one list and below zero means the waiver wire has somebody as good. A player who
+has slid a full round past his own ADP is marked. **What these numbers mean**
+above the pool says what each of them implies, closed by default.
+
 **Follow a Yahoo draft.** The assistant already followed a Sleeper draft. Yahoo
 publishes nothing to anyone but your own browser, so this takes a userscript —
 `userscript/yahoo-draft-bridge.user.js` — running in your own draft room. It
@@ -208,6 +240,15 @@ self test exports a real board, feeds it back, and checks every row returns on
 an exact match in the order it left.
 
 ### Fixed
+
+**A choice of sources can no longer empty a position.** ESPN abstains on kickers
+and defences, because ranking those two last is a roster convention rather than a
+view about anybody. Making it independently selectable therefore took all 45
+kickers and all 32 defences off the board, leaving a league that starts one of
+each unable to fill a roster. The feeds you pick now decide who is asked first
+rather than who may answer: where none of them has an opinion the rest are read,
+and the player carries a flag saying so. Found by the self-test that now covers
+it, before it ever shipped.
 
 **The player pool stopped spending a row on nothing.** Adding the consensus
 column gave the pool a sixth cell and left it with five columns, so the third

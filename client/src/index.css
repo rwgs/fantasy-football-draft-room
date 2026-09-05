@@ -117,7 +117,7 @@ button { cursor: pointer; }
 
 .field { display: flex; flex-direction: column; gap: 5px; }
 
-.field > label {
+.field > label, .field > .field-label {
   font-family: var(--narrow);
   font-size: 11px;
   font-weight: 600;
@@ -185,20 +185,21 @@ input[type='checkbox'] { accent-color: var(--gold); width: 15px; height: 15px; m
 /* The ADP behind the pool, changeable while a real draft is followed. It sits
    in a hint line and reads as part of it until you go near it, because it is
    telling you what you are looking at first and offering to change it second. */
-.adp-pick {
-  /* A select is as wide as its longest option, which leaves the short ones
-     stranded from the arrow. Where this is understood it sizes to the choice
-     actually showing; where it is not, the old full width is no worse. */
-  field-sizing: content;
-  font: inherit;
-  color: var(--chalk-2);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 1px 4px;
-  cursor: pointer;
+.adp-picker { display: flex; flex-direction: column; gap: 5px; }
+
+/* Over a live draft it sits under the panel head rather than in a settings
+   field, so it carries its own padding and a rule to sit under. */
+.adp-picker.is-compact {
+  padding: 7px var(--pad);
+  border-bottom: 1px solid var(--line-soft);
 }
-.adp-pick:hover, .adp-pick:focus { border-color: var(--line); color: var(--chalk); outline: none; }
+
+/* A feed that cannot be read here, and the last one still standing, are both
+   refused rather than hidden: which feeds exist is the thing being explained,
+   and a control that disappears explains nothing. Both keep their title. */
+.adp-picker .chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.adp-picker .chip:disabled:hover { color: var(--chalk-3); border-color: var(--line); }
+.adp-picker .chip[aria-pressed='true']:disabled { opacity: 0.75; }
 
 /* Position colour, applied by a data attribute so one rule covers all six. */
 [data-pos='QB'] { --pos: var(--qb); }
@@ -869,6 +870,56 @@ input[type='range']::-moz-range-thumb {
 /* A player the sources cannot agree on. The number is the gap, in picks. */
 .player-num.is-split { color: var(--te); }
 .player-num.is-split small { color: var(--te); opacity: 0.85; }
+
+/*
+ * A player worth more than the man you could have for nothing.
+ *
+ * Deliberately quiet: most of the board is above replacement in the early
+ * rounds, so a loud treatment would light up almost every row and say nothing.
+ * It goes plain again the moment the number turns negative, which is the
+ * reading actually worth catching late in a draft.
+ */
+.player-num.is-worth b { color: var(--chalk); }
+.player-num:not(.is-worth) b { color: var(--chalk-3); }
+
+/* The room has let him slide a full round. Gold is taken, so this is the one
+   colour left that reads as "look now" without claiming the pick is yours. */
+.player-fell { color: var(--wr); font-weight: 600; }
+
+/* ------------------------------------------------------------------ the key */
+
+/*
+ * Closed by default, so it costs one line of a list that is the point of the
+ * screen. Open, it is the only place that says what a number implies rather
+ * than what it is.
+ */
+.pool-legend > summary {
+  font-family: var(--narrow);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--chalk-3);
+  cursor: pointer;
+}
+.pool-legend > summary:hover { color: var(--chalk-2); }
+
+.pool-legend dl {
+  margin: 7px 0 2px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.pool-legend dt {
+  font-family: var(--narrow);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--chalk-2);
+  white-space: nowrap;
+}
+.pool-legend dd { margin: 0; color: var(--chalk-3); }
 
 /* ------------------------------------------------------- the cost of waiting */
 

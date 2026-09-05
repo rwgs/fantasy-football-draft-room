@@ -224,17 +224,39 @@ with the board open beside it before you rely on it in a draft that counts.
 
 | | Source | What it gives | Key |
 |---|---|---|---|
-| ADP, primary | [Sleeper](https://sleeper.com) | About 530 ranked players, per scoring format | none |
-| ADP, fallback and cross check | [Fantasy Football Calculator](https://fantasyfootballcalculator.com) | About 230 players, per league size, **with a standard deviation on every pick** | none |
+| ADP | [Sleeper](https://sleeper.com) | About 530 ranked players, per scoring format | none |
+| ADP | [Fantasy Football Calculator](https://fantasyfootballcalculator.com) | About 230 players, per league size, **with a standard deviation on every pick** | none |
+| Draft rank | [ESPN](https://fantasy.espn.com) | An editorial rank, set by people rather than measured. Abstains on kickers and defences | none |
+| ADP | Your own Yahoo draft room | What the people you are actually drafting against do. Needs the bridge, and only during a draft | none |
 | Projected points | Rotowire, through Sleeper | Season points in standard, half PPR and PPR | none |
 
-Sleeper leads because it ranks roughly twice as many players, so a twenty round
-draft still has a real board in the last rounds instead of a tail of unranked
-names. Fantasy Football Calculator fills the gaps and supplies two things
-Sleeper does not publish at all: a separate ADP for each league size, and the
-standard deviation of every pick measured across thousands of real drafts. That
-deviation is what sets how far the room reaches. You can switch the order, or
-average the two, in the settings.
+**You choose which of them price the board, and how.** Tick any combination in
+the settings, or over a live draft without restarting it, and pick whether they
+are averaged or read in order — the first feed that has heard of a player, with
+the rest filling its gaps. Hovering a feed says what it measures.
+
+The distinction worth knowing when choosing: Sleeper and Fantasy Football
+Calculator both measure where players actually go, over different populations,
+so agreement between them is one measurement counted twice rather than a
+consensus. ESPN's is a judgement, so it is the only one that can disagree with
+the market for a reason. Your own Yahoo room is the only one measured over the
+people you are literally drafting against.
+
+Sleeper is the default lead because it ranks roughly twice as many players, so a
+twenty round draft still has a real board in the last rounds instead of a tail
+of unranked names. Fantasy Football Calculator supplies two things nobody else
+publishes: a separate ADP for each league size, and the standard deviation of
+every pick measured across thousands of real drafts. That deviation is what sets
+how far the room reaches, and it is used whether or not you have that feed
+switched on.
+
+**A choice never empties a position.** ESPN abstains on kickers and defences,
+because ranking those two last is a roster convention rather than a view about
+anybody. So the feeds you pick decide who is asked first, not who is allowed to
+answer: where none of them has an opinion the rest are read instead, and the
+player is marked rather than quietly renumbered. Without that, choosing ESPN on
+its own took every kicker and defence off the board and left a league that
+starts one of each unable to fill a roster.
 
 **ADP borrows across formats.** The columns are not equally populated: half PPR
 carries 529 Sleeper ranks and standard carries 310. A player with a half PPR ADP
@@ -246,8 +268,8 @@ back to the user as names that matched nothing. Every board now holds about 600.
 If a league is still deep enough to outrun the board, the settings screen says
 so before you start.
 
-The two boards join on normalised name plus position, with team defences joined
-on the team abbreviation because the two sources name them differently
+Every source joins on normalised name plus position, with team defences joined
+on the team abbreviation because sources name them differently
 ("Seattle Defense" against "Seattle Seahawks"). The match rate is reported on
 every response. It currently runs at 99.6 per cent.
 
@@ -390,6 +412,22 @@ with no upstream to blame for its length.
 
 ---
 
+## What the numbers on a row mean
+
+Every row carries where the market takes a player, what the sources make of him,
+what he is worth, and the odds he lasts. The draft screen explains each of them
+in place: open **What these numbers mean** above the pool. The explanation lives
+next to the thing it explains rather than here, where it would drift from it.
+
+The one worth stating once, because it is not the number most tools show:
+**WORTH** is projected points above a *replacement starter at that player's own
+position*, not raw projected points. 240 points is a poor starting back and an
+outstanding tight end, and the raw number cannot tell you which. Subtracting
+replacement is what puts six positions on one list, and below zero means the
+waiver wire has somebody as good.
+
+---
+
 ## The survival bar
 
 Beside every player is a bar and a percentage: the chance that player is still
@@ -412,14 +450,22 @@ real numbers down and the bar will not see it.
 draft-room/
 ├── server/                  the data service. Express, no build step.
 │   └── src/
-│       ├── index.js         health, board, rankings, sleeper league
-│       ├── board.js         joins the two sources into one board
+│       ├── index.js         health, board, rankings, and the platform routes
+│       ├── board.js         joins the feeds you chose into one board
 │       ├── names.js         when two records name the same player
 │       ├── rankings.js      reads a ranking file from anywhere
-│       ├── sleeperLeague.js turns a real league into draft settings
-│       ├── sleeperDraft.js  a real draft: seats, keepers, order, live picks
 │       ├── cache.js         six hour disk cache, serves stale on failure
-│       └── sources/         ffc.js, sleeper.js
+│       ├── sources/         the ADP and projection feeds
+│       │   ├── ffc.js       Fantasy Football Calculator: ADP per league size
+│       │   ├── sleeper.js   projections, and a deeper pool
+│       │   └── espnRanks.js the editorial draft rank
+│       └── platforms/       one directory per league site, five methods each
+│           ├── index.js     the registry. An explicit list, not a scan
+│           ├── sleeper/     index.js, league.js, draft.js — pulled from a feed
+│           └── yahoo/       index.js, frames.js, room.js — pushed by the bridge
+├── userscript/              runs on Yahoo's page, not served from here
+│   ├── yahoo-draft-bridge.user.js   carries the room's frames to the service
+│   └── draft-panel.js               the board's reading, over the draft room
 └── client/                  React and TypeScript, built with Vite
     └── src/
         ├── config.ts        your leagues and your name, read from the env
@@ -431,15 +477,23 @@ draft-room/
         │   ├── order.ts     snake, linear, third round reversal
         │   ├── roster.ts    slots, flex, caps, best lineup
         │   ├── survival.ts  the odds a player lasts
+        │   ├── forecast.ts  this room played forward, and which way it leans
+        │   ├── value.ts     what waiting one turn costs, position by position
         │   ├── grade.ts     the two numbers at the end
         │   └── selftest.ts  the checks, run against live data
         └── components/      setup, draft, board, pool, roster, results, notes
 ```
 
 The draft runs in the browser. A pick has to land the instant you click it, and
-nothing about a draft needs a server round trip. The server exists to reach two
+nothing about a draft needs a server round trip. The server exists to reach the
 feeds a browser cannot call directly, to cache them, and to join them in one
 place so the client never has to guess whether two records name the same player.
+
+The userscript is the exception to both halves, and the only code here that runs
+on somebody else's page. Yahoo answers a session cookie, so only a script in
+your own tab can read your draft room; it posts what the room sends and decodes
+none of it, because the decoding is the fragile part and belongs where a test
+can replay it offline.
 
 ---
 

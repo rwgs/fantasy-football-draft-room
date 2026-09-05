@@ -10,6 +10,16 @@ export interface BoardQuery {
   teams: number;
   adpSource: string;
   year: number;
+  /**
+   * The draft room allowed to price this board, as `<platform>:<leagueId>`.
+   *
+   * Sent whenever a real draft is being followed, whatever the platform, and
+   * not only when the room is among the chosen feeds: the reply reports which
+   * feeds it *could* have used, and that is what lets the control offer the
+   * choice in the first place. A platform that publishes no such ADP yields
+   * none, so this costs nothing where it means nothing.
+   */
+  room?: string;
   force?: boolean;
 }
 
@@ -31,6 +41,7 @@ function query(q: BoardQuery): string {
     adpSource: q.adpSource,
     year: String(q.year),
   });
+  if (q.room) p.set('room', q.room);
   if (q.force) p.set('force', '1');
   return p.toString();
 }

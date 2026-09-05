@@ -68,6 +68,36 @@ Phase 4: prove the platform seam against real leagues.
     watching the check fail. Defences were never affected: Yahoo writes `DEF` and
     a team abbreviation, which is what `joinKey` already wanted.
 
+- [x] Choose which sources price the board, and say what the numbers imply.
+  - Scope: `adpSource` became `<rule>:<feed>,<feed>` — a tick per feed plus
+    averaged or in-order — with the four older namings normalised on the way in
+    so a saved league opens on the board it opened on. Yahoo's own room ADP
+    became a fourth feed, offered only while a draft is being followed, since
+    only the bridge can reach it. The pool's projected-points column became
+    points over a replacement starter, and a key above the pool says what each
+    number implies.
+  - Acceptance criteria: every older naming produces the board it always did;
+    no choice of feeds can empty a position; an average is of the feeds named
+    and no others; a room nobody posted is dropped rather than refused. All met
+    and all checked.
+  - Automated validation: eleven new checks in `engine:test` under "Choosing
+    which sources price the board", plus four in the Yahoo suite that price a
+    board off the posted room. Full run green with the service restarted first.
+    Typecheck, build and `server:test` clean; lint unchanged at 36 warnings,
+    none in the files touched.
+  - Manual validation: `npm run shots` clean with no console error, and the
+    control, the key and the new column photographed open in a real browser.
+  - **Found while building, and fixed before it shipped.** Making ESPN
+    independently selectable took all 45 kickers and all 32 defences off the
+    board, because ESPN abstains on both and nothing else was left to price
+    them. A league starting one of each could not have filled a roster. The
+    chosen feeds now decide who is asked first rather than who may answer.
+  - Behaviour that did change, deliberately: `consensus` past pick 240 in a 12
+    team league. It used to fall back to the first feed holding a number and now
+    takes their mean, which is what `blend` always did. Measured: 295 players
+    moved, none of them inside any draft, and the draftable board is identical
+    in content and order.
+
 - [x] The board's reading, shown over the Yahoo draft room.
   - Scope: the app posts what it has worked out to the service, the service
     holds it, and a panel over the draft room collects and paints it. The engine

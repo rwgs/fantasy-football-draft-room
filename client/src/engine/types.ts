@@ -3,23 +3,88 @@ export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
 export const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 
 /**
- * What `adpSource` may be, and what each choice is called on screen.
+ * The feeds that can price a player, in the order they are offered.
  *
- * Two namings because they answer in two places. Settings has the room to say
- * which feed is tried second, and that is the part worth knowing when you are
- * choosing. The draft screen says it in a line that also carries the format
- * and how long ago the room was read, so there it is the short form.
+ * `what` is the part that is easy to get wrong when choosing. Sleeper and
+ * Fantasy Football Calculator both measure where players actually go, over
+ * different populations. ESPN's is a judgement rather than a measurement, so it
+ * is the only one that can disagree with the market for a reason. Your own
+ * room measures the people you are literally drafting against.
  */
-export const ADP_SOURCES = [
-  { id: 'sleeper', label: 'Sleeper, then Fantasy Football Calculator', short: 'Sleeper first' },
-  { id: 'ffc', label: 'Fantasy Football Calculator, then Sleeper', short: 'Fantasy Football Calculator first' },
-  { id: 'blend', label: 'The mean of both', short: 'Mean of both' },
+export interface AdpFeed {
+  id: string;
+  label: string;
+  /** A shorter name, where one screen has no room for the full one. */
+  short?: string;
+  what: string;
+}
+
+export const ADP_FEEDS: AdpFeed[] = [
   {
-    id: 'consensus',
-    label: 'Consensus of Sleeper, Fantasy Football Calculator and ESPN',
-    short: 'Consensus of all three',
+    id: 'sleeper',
+    label: 'Sleeper',
+    what: 'Where players go in Sleeper drafts. Ranks about twice as many players as anyone else, so the late rounds stay real.',
+  },
+  {
+    id: 'ffc',
+    label: 'Fantasy Football Calculator',
+    short: 'FFC',
+    what: 'Where players go in its own drafts. The only feed with a separate ADP per league size, and the only one that measures how far real drafts disagree, which is what sets the reaching.',
+  },
+  {
+    id: 'espn',
+    label: 'ESPN',
+    what: 'A draft rank set by people rather than measured, put on the market’s own scale. The only opinion here, so the only one that can disagree for a reason. It abstains on kickers and defences.',
+  },
+  {
+    id: 'room',
+    label: 'Your draft room',
+    what: 'What the people you are actually drafting against do. Only your own browser can read it, so it needs a live Yahoo draft and is not available in a mock.',
   },
 ];
+
+/** How the chosen feeds are put together. */
+export const ADP_RULES = [
+  { id: 'avg', label: 'Averaged', what: 'The mean of every feed that puts him inside a draft.' },
+  { id: 'order', label: 'In order', what: 'The first feed that has heard of him. The rest only fill its gaps.' },
+];
+
+export interface AdpChoice {
+  rule: string;
+  feeds: string[];
+}
+
+/**
+ * Read an `adpSource` string into the chips to light up.
+ *
+ * The server decides what a source string *means* for the board; this decides
+ * only what the control shows, which is why the two are not one function. The
+ * four bare words are what saved leagues held before the list was selectable,
+ * and that table is closed: no new one will ever be added to it.
+ */
+export function parseAdpChoice(raw: string): AdpChoice {
+  const legacy: Record<string, string> = {
+    sleeper: 'order:sleeper,ffc',
+    ffc: 'order:ffc,sleeper',
+    blend: 'avg:sleeper,ffc',
+    consensus: 'avg:sleeper,ffc,espn',
+  };
+  const text = legacy[raw] ?? raw ?? '';
+  const at = text.indexOf(':');
+  const rule = at > 0 ? text.slice(0, at) : 'order';
+  const feeds = (at > 0 ? text.slice(at + 1) : text)
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => ADP_FEEDS.some((f) => f.id === s));
+
+  if (!feeds.length) return { rule: 'order', feeds: ['sleeper', 'ffc'] };
+  return { rule: ADP_RULES.some((r) => r.id === rule) ? rule : 'order', feeds };
+}
+
+/** Turn a choice back into the string the board is asked for. */
+export function adpChoiceId({ rule, feeds }: AdpChoice): string {
+  return rule + ':' + feeds.join(',');
+}
 
 export interface Player {
   id: string;
@@ -35,6 +100,14 @@ export interface Player {
   points: number | null;
   /** Set when this player has no ADP in the chosen format and one was borrowed. */
   adpBorrowedFrom: string | null;
+  /**
+   * True where no feed you chose had a view of him and the rest answered.
+   *
+   * Kickers and defences under an ESPN-only board are the ordinary case: ESPN
+   * abstains on both, and dropping them would leave a league that starts one of
+   * each unable to fill a roster.
+   */
+  adpOutsideChoice?: boolean;
   ffcAdp: number | null;
   sleeperAdp: number | null;
   injuryStatus: string | null;
@@ -49,6 +122,8 @@ export interface Player {
   /** ESPN's own ADP, carried for display and left out of the average. */
   espnAdp?: number | null;
   espnAuction?: number | null;
+  /** What the room being followed drafts him at. Null unless one is being read. */
+  roomAdp?: number | null;
   /** The mean of the sources that had an opinion, in picks. */
   consensus?: number | null;
   /** How far apart they are, in picks. Null when only one source voted. */
@@ -64,6 +139,12 @@ export interface BoardMeta {
   formatLabel: string;
   adpSource: string;
   adpSourceLabel: string;
+  /** How the feeds below were combined: `avg` or `order`. */
+  adpRule: string;
+  /** Which feeds priced this board, after unknown and unavailable ones were dropped. */
+  adpFeeds: string[];
+  /** Which feeds this board could have used. `room` is absent unless one is live. */
+  adpOffered: string[];
   adpLeagueSize: number;
   requestedLeagueSize: number;
   year: number;
@@ -78,6 +159,10 @@ export interface BoardMeta {
   withProjectedPoints: number;
   /** How many players carry an ADP read from a format other than this one. */
   adpBorrowed: number;
+  /** How many no chosen feed had a view about, so the others priced them. */
+  adpOutsideChoice: number;
+  /** How many the room being followed has an ADP for. Zero when none is. */
+  roomRanked: number;
   fetchedAt: number;
   stale: boolean;
 }

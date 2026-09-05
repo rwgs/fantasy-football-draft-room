@@ -1,17 +1,16 @@
-// The draft board: one row per player, built from three sources.
+// The draft board: one row per player, built from the sources the caller chose.
 //
 // WHICH ADP WINS
-// Sleeper is the primary ADP. It covers roughly 530 players against Fantasy
+// Sleeper is the default lead. It covers roughly 530 players against Fantasy
 // Football Calculator's 230, so a deep roster still has a real board in the
 // last rounds instead of a tail of unranked names. Fantasy Football Calculator
 // fills the gaps, and it supplies two things Sleeper does not publish at all:
 // a standard deviation for every pick, and a separate ADP per league size.
 //
-// The caller picks the rule with `adpSource`:
-//   sleeper  Sleeper first, Fantasy Football Calculator where Sleeper is blank.
-//   ffc      Fantasy Football Calculator first, Sleeper where it is blank.
-//   blend    The mean of the two, over whichever of them named a pick.
-//   consensus The mean of all three, ESPN's published rank included.
+// The caller says which sources vote and how, with `adpSource`. It reads
+// `<rule>:<source>,<source>` — `avg:sleeper,ffc,espn` for the mean of three,
+// `order:ffc,sleeper` for Fantasy Football Calculator with Sleeper filling its
+// gaps. See `parseAdpSource` for the two rules and the four older namings.
 //
 // HOW THEY JOIN
 // Name plus position, with team defences on the team abbreviation. See names.js
@@ -24,12 +23,76 @@ import { fetchEspnRanks } from './sources/espnRanks.js';
 
 export { FORMATS, nearestSize };
 
-export const ADP_SOURCES = {
-  sleeper: 'Sleeper first',
-  ffc: 'Fantasy Football Calculator first',
-  blend: 'Mean of both',
-  consensus: 'Consensus of all three',
+/**
+ * The feeds that may vote, and what each is called.
+ *
+ * `room` is not fetched here and is not always on offer. It is the ADP of the
+ * platform whose draft is being followed, which only that platform's own users
+ * can read, so it reaches this file as `buildBoard`'s `roomAdp` argument or not
+ * at all. Where none was passed it is not offered and a choice naming it is
+ * read without it.
+ */
+export const ADP_FEEDS = {
+  sleeper: 'Sleeper',
+  ffc: 'Fantasy Football Calculator',
+  espn: 'ESPN',
+  room: 'Your draft room',
 };
+
+/** How the chosen feeds are put together. */
+export const ADP_RULES = {
+  avg: 'Averaged',
+  order: 'In order',
+};
+
+/**
+ * The four namings that predate a selectable list, and what each always meant.
+ *
+ * Kept because they are what every saved league in somebody's browser holds.
+ * They are not a second way of expressing a choice: each is rewritten into the
+ * one encoding on the way in, so nothing downstream ever sees these words.
+ */
+const LEGACY_SOURCES = {
+  sleeper: 'order:sleeper,ffc',
+  ffc: 'order:ffc,sleeper',
+  blend: 'avg:sleeper,ffc',
+  consensus: 'avg:sleeper,ffc,espn',
+};
+
+/**
+ * Read `adpSource` into the rule and the feeds it names.
+ *
+ * Unknown feeds are dropped rather than refused, because this string outlives
+ * the app that wrote it: a league saved while a Yahoo room was open still says
+ * `room` months later in a mock draft where no room exists, and the useful
+ * answer there is the rest of the choice rather than an error. A choice that
+ * drops to nothing falls back to the default.
+ *
+ * @param {string} raw
+ * @param {string[]} [offered] the feeds available to this call, room included
+ */
+export function parseAdpSource(raw, offered = Object.keys(ADP_FEEDS)) {
+  const text = LEGACY_SOURCES[raw] || String(raw || '');
+  const [head, tail] = text.includes(':') ? text.split(/:(.*)/s) : ['order', text];
+  const rule = ADP_RULES[head] ? head : 'order';
+
+  const seen = new Set();
+  const sources = tail.split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => offered.includes(s) && !seen.has(s) && seen.add(s));
+
+  if (!sources.length) return parseAdpSource('sleeper', offered);
+  return { rule, sources, id: rule + ':' + sources.join(',') };
+}
+
+/** What a parsed choice is called on screen. */
+export function adpSourceLabel({ rule, sources }) {
+  const names = sources.map((s) => ADP_FEEDS[s] || s);
+  if (names.length === 1) return names[0];
+  return rule === 'avg'
+    ? 'Mean of ' + names.join(', ')
+    : names.join(', then ');
+}
 
 /**
  * THE CONSENSUS BOARD, AND WHY IT IS AVERAGED IN PICKS
@@ -132,26 +195,52 @@ function estimateStdev(adp) {
   return Math.min(MAX_MEASURED_STDEV, Math.max(1.5, adp * 0.11));
 }
 
-function pickAdp(source, sleeperAdp, ffcAdp, teams, consensus) {
-  if (source === 'consensus') return consensus ?? sleeperAdp ?? ffcAdp ?? null;
-  if (source === 'ffc') return ffcAdp ?? sleeperAdp ?? null;
-  if (source === 'blend') {
-    // Only a source that named a pick votes, so one that has run out of players
-    // cannot drag a real pick out of the draft.
-    const s = votes(sleeperAdp, teams);
-    const f = votes(ffcAdp, teams);
-    if (s != null && f != null) return (s + f) / 2;
-    if (s != null) return s;
-    if (f != null) return f;
-    // Neither named a pick. The mean is still the best ordering on offer for a
-    // tail no draft reaches, and dropping the player would shorten the board.
-    if (sleeperAdp != null && ffcAdp != null) return (sleeperAdp + ffcAdp) / 2;
-    return sleeperAdp ?? ffcAdp ?? null;
+const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/**
+ * The chosen feeds, combined into one pick number.
+ *
+ * `order` takes the first feed that has heard of the player at all. It does not
+ * ask whether the number is inside a draft, because the point of the rule is
+ * that the feeds are ranked by how much you trust them and the first one wins.
+ *
+ * `avg` averages only the feeds that named a pick a real draft could reach, so
+ * one that has run out of players cannot drag a drafted player out of the
+ * draft. Where none of them did the mean of whatever they hold is still the
+ * best ordering on offer for a tail nobody reaches, and dropping the player
+ * would shorten the board instead.
+ *
+ * @param {'avg'|'order'} rule
+ * @param {string[]} sources
+ * @param {Record<string, number|null>} values one pick number per feed
+ */
+function combineAdp(rule, sources, values, teams) {
+  if (rule === 'order') {
+    for (const s of sources) {
+      const v = values[s];
+      if (v != null && Number.isFinite(v)) return v;
+    }
+    return null;
   }
-  return sleeperAdp ?? ffcAdp ?? null;
+
+  const named = sources.map((s) => votes(values[s], teams)).filter((v) => v != null);
+  if (named.length) return mean(named);
+
+  const held = sources.map((s) => values[s]).filter((v) => v != null && Number.isFinite(v));
+  return held.length ? mean(held) : null;
 }
 
-export async function buildBoard({ format, teams, year, adpSource = 'sleeper', force = false }) {
+/**
+ * @param {object} opts
+ * @param {Map<string, number>|null} [opts.roomAdp] ADP from the room being
+ *   followed, keyed the way `names.js` keys everything. Only a platform's own
+ *   users can read it, so it is passed in rather than fetched.
+ */
+export async function buildBoard({
+  format, teams, year, adpSource = 'sleeper', roomAdp = null, force = false,
+}) {
+  const offered = Object.keys(ADP_FEEDS).filter((s) => s !== 'room' || roomAdp);
+  const chosen = parseAdpSource(adpSource, offered);
   const [ffc, sleeper, espn] = await Promise.all([
     fetchAdp({ format, teams, year, force }),
     fetchProjections({ year, force }),
@@ -242,9 +331,27 @@ export async function buildBoard({ format, teams, year, adpSource = 'sleeper', f
     const agreed = consensusOf([
       votes(p.sleeperAdp, teams), votes(p.ffcAdp, teams), votes(espnVote, teams),
     ]);
-    const adp = pickAdp(adpSource, p.sleeperAdp, p.ffcAdp, teams, agreed?.consensus ?? null);
+    const room = roomAdp?.get(p.key) ?? null;
+    const values = { sleeper: p.sleeperAdp, ffc: p.ffcAdp, espn: espnVote, room };
+
+    /*
+     * A PLAYER THE CHOSEN FEEDS DO NOT PRICE STILL BELONGS ON THE BOARD.
+     *
+     * Dropping him is not a smaller board, it is a broken one. ESPN abstains on
+     * kickers and defences, so ESPN chosen on its own emptied both positions
+     * outright — 45 kickers and 32 defences gone — and a league that starts one
+     * of each cannot fill a roster from what is left.
+     *
+     * So the choice decides who is *asked* first, not who is allowed to answer.
+     * Where nobody it names has a view, the rest are read on the same rule, and
+     * the player is marked rather than quietly renumbered.
+     */
+    let adp = combineAdp(chosen.rule, chosen.sources, values, teams);
+    const outside = adp == null;
+    if (outside) adp = combineAdp(chosen.rule, offered, values, teams);
     if (adp == null) continue;
-    const borrowed = adpSource !== 'ffc' && p.sleeperAdpFrom && p.sleeperAdpFrom !== format;
+    const borrowed = chosen.sources.includes('sleeper')
+      && p.sleeperAdpFrom && p.sleeperAdpFrom !== format;
     players.push({
       ...p,
       adp: Number(adp.toFixed(2)),
@@ -252,6 +359,8 @@ export async function buildBoard({ format, teams, year, adpSource = 'sleeper', f
       // was read from another one. Shown in the pool so the borrowing is never
       // silent.
       adpBorrowedFrom: borrowed ? p.sleeperAdpFrom : null,
+      /** True where no feed you chose had a view and the others answered. */
+      adpOutsideChoice: outside,
       adpStdev: Number(Math.min(MAX_MEASURED_STDEV, p.adpStdev ?? estimateStdev(adp)).toFixed(2)),
       stdevMeasured: p.adpStdev != null,
       espnRank: rated?.rank ?? null,
@@ -261,6 +370,8 @@ export async function buildBoard({ format, teams, year, adpSource = 'sleeper', f
       espnPick: espnPick.get(p.key) ?? null,
       espnAdp: rated?.adp ?? null,
       espnAuction: rated?.auction ?? null,
+      /** What the room being followed drafts him at, when one is being read. */
+      roomAdp: room,
       consensus: agreed?.consensus ?? null,
       /** How far apart the sources are about him, in picks. */
       consensusSpread: agreed?.spread ?? null,
@@ -280,8 +391,12 @@ export async function buildBoard({ format, teams, year, adpSource = 'sleeper', f
     players,
     meta: {
       ...ffc.meta,
-      adpSource,
-      adpSourceLabel: ADP_SOURCES[adpSource] || adpSource,
+      adpSource: chosen.id,
+      adpSourceLabel: adpSourceLabel(chosen),
+      adpRule: chosen.rule,
+      adpFeeds: chosen.sources,
+      /** Which feeds this board could have used, so the client greys the rest. */
+      adpOffered: offered,
       poolSize: players.length,
       positionCounts: counts,
       ffcPoolSize: ffc.players.length,
@@ -292,8 +407,12 @@ export async function buildBoard({ format, teams, year, adpSource = 'sleeper', f
         : 0,
       withProjectedPoints: players.filter((p) => p.points != null).length,
       adpBorrowed: players.filter((p) => p.adpBorrowedFrom).length,
+      /** How many no chosen feed had a view about. Kickers, mostly. */
+      adpOutsideChoice: players.filter((p) => p.adpOutsideChoice).length,
       espn: espn.meta,
       espnRanked: players.filter((p) => p.espnRank != null).length,
+      /** How many the room being followed has an ADP for. Zero when none is. */
+      roomRanked: players.filter((p) => p.roomAdp != null).length,
       /** Players all three sources had an opinion about. */
       consensusOfThree: players.filter((p) => p.consensusVotes >= 3).length,
       consensusOfTwo: players.filter((p) => p.consensusVotes === 2).length,

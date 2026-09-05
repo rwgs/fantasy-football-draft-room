@@ -12,7 +12,7 @@ import cors from 'cors';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ADP_SOURCES, FORMATS, buildBoard, nearestSize } from './board.js';
+import { ADP_FEEDS, ADP_RULES, FORMATS, buildBoard, nearestSize } from './board.js';
 import { parseRankings } from './rankings.js';
 import { PLATFORM_NAMES, platformFor } from './platforms/index.js';
 
@@ -91,14 +91,51 @@ function readTarget(req, res) {
 
 function readQuery(q) {
   const format = FORMATS[q.scoring] ? q.scoring : 'ppr';
-  const adpSource = ADP_SOURCES[q.adpSource] ? q.adpSource : 'sleeper';
+  // Carried rather than checked here: `parseAdpSource` is the one place that
+  // decides what a source string means, and it drops what it does not know.
+  // Capped only so a stranger cannot send a megabyte of feed names.
+  const adpSource = String(q.adpSource || 'sleeper').slice(0, 120);
   const teams = Math.min(16, Math.max(2, Number(q.teams) || 12));
   // A year is a new cache key and a new set of upstream fetches, so an
   // unbounded one lets a stranger drive traffic at two free feeds on our
   // behalf. Neither feed holds a season outside this window.
   const asked = Number(q.year) || DEFAULT_YEAR;
   const year = asked >= 2015 && asked <= DEFAULT_YEAR + 1 ? Math.trunc(asked) : DEFAULT_YEAR;
-  return { format, adpSource, teams, year, force: q.force === '1' || q.force === 'true' };
+  // Which live draft room, if any, is allowed to price this board. Written
+  // `<platform>:<leagueId>`, and worth nothing on its own: it is resolved
+  // through the registry below, so an unknown platform or a league nobody has
+  // posted simply yields no room rather than an error. Asking for a room that
+  // does not exist is what the app does every time it starts.
+  const room = String(q.room || '').slice(0, 64);
+  return {
+    format,
+    adpSource,
+    teams,
+    year,
+    roomAdp: room ? roomAdpFor(room) : null,
+    force: q.force === '1' || q.force === 'true',
+  };
+}
+
+/**
+ * The ADP of the room being followed, when one is being followed.
+ *
+ * Only a platform can produce this, because only a platform's own users can
+ * read it, so the board asks the registry rather than knowing any platform's
+ * name. A platform that cannot publish one simply does not offer `roomAdpByKey`
+ * and the board is built from the feeds alone, which is every platform but
+ * Yahoo today.
+ */
+function roomAdpFor(room) {
+  const [name, leagueId] = String(room).split(':');
+  const platform = platformFor(name);
+  if (!platform?.roomAdpByKey || !platform.isValidId(String(leagueId || ''))) return null;
+  try {
+    return platform.roomAdpByKey(leagueId);
+  } catch {
+    // A room that cannot be read is a board without it, never a failed board.
+    return null;
+  }
 }
 
 app.get('/api/health', (_req, res) => {
@@ -106,7 +143,8 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     year: DEFAULT_YEAR,
     formats: FORMATS,
-    adpSources: ADP_SOURCES,
+    adpFeeds: ADP_FEEDS,
+    adpRules: ADP_RULES,
     platforms: PLATFORM_NAMES,
     // Who is answering, and since when. A health check that only says "ok"
     // cannot tell a service that just started from one left running since

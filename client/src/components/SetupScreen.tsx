@@ -14,7 +14,8 @@ import type {
   AppMode, Board, CpuConfig, LeagueConfig, LeagueImport, LeagueSetup, NoteSet,
   Overrides, PendingKeeper, Platform, Position, PresetPick, RankingSet, RosterSlots, SavedLeague,
 } from '../engine/types';
-import { ADP_SOURCES, POSITIONS } from '../engine/types';
+import { POSITIONS } from '../engine/types';
+import AdpSourcePicker from './AdpSourcePicker';
 
 const SCORING = [
   { id: 'half-ppr', label: 'Half PPR' },
@@ -437,20 +438,19 @@ export default function SetupScreen(props: Props) {
               </div>
             </div>
 
-            <div className="field">
-              <label htmlFor="adpSource">Which ADP</label>
-              <select
-                id="adpSource"
-                className="input"
+            {/* A group of chips rather than one control, so the label names the
+                group instead of pointing at a form element that is not there. */}
+            <div className="field" role="group" aria-labelledby="adpSourceLabel">
+              <span className="field-label" id="adpSourceLabel">Which ADP</span>
+              <AdpSourcePicker
                 value={league.adpSource}
-                onChange={(e) => onLeague({ ...league, adpSource: e.target.value })}
-              >
-                {ADP_SOURCES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
+                offered={board?.meta.adpOffered}
+                onChange={(adpSource) => onLeague({ ...league, adpSource })}
+              />
               <p className="hint">
-                Sleeper ranks about twice as many players, so the late rounds stay real. Fantasy
-                Football Calculator publishes a separate ADP for every league size and measures how
-                far real drafts disagree on each player, which is what sets the reaching.
+                {board ? board.meta.adpSourceLabel + '. ' : ''}
+                Hover a feed to see what it measures. Two feeds that both count real drafts agree
+                by construction, so the one worth adding is the one that measures something else.
                 {board && board.meta.requestedLeagueSize !== board.meta.adpLeagueSize
                   && ' Your ' + board.meta.requestedLeagueSize + ' team league reads the '
                     + board.meta.adpLeagueSize + ' team ADP, the nearest one published.'}

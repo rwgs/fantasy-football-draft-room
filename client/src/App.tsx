@@ -133,6 +133,12 @@ export default function App() {
 
   // The board depends only on the four things that change it. Changing your
   // draft slot or the roster shape must not throw the pool away.
+  //
+  // The room is named whatever the platform, rather than only for the one that
+  // publishes an ADP. Which platforms do is the service's business, and asking
+  // is how the board comes back saying whether `room` was on offer at all.
+  const boardRoom = liveDraftId ? activePlatform + ':' + liveDraftId : undefined;
+
   useEffect(() => {
     const control = new AbortController();
     setLoading(true);
@@ -143,6 +149,7 @@ export default function App() {
         teams: league.teams,
         adpSource: league.adpSource,
         year: league.year,
+        room: boardRoom,
         force: refreshToken > 0,
       },
       control.signal,
@@ -154,7 +161,7 @@ export default function App() {
         setLoading(false);
       });
     return () => control.abort();
-  }, [league.scoring, league.teams, league.adpSource, league.year, refreshToken]);
+  }, [league.scoring, league.teams, league.adpSource, league.year, boardRoom, refreshToken]);
 
   /**
    * Run a ranking file against the board with the current overrides applied.
@@ -781,7 +788,7 @@ export default function App() {
           <a href="https://fantasyfootballcalculator.com" target="_blank" rel="noreferrer" style={{ color: 'var(--chalk-2)' }}>
             Fantasy Football Calculator
           </a>
-          {board?.meta.adpSource === 'consensus' && (
+          {board?.meta.adpFeeds?.includes('espn') && (
             <>
               {', with draft ranks from '}
               <a href="https://fantasy.espn.com" target="_blank" rel="noreferrer" style={{ color: 'var(--chalk-2)' }}>
