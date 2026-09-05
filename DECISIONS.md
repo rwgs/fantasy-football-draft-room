@@ -9,6 +9,57 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-05 FantasyPros is not a source on the free tier
+
+Status: Accepted. Reopens only if someone holds a paid key.
+
+### Decision
+
+The board is not built from FantasyPros. `server/.env` still recognises
+`FANTASYPROS_API_KEY` because the file is where any machine-local setting
+belongs, but nothing reads it and no source module exists.
+
+### Why
+
+The free tier returns ten rows. Not ten per position, and not the top ten: ten
+in all, whatever was asked for.
+
+Measured on 2026-09-05 with a real key, two requests:
+
+    GET /nfl/2026/rankings?week=0    count 1782   returned 10
+    GET /nfl/players?external_ids=…  count 8545   returned 10
+
+Both replies say so themselves, in `limit: 10`, `public_api_limited: true` and
+`tier: "free"`. The ten from the rankings call were the first ten defences in
+alphabetical order, so it is not even a useful ten. No amount of caching helps
+with data that does not arrive, and this app needs five hundred players deep for
+the late rounds of a fifteen round draft.
+
+The terms are not the obstacle, which is worth recording so nobody re-reads them
+hoping otherwise. Personal, non-commercial use of a locally run tool is squarely
+inside them, fifty requests a day is generous against a board cached for hours,
+and the attribution they ask for already has a home in the interface. The
+obstacle is only the row cap.
+
+### What is lost, and what would reopen it
+
+The shape of the data is close to ideal, which is why this is worth a record
+rather than a shrug. One row from `/nfl/players` carries `rank_ecr`, `rank_adp`,
+`rank_ecr_ppr`, `rank_adp_ppr` and `rank_ecr_half` — expert consensus and ADP
+for every format this app offers — alongside `yahoo_id` and `espn_id`. Those two
+would replace the six matching tiers in `names.js` with an authoritative join,
+and the Yahoo bridge currently matches picks by name because nothing better
+exists.
+
+So: a paid key, which the docs advertise as five hundred requests a day and full
+responses, would make this the strongest source available and would be worth
+taking. Nothing else changes the answer.
+
+### What was rejected with it
+
+Building a consensus board around FantasyPros instead of around ESPN. ESPN
+stays, and the entry it replaces was never written because ESPN landed first.
+
 ## 2026-09-04 The bridge carries, the service decodes
 
 Status: Accepted. Narrows the entry below, which left the split unstated.

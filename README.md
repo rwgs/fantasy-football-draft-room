@@ -460,13 +460,14 @@ way; copy `server/.env.example` to start one. Nothing in it is required.
 
 | Variable | What it does |
 |---|---|
-| `FANTASYPROS_API_KEY` | Optional. Adds FantasyPros consensus rankings to the board. Free key from [their docs](https://api.fantasypros.com/public/v2/docs), personal and non-commercial, 50 requests a day |
 | `DRAFT_YEAR` | The season to read. Defaults to the current year |
 | `PORT`, `HOST` | Where the service listens. Loopback only unless you change `HOST` |
 
-A key is yours personally and may not be shared, so it goes in that file and
-never in the repository. It travels to FantasyPros in a header rather than in
-the address, which keeps it out of URLs, logs and the names of cache files.
+Every feed the board is built from is free and asks for no key, and none of
+these is required. If you ever add one that does want a key, that file is where
+it goes: it is git ignored, and a key belongs in a header rather than in an
+address, which keeps it out of URLs, logs and the names of cache files.
+`DECISIONS.md` records why FantasyPros is not one of those feeds.
 
 Without them the app starts with no leagues and you paste a league ID into the
 settings screen, which is the path everybody else takes and so the one that
