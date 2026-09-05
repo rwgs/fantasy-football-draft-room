@@ -109,6 +109,8 @@ interface Props {
   onMyUser: (userId: string) => void;
   yahooMock: boolean;
   onYahooMock: (on: boolean) => void;
+  /** A Yahoo mock whose room has not been posted yet, and is being waited for. */
+  waitingRoom: string | null;
   onCheckDraft: () => void;
 }
 
@@ -139,7 +141,7 @@ export default function SetupScreen(props: Props) {
     keeperImportBusy, keeperImportNote, canImport, declared,
     resumeLive, onResumeLive, liveCount, liveBusy, liveStarted, hasDraft, startError,
     onCheckLive,
-    setup, myUserId, onMyUser, yahooMock, onYahooMock, onCheckDraft,
+    setup, myUserId, onMyUser, yahooMock, onYahooMock, waitingRoom, onCheckDraft,
   } = props;
 
   const activeLeague = savedLeagues.find((l) => l.id === activeLeagueId) || null;
@@ -343,6 +345,7 @@ export default function SetupScreen(props: Props) {
             onMyUser={onMyUser}
             yahooMock={yahooMock}
             onYahooMock={onYahooMock}
+            waitingRoom={waitingRoom}
           />
         </Section>
 

@@ -277,6 +277,29 @@ function roomAdp(room, byKey) {
 }
 
 /**
+ * Whether a room has been posted for this league yet, and how much of it.
+ *
+ * The one question here whose ordinary answer is "not yet", and so the one that
+ * reports rather than refuses. Every other method throws for a league nobody
+ * has posted, because asking what a draft has taken when no draft was ever
+ * opened is a mistake worth saying out loud. Waiting is not a mistake: a mock
+ * hands out its league number in the lobby minutes before the draft room tab
+ * exists, so the app asks this on a beat until both answers turn true.
+ *
+ * Both are evidence rather than description. The seat is written only by a post
+ * from the bridge, so it means a room is being watched now; the order arrives in
+ * the same connect burst as the settings, so it means the handshake landed and
+ * the seat and round counts an import reads are Yahoo's own.
+ */
+export async function roomState(leagueId) {
+  const room = getRoom(leagueId);
+  return {
+    orderIsSet: !!room?.order,
+    mySeat: room?.mySeat ?? null,
+  };
+}
+
+/**
  * Take one post from the bridge in the user's browser.
  *
  * The only way into this platform, and the only route in the service that is
@@ -313,6 +336,7 @@ export default {
   id: 'yahoo',
   label: 'Yahoo',
   ingest,
+  roomState,
   putAdvice,
   readAdvice,
   isValidId: (id) => IS_ID.test(id),

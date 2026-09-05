@@ -1731,6 +1731,19 @@ async function yahooRoom() {
     body: JSON.stringify(body),
   }).then((r) => r.json());
 
+  /*
+   * The one question a league nobody has posted can answer.
+   *
+   * The app asks it on a beat while a Yahoo mock waits for its draft room tab
+   * to open, which takes minutes and is the ordinary course of joining one. A
+   * refusal here would be an error every five seconds about nothing being
+   * wrong, and the app would have to read a fault as a state.
+   */
+  const roomState = (id: string) => fetch(API + '/api/yahoo/room/' + id).then((r) => r.json());
+  const before = await roomState(LEAGUE);
+  check('a room nobody has posted says so rather than refusing',
+    before.orderIsSet === false && before.mySeat === null, JSON.stringify(before));
+
   const first = await post({ team: 3, frames });
   check('a room with no pool yet asks for one', first.needPool === true);
 
@@ -1740,6 +1753,13 @@ async function yahooRoom() {
   // Both posts carried the same six picks. A pick that arrives twice, once live
   // and again in a reconnecting tab's replay, is still one pick.
   check('a pick sent twice is still one pick', reply.picks === 5, String(reply.picks));
+
+  // Both of the things the app waits for before it opens a board by itself: a
+  // seat means the bridge is posting, and the order means the room has finished
+  // introducing itself, so the seat and round counts are Yahoo's own.
+  const after = await roomState(LEAGUE);
+  check('a posted room reports the seat and the order the app waits on',
+    after.orderIsSet === true && after.mySeat === 3, JSON.stringify(after));
 
   /*
    * Yahoo's own ADP is the one thing here no feed this service can reach will
@@ -1863,6 +1883,9 @@ async function yahooRoom() {
   });
   check('nor is it given a room to advise on', strayAdvice.status === 404,
     String(strayAdvice.status));
+
+  const strayRoom = await fetch(API + '/api/sleeper/room/1234567890123456789');
+  check('nor a room to be waited for', strayRoom.status === 404, String(strayRoom.status));
 
   // ---- The real captures, when whoever is running this has them ------------
 

@@ -383,6 +383,33 @@ app.post('/api/:platform/room/:id', async (req, res) => {
 });
 
 /**
+ * Whether the room behind a league has been posted yet.
+ *
+ * The only question about a Yahoo league that a league nobody has posted can
+ * answer, and it answers "not yet" rather than refusing. The app asks it while
+ * it waits for a draft room to open, which is an ordinary few minutes of a mock
+ * rather than a fault, and a refusal on a beat would fill a console with errors
+ * about something going exactly as it should.
+ *
+ * Offered only to platforms that keep a room, exactly as the two routes around
+ * it are. A pulled platform has nothing to wait for.
+ */
+app.get('/api/:platform/room/:id', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.roomState) {
+    res.status(404).json({ error: 'That platform is read from its own feed, not posted to.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.roomState(target.id));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
  * What the board makes of the room, written by the app and read by the bridge.
  *
  * The two cannot address each other. The app is a page on this machine and the

@@ -28,6 +28,15 @@ const NARROW = { width: 430, height: 900 };
 
 const START = { mock: 'Start mock draft', assistant: 'Follow the draft' };
 
+/** Where the app keeps what you set. Seeded below to stand in for a last session. */
+const STORE = 'draftroom.v1';
+/** A Yahoo league saved in a previous session. Its room is long gone. */
+const DEAD_LEAGUE = '900000001';
+/** The seat the room below says the bridge is running in. */
+const MY_SEAT = 7;
+/** One beat of the wait for a room, and room to spare for the read that follows. */
+const ROOM_WAIT = 30000;
+
 async function reachDraft(browser, mode, viewport) {
   const page = await browser.newPage({ viewport });
   const errors = [];
@@ -51,6 +60,148 @@ async function reachDraft(browser, mode, viewport) {
   await page.locator('.clock').waitFor({ state: 'visible' });
   // The mock runs the room up to your turn before the clock settles.
   await page.waitForTimeout(600);
+
+  return { page, errors };
+}
+
+/**
+ * A Yahoo league the way one comes back with the page: an ID and nothing else.
+ *
+ * Every field the settings screen reads is here, because a missing one paints a
+ * console error, and a console error is a failure in this script.
+ */
+function savedYahooLeague(id) {
+  const settings = {
+    id,
+    draftId: id,
+    previousLeagueId: null,
+    isKeeper: false,
+    maxKeepers: 0,
+    name: 'Yahoo league ' + id,
+    season: null,
+    status: 'pre_draft',
+    teams: 12,
+    rounds: 15,
+    roster: null,
+    scoring: null,
+    draftType: 'snake',
+    rosterPositions: [],
+    receptionPoints: 0,
+    warnings: [],
+  };
+  return {
+    id,
+    name: settings.name,
+    platform: 'yahoo',
+    settings,
+    fetchedAt: Date.now(),
+    rankingSource: null,
+    keepers: [],
+    pendingKeepers: [],
+    tradedPicks: [],
+    myUserId: null,
+    slots: [],
+  };
+}
+
+/**
+ * Post a room the way the bridge in a draft room tab does.
+ *
+ * The seat it runs in and the whole draft order, which is what the connect
+ * burst carries and what the app waits for before it opens anything. Through
+ * the app's own origin, so this needs to know no more about where the service
+ * runs than the browser does.
+ */
+async function postRoom(id, teams, rounds, seat) {
+  const order = [];
+  for (let round = 1; round <= rounds; round += 1) {
+    const down = Array.from({ length: teams }, (_, i) => i + 1);
+    order.push(...(round % 2 ? down : down.reverse()));
+  }
+  const res = await fetch(APP + '/api/yahoo/room/' + id, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      team: seat,
+      seats: Array.from({ length: teams }, (_, i) => ({
+        id: i + 1, teamname: 'Team ' + (i + 1), manager: 'Manager ' + (i + 1),
+      })),
+      frames: ['H|S|30|0|0|0', 'R|' + order.join('|')],
+    }),
+  });
+  if (!res.ok) throw new Error('the service refused the room: ' + res.status);
+}
+
+/**
+ * A Yahoo mock, from a room that does not exist yet to a board that follows it.
+ *
+ * The only path here that no other check can reach. `engine:test` asks the
+ * service the questions a caller asks and renders nothing, and everything below
+ * is about when the app decides to open the board, which is where it went
+ * wrong: a ticked box and a league ID restored from the last session were taken
+ * as evidence of a room, so the board opened on a dead league and the real mock
+ * was never picked up.
+ *
+ * Three steps, in one page because they are one behaviour. A league that came
+ * back with the page opens nothing. A number typed before the draft room tab is
+ * up waits rather than failing. The room appearing opens the board by itself,
+ * in the seat the room says is yours.
+ */
+async function yahooMock(browser, viewport) {
+  const live = String(Date.now()).slice(-9);
+  const page = await browser.newPage({ viewport });
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+
+  await page.addInitScript(([key, state]) => {
+    localStorage.setItem(key, JSON.stringify(state));
+  }, [STORE, {
+    mode: 'assistant',
+    yahooMock: true,
+    activeLeagueId: DEAD_LEAGUE,
+    savedLeagues: [savedYahooLeague(DEAD_LEAGUE)],
+  }]);
+
+  await page.goto(APP, { waitUntil: 'domcontentloaded' });
+  // The board is a live fetch, and nothing can be decided before it lands.
+  await page.waitForFunction(
+    (label) => [...document.querySelectorAll('button')]
+      .some((b) => b.textContent.includes(label) && !b.disabled),
+    START.assistant,
+    { timeout: 60000 },
+  );
+  await page.waitForTimeout(500);
+  if (await page.locator('.clock').count()) {
+    throw new Error('the board opened on a league restored from the page, with no room behind it');
+  }
+
+  await page.getByRole('button', { name: 'Yahoo', exact: true }).click();
+  if (!await page.getByRole('checkbox', { name: /Yahoo mock draft/ }).isChecked()) {
+    throw new Error('the mock box did not come back ticked');
+  }
+
+  await page.locator('#leagueId').fill(live);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByText('Waiting for the room').waitFor({ state: 'visible' });
+  if (await page.locator('.clock').count()) {
+    throw new Error('the board opened on a room nobody has posted');
+  }
+  await page.screenshot({ path: join(OUT, 'yahoo-mock-waiting.png') });
+  console.log('  yahoo-mock-waiting.png');
+
+  // The draft room tab, two or three minutes later.
+  await postRoom(live, 12, 15, MY_SEAT);
+  await page.locator('.clock').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+
+  const slot = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)).league.mySlot,
+    STORE,
+  );
+  if (slot !== MY_SEAT) {
+    throw new Error('the board opened in seat ' + slot + ', not the ' + MY_SEAT
+      + ' the room reported');
+  }
 
   return { page, errors };
 }
@@ -87,6 +238,18 @@ async function main() {
     console.log('  ' + tag + '-full.png');
     if (errors.length) failures.push(tag + ': ' + errors.join(' | '));
     await page.close();
+  }
+
+  console.log('yahoo-mock:');
+  try {
+    const { page, errors } = await yahooMock(browser, WIDE);
+    await shoot(page, '.clock', 'yahoo-mock-clock');
+    await page.screenshot({ path: join(OUT, 'yahoo-mock-full.png') });
+    console.log('  yahoo-mock-full.png');
+    if (errors.length) failures.push('yahoo-mock: ' + errors.join(' | '));
+    await page.close();
+  } catch (err) {
+    failures.push('yahoo-mock: ' + err.message);
   }
 
   await browser.close();

@@ -321,6 +321,10 @@ left is: hook `WebSocket`, copy strings aside, POST them.
 - `POST /api/:platform/room/:id` exists, and is the only route written to. It is
   offered to platforms exposing `ingest` and refused for the rest, so the router
   still names no platform.
+- `GET /api/:platform/room/:id` exists alongside it, offered on the same terms,
+  and is the one Yahoo read that reports rather than refusing. A mock hands out
+  its league number in the lobby minutes before the draft room tab exists, so
+  "nothing posted yet" is a state the app waits through rather than a fault.
 - Yahoo is a *pushed* platform behind a seam designed for pulled ones. The five
   methods still fit; `draftPicks` reads memory instead of fetching.
 

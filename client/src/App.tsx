@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  fetchBoard, fetchDraftPicks, fetchLeague, fetchLeagueSetup, matchNotes, matchRankings,
+  fetchBoard, fetchDraftPicks, fetchLeague, fetchLeagueSetup, fetchRoomState, matchNotes,
+  matchRankings,
 } from './api';
 import { maskLeague } from './anon';
 import { keeperPicksIn } from './engine/order';
@@ -19,6 +20,9 @@ import type { RankingSource } from './storage';
 import { load, save } from './storage';
 
 type Screen = 'setup' | 'draft' | 'results';
+
+/** How often a Yahoo mock named before its room exists is asked about. */
+const ROOM_WAIT_MS = 5000;
 
 export default function App() {
   const saved = useRef(load()).current;
@@ -52,6 +56,16 @@ export default function App() {
    */
   const [resumeLive, setResumeLive] = useState(saved.resumeLive);
   const [yahooMock, setYahooMock] = useState(saved.yahooMock);
+  /**
+   * A Yahoo mock named from the lobby, before its draft room exists.
+   *
+   * The lobby hands out the league number two or three minutes before the room
+   * tab opens, and nothing about a Yahoo league can be read until the bridge in
+   * that tab posts. So the number is held here and the room asked about on a
+   * beat, rather than refused once and forgotten, which is the only thing "the
+   * board is up when the room is" can mean when the number arrives first.
+   */
+  const [waitingRoom, setWaitingRoom] = useState<string | null>(null);
   const [liveCount, setLiveCount] = useState<{ picks: number; at: number } | null>(null);
   const [liveBusy, setLiveBusy] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -627,7 +641,12 @@ export default function App() {
    */
   const applyYahooMock = useCallback((on: boolean) => {
     setYahooMock(on);
-    if (!on) return;
+    // The tick is also the off switch for the wait below. It is what armed it,
+    // so it is what stops it; nothing else does.
+    if (!on) {
+      setWaitingRoom(null);
+      return;
+    }
     setLeague((current) => ({
       ...current,
       roster: { ...YAHOO_MOCK_ROSTER },
@@ -636,28 +655,82 @@ export default function App() {
   }, []);
 
   /**
-   * Open the board the moment a Yahoo mock can be read.
+   * Add a league, or hold on to one that cannot be read yet.
+   *
+   * A ticked mock box means the number was copied out of the lobby, so the room
+   * it names may still be minutes from existing. Holding it and asking is what
+   * the tick is for. Every other league is read now or not at all, because
+   * every other league is one the service can already answer for.
+   */
+  const addLeague = useCallback((platform: Platform, id: string) => {
+    if (platform === 'yahoo' && yahooMock) {
+      setLeagueError(null);
+      setWaitingRoom(id);
+      return;
+    }
+    void pullLeague(platform, id);
+  }, [yahooMock, pullLeague]);
+
+  /**
+   * Ask a held Yahoo mock whether its room is there yet, and read it when it is.
+   *
+   * The two things it waits for are the two the route's own answer explains: a
+   * seat means the bridge is posting, and the order means it has finished
+   * introducing itself, so an import reads Yahoo's seat and round counts rather
+   * than the defaults it falls back on. A service that has stopped answering
+   * altogether is nothing to report while waiting; the next beat asks again.
+   */
+  useEffect(() => {
+    if (!waitingRoom || !yahooMock || screen !== 'setup') return undefined;
+    let alive = true;
+
+    const ask = async () => {
+      const room = await fetchRoomState('yahoo', waitingRoom).catch(() => null);
+      if (!alive || !room?.orderIsSet || !room.mySeat) return;
+      setWaitingRoom(null);
+      void pullLeague('yahoo', waitingRoom);
+    };
+
+    void ask();
+    const timer = setInterval(() => { void ask(); }, ROOM_WAIT_MS);
+    return () => { alive = false; clearInterval(timer); };
+  }, [waitingRoom, yahooMock, screen, pullLeague]);
+
+  /**
+   * Open the board the moment a Yahoo mock's room can be read.
    *
    * A mock is worth joining on a whim, and the two clicks between joining one
-   * and watching it are the ones that make it not worth bothering. The import
-   * only succeeds once the bridge has posted the room, so a league that loads
-   * at all is a room that is being watched.
+   * and watching it are the ones that make it not worth bothering.
    *
-   * Once per room, and never over a draft already on screen. The seat comes
-   * from the room address rather than a guess at which manager is you, which
-   * is the whole reason it can start without being asked anything.
+   * What starts it is the setup read for this league carrying a seat, not the
+   * league ID being set. The ID comes back with the page from the last session
+   * and so says nothing about any room; the seat is written only by a post from
+   * the bridge, so it says a room is being watched now, and it says which one
+   * is yours, which is the whole reason this can start without asking anything.
+   *
+   * The seat is applied on one pass and the draft started on the next. A draft
+   * is built from the league in hand, so setting the seat and starting in the
+   * same breath would build it from the seat that was there before.
+   *
+   * Once per room, and never over a draft already on screen.
    */
   const followedRoom = useRef<string | null>(null);
   useEffect(() => {
     if (!yahooMock || mode !== 'assistant' || screen !== 'setup') return;
     if (activePlatform !== 'yahoo' || !board || !liveDraftId) return;
     if (followedRoom.current === liveDraftId) return;
-    followedRoom.current = liveDraftId;
+    if (setup?.leagueId !== liveDraftId) return;
 
-    const seat = setup?.draft?.mySeat;
-    if (seat) setLeague((current) => ({ ...current, mySlot: seat }));
+    const seat = setup.draft?.mySeat;
+    if (!seat) return;
+    if (league.mySlot !== seat) {
+      setLeague((current) => ({ ...current, mySlot: seat }));
+      return;
+    }
+
+    followedRoom.current = liveDraftId;
     start();
-  }, [yahooMock, mode, screen, activePlatform, board, liveDraftId, setup, start]);
+  }, [yahooMock, mode, screen, activePlatform, board, liveDraftId, setup, league.mySlot, start]);
 
   // A new seed, drawn once and used for both the saved settings and the draft
   // that runs off them. Two draws here would mean the settings no longer
@@ -781,7 +854,7 @@ export default function App() {
             setCpu((c) => ({ ...c, cpuUsesMyRankings: false }));
           }}
           onLoadLeague={loadSavedLeague}
-          onAddLeague={(platform, id) => { void pullLeague(platform, id); }}
+          onAddLeague={addLeague}
           onRefreshLeague={(id) => {
             const at = savedLeagues.find((l) => l.id === id)?.platform ?? 'sleeper';
             void pullLeague(at, id, true);
@@ -830,6 +903,7 @@ export default function App() {
           setup={setup}
           yahooMock={yahooMock}
           onYahooMock={applyYahooMock}
+          waitingRoom={waitingRoom}
           myUserId={activeLeague?.myUserId ?? null}
           onMyUser={(userId) => {
             if (!activeLeagueId) return;

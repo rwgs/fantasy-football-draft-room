@@ -471,6 +471,17 @@ export interface LivePicks {
 }
 
 /**
+ * How much of a Yahoo draft room has been posted, while the app waits for one.
+ *
+ * The one question about a Yahoo league whose ordinary answer is "not yet", and
+ * so the one that reports rather than refusing.
+ */
+export interface RoomState {
+  orderIsSet: boolean;
+  mySeat: number | null;
+}
+
+/**
  * What the board makes of a room, in the few lines a panel over a draft can
  * hold without getting in the way of it.
  *

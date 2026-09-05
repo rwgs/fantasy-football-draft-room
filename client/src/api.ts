@@ -1,6 +1,6 @@
 import type {
   Board, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState, NoteSet,
-  Overrides, Platform, RankingSet, RoomAdvice,
+  Overrides, Platform, RankingSet, RoomAdvice, RoomState,
 } from './engine/types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -121,6 +121,20 @@ export async function fetchDraftState(
   draftId: string,
 ): Promise<LiveDraftState> {
   const res = await fetch(on(platform, '/draft/' + encodeURIComponent(draftId)));
+  if (!res.ok) return fail(res);
+  return res.json();
+}
+
+/**
+ * Whether the room behind a league has been posted yet.
+ *
+ * Asked on a beat while a Yahoo mock waits for its draft room tab to open, so
+ * unlike every other read here it answers rather than refusing when there is
+ * nothing there: a lobby hands out the league number before the room exists.
+ */
+export async function fetchRoomState(platform: Platform, leagueId: string): Promise<RoomState> {
+  const res = await fetch(on(platform, '/room/' + encodeURIComponent(leagueId)),
+    { cache: 'no-store' });
   if (!res.ok) return fail(res);
   return res.json();
 }

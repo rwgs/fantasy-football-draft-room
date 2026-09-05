@@ -78,8 +78,24 @@ and DEF, with six on the bench, for fifteen rounds.
 It also opens the board as soon as the room can be read, in the seat you are
 actually sitting in. The draft room address the bridge runs in names your team,
 so the app no longer has to ask which manager is you; that seat now comes back
-with the rest of the draft state. Paste the league number from the mock lobby,
-which shows it before the draft starts, and the board is up when the room is.
+with the rest of the draft state.
+
+Paste the league number from the mock lobby, which shows it before the draft
+starts, and the app waits: the lobby hands out that number two or three minutes
+before the draft room tab exists, so waiting is a state on the settings screen
+rather than a load that failed. It asks the service every few seconds whether
+the room is there, and reads the league the moment your draft room is up and the
+bridge in it has posted the seat and the draft order. In the draft assistant the
+board then opens by itself. Unticking the box stops it.
+
+A Yahoo mock is a public room of real people rather than a simulation, so it is
+the assistant that follows one, not this app's own mock draft. Ticking the box
+in a mock still sets the roster, because that is a fact about the room either
+way.
+
+Nothing opens on a league ID alone. The ID of the last league you loaded comes
+back with the page and says nothing about any room, so what starts a board is
+the room itself answering.
 
 **What a position costs to skip.** Above your roster, each position now carries
 the best player left at it in points over a replacement starter, the value you

@@ -19,6 +19,8 @@ interface Props {
   /** Whether the Yahoo league being added is one of Yahoo's own mock drafts. */
   yahooMock: boolean;
   onYahooMock: (on: boolean) => void;
+  /** A Yahoo mock whose room has not been posted yet, and is being waited for. */
+  waitingRoom: string | null;
 }
 
 /** How long ago a league's settings were pulled, in plain words. */
@@ -64,7 +66,7 @@ const PLATFORMS: { id: Platform; label: string; hint: string }[] = [
 export default function LeaguePanel(props: Props) {
   const {
     leagues, activeId, imported, busy, error, onLoad, onAdd, onRefresh, onRemove, anonymous,
-    setup, myUserId, onMyUser, yahooMock, onYahooMock,
+    setup, myUserId, onMyUser, yahooMock, onYahooMock, waitingRoom,
   } = props;
   const seats = setup?.slots ?? [];
   const mySeat = seats.find((s2) => s2.userId === myUserId) || null;
@@ -214,8 +216,9 @@ export default function LeaguePanel(props: Props) {
             <span>
               <b>This is a Yahoo mock draft.</b>
               {' Sets the roster Yahoo mocks always run, QB, WR, WR, RB, RB, TE, W/R/T, K '}
-              {'and DEF with six on the bench, and follows the draft as soon as the room '}
-              {'is readable. The lobby shows the league number before it starts.'}
+              {'and DEF with six on the bench. Paste the league number from the lobby, '}
+              {'which shows it before the draft starts, and the board waits for your '}
+              {'draft room. In the draft assistant it opens by itself when the room is up.'}
             </span>
           </label>
           </div>
@@ -223,6 +226,22 @@ export default function LeaguePanel(props: Props) {
       </div>
 
       <div>
+        {/*
+          * A mock named before its room exists. Nothing is wrong and nothing is
+          * loading, so neither the error banner nor the busy line says it: the
+          * draft room tab is simply not open yet.
+          */}
+        {waitingRoom && (
+          <>
+            <p className="eyebrow">Waiting for the room</p>
+            <p className="hint" style={{ margin: '2px 0 0' }}>
+              {'Nothing has been posted for ' + (anonymous ? 'this league' : 'league ' + waitingRoom)}
+              {'. The board opens by itself once your Yahoo draft room is up and the '}
+              {'bridge in it posts. Untick the mock box to stop waiting.'}
+            </p>
+          </>
+        )}
+
         {busy && <p className="hint">Reading the league.</p>}
 
         {imported && !busy && (
