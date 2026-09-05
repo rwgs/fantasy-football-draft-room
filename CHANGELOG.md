@@ -119,6 +119,27 @@ best quarterback's chance of lasting to your next pick from 90 per cent to 75.
 Once a round of real picks exists they win: what this draft did beats what
 Yahoo's drafts do in general.
 
+**A third opinion on the board, and a way to see where they disagree.** Sleeper
+and Fantasy Football Calculator both measure the same thing — where players
+actually come off the board — so agreeing with each other is one measurement
+counted twice. ESPN publishes a draft rank, which is a judgement rather than a
+measurement, and it is free and needs no key. Pick **Consensus of all three**
+as your ADP source to average them, and the pool carries the gap between the
+sources beside the number so a mean never hides whether three agreed or two
+disagreed.
+
+Three rules make the average mean something. A rank is not a pick number, so
+ESPN's ranks are mapped onto the market's own scale by position, which brings
+them from 412 picks away from the market to 81. ESPN abstains on kickers and
+defences, where its placement is the convention that you draft them last rather
+than a view on the player. And a source that has run out of players abstains
+rather than voting with a number from past the end of any draft.
+
+**PPR is the default scoring.** It was half PPR, in the setting a new browser
+starts with and in the format the service falls back to. ESPN publishes a rank
+table for PPR and none for half PPR, so this is also the format where its
+opinion is its own rather than borrowed.
+
 ### Fixed
 
 **A player eligible at two positions joins the board again.** Yahoo writes dual

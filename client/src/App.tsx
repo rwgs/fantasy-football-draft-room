@@ -652,12 +652,27 @@ export default function App() {
             {' players'}
           </span>
         )}
+        {/*
+          * Who the numbers on screen came from.
+          *
+          * ESPN is named only when it is voting. It contributes to the
+          * consensus board and to no other, so crediting it on all of them
+          * would claim a source the board in front of you did not use.
+          */}
         <span className="hint attribution">
           ADP from Sleeper and
           {' '}
           <a href="https://fantasyfootballcalculator.com" target="_blank" rel="noreferrer" style={{ color: 'var(--chalk-2)' }}>
             Fantasy Football Calculator
           </a>
+          {board?.meta.adpSource === 'consensus' && (
+            <>
+              {', with draft ranks from '}
+              <a href="https://fantasy.espn.com" target="_blank" rel="noreferrer" style={{ color: 'var(--chalk-2)' }}>
+                ESPN
+              </a>
+            </>
+          )}
           . Projections from Rotowire via Sleeper.
         </span>
 
