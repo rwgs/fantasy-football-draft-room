@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DraftBoard from './DraftBoard';
 import PlayerPool from './PlayerPool';
 import ValuePanel from './ValuePanel';
+import { forecast } from '../engine/forecast';
 import RosterPanel from './RosterPanel';
 import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
@@ -16,6 +17,14 @@ import type { AppMode, Board, Platform } from '../engine/types';
 
 /** How often the assistant asks Sleeper for new picks. */
 const POLL_MS = 8000;
+
+/**
+ * How many times the room is played out to read the odds off it.
+ *
+ * The numbers stop moving somewhere under this: at 120 runs and again at 240
+ * the mean picks per position agree to a tenth.
+ */
+const FORECAST_RUNS = 150;
 
 interface Props {
   engine: DraftEngine;
@@ -178,6 +187,28 @@ export default function DraftScreen(props: Props) {
     // A real draft ending is a result worth reading. A mock ending is too.
     if (state.done) onFinish();
   }, [state.done]);
+
+  /*
+   * The room, played forward from where it actually is.
+   *
+   * Only when following a real one, for two separate reasons.
+   *
+   * It would be wrong in a mock. The lean is measured off the picks and then
+   * added to the dials, which is right for a room whose bias is unknown and
+   * double counting for one you set yourself: a room dialled to force backs at
+   * +4 measures at +3.6 and would then be simulated at +5. There is nothing to
+   * discover about a room you configured.
+   *
+   * It would also be too slow. One run costs 100ms to 230ms, rising with the
+   * distance to your turn, and a mock takes a pick every 140ms at the default
+   * pace, so it would more than double the time each pick takes and block the
+   * frame for most of it. Following a real draft the engine changes only when a
+   * pick actually lands, a poll apart at most, so there is nothing to throttle.
+   */
+  const room = useMemo(
+    () => (assistant ? forecast(engine, FORECAST_RUNS) : null),
+    [engine, assistant],
+  );
 
   const draft = (id: string) => {
     setQueue((q) => q.filter((x) => x !== id));
@@ -360,6 +391,7 @@ export default function DraftScreen(props: Props) {
             queue={queue}
             onQueue={toggleQueue}
             formatLabel={board.meta.formatLabel}
+            roomOdds={room?.survival ?? null}
           />
         </div>
 
@@ -381,6 +413,7 @@ export default function DraftScreen(props: Props) {
             teams={teams}
             currentPick={pick}
             myNextPick={oddsTarget}
+            room={room}
           />
           <RosterPanel
             players={myPlayers}
