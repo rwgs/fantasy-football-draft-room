@@ -89,12 +89,37 @@ Frames are pipe-delimited text, one record per frame.
 | `H\|S\|30\|0\|0\|<started>` | Settings. `S` is snake and `30` the seconds per pick — both **inferred**, and both agree with the order and clock actually seen. The last field is **observed** to be `0` before a draft opens and `1` on reconnecting to one in progress. The middle two zeros are unknown |
 | `R\|<team>\|<team>\|…` | **The entire draft order**, one entry per pick, in pick order. **Observed** at exactly 210 entries for a 14-team, 15-round league, running `1..14, 14..1, …` |
 | `Q` | Unknown. No payload |
-| `A\|14=0\|13=2\|12=0\|11=1\|…` | One value per seat. **Observed** taking `0`, `1` and `2`, so it is not a boolean and the obvious "autopick on/off" reading is wrong. Meaning unknown |
+| `A\|14=0\|13=2\|12=0\|11=1\|…` | One value per seat. **Observed** taking `0`, `1` and `2`. `1` is **observed once** to mean autopick, and `2` is still unknown. See below |
 | `P\|<overall>=<player>,<team>,<cost>\|…` | **Every pick made so far.** Empty on a draft that has not started, which is why it first appeared as a bare `P`. See below |
 | `w\|3600\|20` | Unknown. `3600` looks like a limit in seconds |
 
 Two of these carry the state a client needs to catch up, and both are
 **observed**, on a reconnect into a draft 91 picks deep.
+
+#### What `A|` says, as far as it is known
+
+`1` is autopick. Read on 2026-09-05 by rejoining a 14-team mock from a seat
+already known to be in autopick, put there by Yahoo for inactivity, and reading
+that seat back out of the connect burst:
+
+    A|14=1|13=1|12=1|11=1|10=0|9=1|8=1|7=1|6=0|5=0|4=1|3=1|2=1|1=1
+         ^ the seat known to be autopicking
+
+Three seats read `0` in a room where most were bots, which fits `0` meaning a
+manager still picking for themselves, though that half is inference.
+
+**`2` remains unknown.** It has appeared once across every capture taken, on a
+seat whose state nothing independent established. So this is a three-state field
+with two states identified, and the plain "autopick on or off" reading is still
+wrong.
+
+None of this reaches the board. The bridge forwards `0`, `H`, `R` and `P` only,
+and a frame it drops cannot break it — which is why `A|` had to be read with a
+recorder injected beside the bridge rather than from anything the service holds.
+
+`A|` is sent **once, in the connect burst, and never again** when the state it
+reports changes. A client cannot watch a seat flip; it can only reconnect and
+read the value afresh, which is how the reading above was taken.
 
 `R|` gives the order rather than implying it. A league with keepers, traded
 picks or a custom order should be read from here, and deriving the order from a
