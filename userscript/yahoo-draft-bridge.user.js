@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo draft bridge
 // @namespace    fantasy-football-draft-room
-// @version      1.0.0
+// @version      1.2.0
 // @description  Copy your own Yahoo draft room onto the draft board running on your machine. Reads only; never picks.
 // @match        https://football.fantasysports.yahoo.com/draftclient/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js
@@ -30,12 +30,23 @@
  *   - Read `document.cookie`, or any storage. Your Yahoo session stays in the
  *     browser, and the local service is deliberately never given it.
  *   - Send anything anywhere except the loopback address below.
+ *   - Draw anything. The panel that shows what the board makes of the room is
+ *     not here: it needs no privileges, and tying it to a userscript only gave
+ *     it a userscript's ways of failing to install. It is a bookmarklet, from
+ *     `http://127.0.0.1:5178/panel`. See `DECISIONS.md`.
  *
  * Two things worth knowing before you rely on it:
  *
  *   - The frame format is Yahoo's private protocol with its own client. Nobody
  *     promised it, and it can change in a deploy, without notice, mid-draft. If
  *     picks stop appearing, that is the first thing to suspect.
+ *   - Chrome gates a public page reaching the loopback, separately from anything
+ *     this project controls. Where it is enforced it asks once, and refusing it
+ *     leaves the console saying only that a CORS policy denied "the `loopback`
+ *     address space". If nothing ever arrives and that line is in the console,
+ *     that is the reason: allow the local network access Chrome asked about.
+ *     No header from the service can answer it, because it is a permission
+ *     rather than a negotiation.
  *   - Everything it was built from was watched in mock drafts. Run a mock with
  *     the board open beside it before you trust it in a real one.
  *
@@ -77,7 +88,17 @@
   /** A queue that only ever grows means the service is down. Cap it and say so. */
   const MAX_QUEUED = 2000;
 
+  /** Bumped with `@version` above. Logged so the running copy is never in doubt. */
+  const VERSION = '1.2.0';
+
   const log = (...args) => console.log('[yahoo-bridge]', ...args);
+
+  // Said before anything that could go wrong, so the running version is known
+  // even when everything after this line fails. It used to be logged at the
+  // end, which told you the version only when nothing had gone wrong, which is
+  // exactly when nobody needs it.
+  log('v' + VERSION + ' loading in the ' + (window.top === window ? 'top frame' : 'an iframe')
+    + ' at ' + location.pathname);
 
   // ---- Which league, and which seat --------------------------------------
   //

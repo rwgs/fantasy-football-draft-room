@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DraftBoard from './DraftBoard';
 import PlayerPool from './PlayerPool';
 import ValuePanel from './ValuePanel';
-import { forecast, priorLean } from '../engine/forecast';
+import { describeLean, forecast, pricedPositions, priorLean } from '../engine/forecast';
 import RosterPanel from './RosterPanel';
 import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
@@ -10,9 +10,9 @@ import {
   undoPick, undoToMyLastPick,
 } from '../engine/draft';
 import type { DraftEngine } from '../engine/draft';
-import { fetchDraftPicks } from '../api';
+import { fetchDraftPicks, postRoomAdvice } from '../api';
 import { maskTeam } from '../anon';
-import { pickLabel } from '../picks';
+import { pickLabel, pickLabelWithOverall } from '../picks';
 import { livePresets, offBoardPlayer } from '../engine/live';
 import { ADP_SOURCES } from '../engine/types';
 import type { AppMode, Board, Platform, Player } from '../engine/types';
@@ -272,6 +272,48 @@ export default function DraftScreen(props: Props) {
     [engine, assistant, prior],
   );
 
+  /** Every position priced for this pick, drawn by the panel and sent to the room. */
+  const priced = useMemo(
+    () => pricedPositions(
+      available, board.players, teams, state.league.roster, pick, oddsTarget, room,
+    ),
+    [available, board.players, teams, state.league.roster, pick, oddsTarget, room],
+  );
+
+  /*
+   * The same reading, handed to the draft room it is about.
+   *
+   * Yahoo answers only the tab the user is already sitting in, so the bridge
+   * that follows the picks is also the only thing that can put an answer back
+   * in front of them. It shows what arrives here and works nothing out itself,
+   * which keeps one implementation of the pricing rather than two.
+   *
+   * Only for a Yahoo draft being followed. A mock has no room to talk to, and
+   * a Sleeper draft is read from a feed with no tab of ours in it.
+   */
+  useEffect(() => {
+    if (!assistant || platform !== 'yahoo' || !draftId) return;
+    if (oddsTarget == null) return;
+
+    void postRoomAdvice(platform, draftId, {
+      onClock: yourTurn,
+      pickLabel: pickLabelWithOverall(oddsTarget, teams),
+      lean: room ? describeLean(room.lean) : null,
+      // Three is what fits over a draft room without covering it. They are
+      // already sorted by what waiting costs, so these are the three worth
+      // spending the pick on.
+      rows: priced.slice(0, 3).map((row) => ({
+        position: row.position,
+        name: row.best?.name ?? '',
+        cost: row.cost,
+        odds: row.odds,
+      })),
+    }).catch(() => {
+      // The board on this screen is unaffected, and the panel in the other tab
+      // simply keeps the last thing it was given.
+    });
+  }, [assistant, platform, draftId, oddsTarget, yourTurn, teams, room, priced]);
+
   const draft = (id: string) => {
     setQueue((q) => q.filter((x) => x !== id));
     onEngine(draftPlayer(engine, id));
@@ -492,11 +534,8 @@ export default function DraftScreen(props: Props) {
 
         <div className={'panel roster-col' + (pane === 'roster' ? ' is-active' : '')}>
           <ValuePanel
-            available={available}
-            all={board.players}
-            roster={state.league.roster}
+            rows={priced}
             teams={teams}
-            currentPick={pick}
             myNextPick={oddsTarget}
             room={room}
           />

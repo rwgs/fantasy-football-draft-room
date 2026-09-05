@@ -1783,6 +1783,45 @@ async function yahooRoom() {
     imported.roster === null && imported.scoring === null);
   check('and says so', imported.warnings.some((w: string) => /roster shape/.test(w)));
 
+  // ---- What the board tells the room ---------------------------------------
+  //
+  // The panel over a Yahoo draft is fed from here: the app writes what it has
+  // worked out, the bridge collects it. The service is a pigeonhole and is
+  // checked as one, including that it will not become a way to invent rooms.
+  const advise = (id: string, body: unknown) => fetch(
+    API + '/api/yahoo/room/' + id + '/advice',
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+  );
+
+  const unknownRoom = await advise('999999999', { rows: [] });
+  check('advice about a room nobody has posted is refused', unknownRoom.status === 400,
+    String(unknownRoom.status));
+  const invented = await (await fetch(API + '/api/yahoo/room/999999999/advice')).json();
+  check('and refusing it did not quietly create the room', invented.advice === null);
+
+  const told = await advise(LEAGUE, {
+    onClock: true,
+    pickLabel: '2.07 #19',
+    lean: 'The room is leaning on backs.',
+    rows: [{ position: 'RB', name: 'A Back', cost: 18.4, odds: 0.22 }],
+    // Anything reachable can post here, so the store keeps what it recognises
+    // and drops the rest rather than handing a page it does not own whatever
+    // arrived.
+    somethingElse: 'ignored',
+  });
+  check('the board can tell the room what it thinks', told.status === 200,
+    String(told.status));
+
+  const read = await (await fetch(API + '/api/yahoo/room/' + LEAGUE + '/advice')).json();
+  check('and the bridge reads back exactly that',
+    read.advice.onClock === true
+      && read.advice.pickLabel === '2.07 #19'
+      && read.advice.rows.length === 1
+      && read.advice.rows[0].name === 'A Back',
+    JSON.stringify(read.advice));
+  check('with nothing it was not asked to keep',
+    !('somethingElse' in read.advice), Object.keys(read.advice).join(','));
+
   const stray = await fetch(API + '/api/sleeper/room/1234567890123456789', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1790,6 +1829,14 @@ async function yahooRoom() {
   });
   check('a platform read from its own feed is not writable', stray.status === 404,
     String(stray.status));
+
+  const strayAdvice = await fetch(API + '/api/sleeper/room/1234567890123456789/advice', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  check('nor is it given a room to advise on', strayAdvice.status === 404,
+    String(strayAdvice.status));
 
   // ---- The real captures, when whoever is running this has them ------------
 

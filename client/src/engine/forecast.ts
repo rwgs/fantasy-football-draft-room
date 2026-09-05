@@ -1,9 +1,10 @@
 import { biasLever, chooseCpuPick } from './cpu';
 import { availablePlayers, currentPick, currentTeam, nextUserPick, presetFor } from './draft';
 import { mulberry32 } from './random';
-import { replacementPoints } from './value';
+import { positionValues, replacementPoints } from './value';
 import type { DraftEngine } from './draft';
-import type { CpuConfig, Player, Position } from './types';
+import type { PositionValue } from './value';
+import type { CpuConfig, Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
 /**
@@ -353,4 +354,38 @@ export function describeLean(lean: Record<Position, number>): string | null {
 
   const words = strong.map((p) => (lean[p] > 0 ? 'forcing ' : 'fading ') + p);
   return 'This room is ' + words.join(' and ') + '.';
+}
+
+/**
+ * Every position priced for this pick, with the room's own reading where there
+ * is one.
+ *
+ * `positionValues` answers off ADP, which is the average of thousands of rooms
+ * rather than yours. When the assistant has simulated this one, its expected
+ * best and its survival replace those guesses. Both answer the same question
+ * and only one of them has watched the draft.
+ *
+ * It lives here rather than in the panel that draws it because it is no longer
+ * drawn in one place: the same reading goes to the bridge, to be shown in the
+ * draft room itself, and two copies of this merge would drift apart.
+ */
+export function pricedPositions(
+  available: Player[],
+  all: Player[],
+  teams: number,
+  roster: RosterSlots,
+  currentPick: number,
+  targetPick: number | null,
+  room: Forecast | null,
+): PositionValue[] {
+  const base = positionValues(available, all, teams, roster, currentPick, targetPick);
+  if (!room) return base;
+
+  return base
+    .map((row) => {
+      const later = room.expected[row.position];
+      const odds = row.best ? room.survival.get(row.best.id) ?? 0 : 0;
+      return { ...row, later, odds, cost: Math.max(0, row.now - later) };
+    })
+    .sort((a, b) => b.cost - a.cost);
 }

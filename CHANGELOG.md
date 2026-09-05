@@ -43,6 +43,32 @@ gate user scripts: until "Allow user scripts" is on for the manager, the bridge
 installs, enables, reports no error and never runs. The README leads with it and
 gives the one console probe that tells that failure apart from every other one.
 
+**The board, in the Yahoo draft room.** A small panel over the draft page A small panel over the page carries the pick you are
+on, what the room is leaning towards, and the three positions worth spending
+this pick on with the odds each one lasts. It is the same reading the app shows,
+so there is one answer rather than two, and it means a pick can be made without
+looking away from the room.
+
+It installs as a bookmarklet from `http://127.0.0.1:5178/panel`: drag it to the
+bookmarks bar once, click it in the draft room. It is deliberately not part of
+the bridge userscript, which needs privileged injection to wrap `WebSocket` and
+would have handed the panel all of its ways of failing to install. See
+`DECISIONS.md`.
+
+The app works it out and posts it; the service holds it; the panel collects it
+and paints it. Nothing was moved into the service, which still forms no opinion
+about a draft, and nothing was moved into the userscript, which still decodes
+nothing. See `DECISIONS.md`.
+
+It cannot get in the way of the draft under it, and that is checked in a real
+browser rather than asserted. It is one element in a shadow root, so no
+style crosses in either direction and Yahoo's own nodes are never touched. It is
+drawn into the top frame, because Yahoo runs the draft in an iframe and anything
+pinned inside one is pinned to the frame rather than to the window.
+Everything in it ignores the mouse except the button that hides it, so a click
+where it sits still reaches the draft. Every fault is swallowed: a panel that
+breaks paints nothing and the draft carries on.
+
 **What a position costs to skip.** Above your roster, each position now carries
 the best player left at it in points over a replacement starter, the value you
 can expect to still be there at your next pick, and the gap between them. The

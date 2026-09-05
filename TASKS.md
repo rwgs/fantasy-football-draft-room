@@ -68,7 +68,36 @@ Phase 4: prove the platform seam against real leagues.
     watching the check fail. Defences were never affected: Yahoo writes `DEF` and
     a team abbreviation, which is what `joinKey` already wanted.
 
+- [x] The board's reading, shown over the Yahoo draft room.
+  - Scope: the app posts what it has worked out to the service, the service
+    holds it, and a panel over the draft room collects and paints it. The engine
+    stays in the client; the service forms no opinion. `DECISIONS.md` carries
+    both the amendment that allowed the bridge to show and the later one that
+    moved the panel out of it.
+  - Acceptance criteria: the panel shows the current pick, the room's lean and
+    the positions worth spending on, and cannot interfere with the draft under
+    it. Met.
+  - Automated validation: `engine:test` covers the advice endpoint — refused for
+    a room nobody posted, not creating one by being asked, round-tripping what
+    the app sent, and keeping nothing it was not asked to keep. Sleeper is
+    refused a room to advise on, as it is refused ingestion.
+  - Manual validation: driven in a real browser against a stand-in draft room.
+    Mounts, renders live advice, survives the page re-rendering over it, stays
+    inside the viewport, and hit-testing at its own coordinates returns the draft
+    underneath rather than the panel. Confirmed working in a live Yahoo draft.
+  - **Learned the hard way, and worth not repeating.** The panel began inside the
+    bridge userscript and spent a whole live draft invisible while the bridge in
+    the same file posted every pick correctly: the manager reported the script as
+    current, the served file was right, and the body executing was neither. Two
+    faults of mine made that undiagnosable — every error path was silenced, and
+    the only line naming the running version was at the end of the file, so it
+    printed only when nothing had gone wrong. Both are fixed, and the panel is a
+    bookmarklet that no manager stands in front of.
+
 - [ ] Decide whether the service should serve the userscript in a release.
+  - Now serves three things, not one: the bridge userscript, `/panel.js`, and
+    `/panel`, the page that installs the panel as a bookmarklet. The same
+    hard-coded `127.0.0.1:5178` question applies to all three.
   - Added while validating: `GET /userscript/yahoo-draft-bridge.user.js`, so a
     manager installs from an address and can pick up later versions instead of
     the user re-pasting a file. It is the install path the README now documents.

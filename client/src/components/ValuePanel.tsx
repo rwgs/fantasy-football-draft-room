@@ -1,16 +1,16 @@
-import { useMemo } from 'react';
-import { positionValues } from '../engine/value';
 import { describeLean } from '../engine/forecast';
 import { pickLabelWithOverall } from '../picks';
 import type { Forecast } from '../engine/forecast';
-import type { Player, RosterSlots } from '../engine/types';
+import type { PositionValue } from '../engine/value';
 
 interface Props {
-  available: Player[];
-  all: Player[];
-  roster: RosterSlots;
+  /**
+   * Every position priced for this pick. Worked out by the screen rather than
+   * here, because the same reading is also sent to the Yahoo draft room and
+   * running it twice a render is running the whole board twice.
+   */
+  rows: PositionValue[];
   teams: number;
-  currentPick: number;
   myNextPick: number | null;
   /**
    * This room simulated forward from its real picks, when there are enough of
@@ -34,22 +34,7 @@ interface Props {
  * draft every real number is small.
  */
 export default function ValuePanel(props: Props) {
-  const { available, all, roster, teams, currentPick, myNextPick, room } = props;
-
-  const rows = useMemo(() => {
-    const base = positionValues(available, all, teams, roster, currentPick, myNextPick);
-    if (!room) return base;
-
-    // The forecast has already played this round out against the real rosters,
-    // so its expected best and its survival replace the ADP model's guesses.
-    return base
-      .map((row) => {
-        const later = room.expected[row.position];
-        const odds = row.best ? room.survival.get(row.best.id) ?? 0 : 0;
-        return { ...row, later, odds, cost: Math.max(0, row.now - later) };
-      })
-      .sort((a, b) => b.cost - a.cost);
-  }, [available, all, teams, roster, currentPick, myNextPick, room]);
+  const { rows, teams, myNextPick, room } = props;
 
   if (myNextPick == null || !rows.length) return null;
 

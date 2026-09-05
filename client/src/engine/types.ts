@@ -461,3 +461,30 @@ export interface LivePicks {
    */
   roomAdp?: { id: string; adp: number }[];
 }
+
+/**
+ * What the board makes of a room, in the few lines a panel over a draft can
+ * hold without getting in the way of it.
+ *
+ * Deliberately flat and already worded. The bridge that shows this runs inside
+ * a page this project does not own, so it is given something to paint rather
+ * than something to work out: nothing here needs the board, the engine, or a
+ * second opinion about what a number means.
+ */
+export interface RoomAdvice {
+  /** Whether the seat running the bridge is the one on the clock. */
+  onClock: boolean;
+  /** The pick this reading runs to, as the draft room itself numbers it. */
+  pickLabel: string;
+  /** What the room is leaning towards, when it is leaning hard enough to say. */
+  lean: string | null;
+  rows: {
+    position: string;
+    /** The best player left at that position. */
+    name: string;
+    /** Points over a replacement starter given up by waiting one turn. */
+    cost: number;
+    /** The chance that player is still there at your next pick. */
+    odds: number;
+  }[];
+}

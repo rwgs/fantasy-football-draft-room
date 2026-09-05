@@ -13,7 +13,7 @@
 
 import { buildBoard } from '../../board.js';
 import { joinKey, normPos, normTeam } from '../../names.js';
-import { applyPost, getRoom, roundCount, teamCount } from './room.js';
+import { applyPost, getAdvice, getRoom, roundCount, setAdvice, teamCount } from './room.js';
 
 /**
  * A Yahoo league ID as the draft room writes it: bare digits.
@@ -284,10 +284,32 @@ export async function ingest(leagueId, body) {
   return applyPost(leagueId, body);
 }
 
+/**
+ * Hand the board's current reading of the room to whoever asks for it.
+ *
+ * The bridge shows this in the draft room so a pick can be made without
+ * looking away, and the service is only the pigeonhole: the app writes, the
+ * bridge reads, and nothing here works any of it out. That split is the point.
+ * The engine that prices a pick lives in the client and is not worth a second
+ * implementation on this side, where it would drift from the first.
+ */
+export async function putAdvice(leagueId, advice) {
+  const held = setAdvice(leagueId, advice);
+  if (!held) throw new Error('No draft room has been posted for that league yet.');
+  return { ok: true };
+}
+
+/** What the app last said about this room, or nothing when it has not spoken. */
+export async function readAdvice(leagueId) {
+  return { advice: getAdvice(leagueId) };
+}
+
 export default {
   id: 'yahoo',
   label: 'Yahoo',
   ingest,
+  putAdvice,
+  readAdvice,
   isValidId: (id) => IS_ID.test(id),
   idHint: 'A Yahoo league ID is the number in your draft room address.',
   importLeague,

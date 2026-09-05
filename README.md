@@ -151,6 +151,28 @@ from the lobby, once. Coming back in from the lobby is fine, and is how to
 attach to a draft already under way: Yahoo replays every pick so far on connect,
 so a bridge that starts late still catches up.
 
+### Seeing the board without leaving the room
+
+The board's reading of your pick can be shown over the Yahoo draft room itself,
+so you are not reading two screens under a pick clock. It carries the pick you
+are on, what the room is leaning towards, and the positions worth spending this
+pick on with the odds each one lasts.
+
+Open <http://127.0.0.1:5178/panel> and drag the button to your bookmarks bar.
+Click it once in the draft room and the panel appears, bottom left. Click it
+again after a page reload; close it with the `x` in its corner.
+
+It is a bookmarklet rather than part of the bridge on purpose. The bridge has to
+be a userscript, because it wraps `WebSocket` before Yahoo's own code builds one
+and only a manager can inject that early. The panel needs nothing of the sort,
+and putting it in the userscript only gave it a userscript's ways of failing to
+install: it once spent an entire draft invisible while the bridge in the same
+file posted every pick correctly. See `DECISIONS.md`.
+
+The numbers come from the app, so they appear once the app is following that
+draft. Until then the panel says so rather than sitting blank. Nothing in it can
+take a click meant for the draft, and it never touches Yahoo's own page.
+
 ### If no picks appear
 
 Ask the draft room itself, in its console:
@@ -160,7 +182,8 @@ window.WebSocket.name
 ```
 
 `Bridged` means the bridge is running, and the problem is between it and the
-app — check the `[yahoo-bridge]` lines in the same console, and that the league
+app — check the `[yahoo-bridge]` lines in the same console, the first of which
+names the version that is actually running, and that the league
 number in the app is the room you are actually in. `WebSocket` means the script
 never ran, which is the "Allow user scripts" switch above almost every time. The
 app's own message cannot tell these apart: it says nothing has been posted in

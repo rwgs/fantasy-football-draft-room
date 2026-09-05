@@ -9,6 +9,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ADP_SOURCES, FORMATS, buildBoard, nearestSize } from './board.js';
@@ -137,6 +138,56 @@ app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
   res.type('text/javascript; charset=utf-8');
   res.set('cache-control', 'no-store');
   res.sendFile(join(HERE, '..', '..', 'userscript', 'yahoo-draft-bridge.user.js'));
+});
+
+/*
+ * The panel, and a page that installs it as a bookmarklet.
+ *
+ * The panel is not part of the bridge userscript. The bridge must be injected
+ * at `document-start` to wrap `WebSocket` before Yahoo builds one; the panel
+ * needs nothing but a DOM, and tying it to a userscript manager meant it
+ * inherited every way one can fail to update. A bookmarklet is one click, from
+ * the browser itself, with nothing in between.
+ */
+app.get('/panel.js', (_req, res) => {
+  res.type('text/javascript; charset=utf-8');
+  res.set('cache-control', 'no-store');
+  res.sendFile(join(HERE, '..', '..', 'userscript', 'draft-panel.js'));
+});
+
+app.get('/panel', (_req, res) => {
+  // The whole panel goes in the bookmarklet rather than a loader that fetches
+  // it. A loader would be shorter and would also be a script tag on an https
+  // page pointing at plain http, which is the sort of thing a browser is right
+  // to be suspicious of.
+  const source = readFileSync(join(HERE, '..', '..', 'userscript', 'draft-panel.js'), 'utf8');
+  const href = 'javascript:' + encodeURIComponent(source);
+  res.type('html').set('cache-control', 'no-store').send(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Draft panel</title><style>
+ body { font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1211;
+        color: #e8e6e3; margin: 0; padding: 40px; }
+ main { max-width: 620px; margin: 0 auto; }
+ h1 { font-size: 20px; margin: 0 0 4px; }
+ p { color: #b9c2bd; }
+ a.bm { display: inline-block; margin: 18px 0; padding: 10px 16px; background: #1a201e;
+        border: 1px solid #b78a2e; border-radius: 6px; color: #e9c46a;
+        text-decoration: none; font-weight: 600; }
+ ol { color: #b9c2bd; } li { margin: 6px 0; }
+ code { background: #1a201e; padding: 1px 5px; border-radius: 3px; color: #e8e6e3; }
+</style></head><body><main>
+<h1>Draft panel</h1>
+<p>Shows what the board makes of your pick, over the Yahoo draft room itself.
+   It reads this machine only and never touches Yahoo.</p>
+<p><b>Drag this to your bookmarks bar:</b></p>
+<a class="bm" href="${href}">Draft panel</a>
+<ol>
+  <li>Drag the button above onto your bookmarks bar. Clicking it here does nothing.</li>
+  <li>Open your Yahoo draft room.</li>
+  <li>Click the bookmark. The panel appears bottom left.</li>
+</ol>
+<p>Click it again after a page reload. Close the panel with the <code>x</code> in its corner.
+   The numbers appear once the app is following that draft.</p>
+</main></body></html>`);
 });
 
 /** The merged draft board for one scoring format and league size. */
@@ -326,6 +377,49 @@ app.post('/api/:platform/room/:id', async (req, res) => {
   try {
     res.set('cache-control', 'no-store');
     res.json(await target.platform.ingest(target.id, req.body || {}));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
+ * What the board makes of the room, written by the app and read by the bridge.
+ *
+ * The two cannot address each other. The app is a page on this machine and the
+ * bridge runs inside Yahoo's own draft room, so this is the pigeonhole between
+ * them: the app posts what it has worked out, the bridge collects it and shows
+ * it where the picks are actually being made.
+ *
+ * Nothing here forms an opinion. The engine that prices a pick lives in the
+ * client, and putting a second copy of it in the service would give two answers
+ * to the same question. Offered only to platforms that have somewhere to keep
+ * it, exactly as the ingestion route above is.
+ */
+app.post('/api/:platform/room/:id/advice', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.putAdvice) {
+    res.status(404).json({ error: 'That platform keeps no room to advise on.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.putAdvice(target.id, req.body || {}));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+app.get('/api/:platform/room/:id/advice', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.readAdvice) {
+    res.status(404).json({ error: 'That platform keeps no room to advise on.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.readAdvice(target.id));
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }

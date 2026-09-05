@@ -1,6 +1,6 @@
 import type {
   Board, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState, NoteSet,
-  Overrides, Platform, RankingSet,
+  Overrides, Platform, RankingSet, RoomAdvice,
 } from './engine/types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -152,4 +152,25 @@ export async function fetchLeague(
     + (force ? '?force=1' : ''));
   if (!res.ok) return fail(res);
   return res.json();
+}
+
+/**
+ * Hand the draft room in the other tab what this board currently makes of it.
+ *
+ * The bridge shows this beside Yahoo's own picks, so a decision can be made
+ * without looking away from the room. It is a one-way write with nothing to
+ * read back, and a failure is not worth reporting: the panel goes stale for a
+ * few seconds and the board on this screen, which is the one that matters, is
+ * unaffected either way.
+ */
+export async function postRoomAdvice(
+  platform: Platform,
+  leagueId: string,
+  advice: RoomAdvice,
+): Promise<void> {
+  await fetch(on(platform, '/room/' + encodeURIComponent(leagueId) + '/advice'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(advice),
+  });
 }

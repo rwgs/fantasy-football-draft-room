@@ -25,6 +25,10 @@ const MAX_ROOMS = 8;
 const MAX_POOL = 5000;
 /** A whole 16 team, 20 round draft is 320 picks. One post never needs more. */
 const MAX_FRAMES = 1000;
+/** Lines of advice held for the bridge to show. A panel nobody reads past. */
+const MAX_ADVICE_ROWS = 5;
+/** Characters kept from one field of it. Everything here is a name or a count. */
+const MAX_ADVICE_TEXT = 120;
 
 /** leagueId to room. Insertion order is eviction order; see `touch`. */
 const rooms = new Map();
@@ -58,6 +62,15 @@ function blank(leagueId) {
     picks: new Map(),
     /** The seat the person running the bridge sits in, from the room URL. */
     mySeat: null,
+    /**
+     * What the board on this machine currently makes of the room.
+     *
+     * Written by the app, read by the bridge, and never computed here. The
+     * engine that works this out lives in the client and stays there; this is
+     * a pigeonhole between two things that cannot address each other directly,
+     * because the draft tab and the app tab are different origins.
+     */
+    advice: null,
     updatedAt: 0,
   };
 }
@@ -163,6 +176,43 @@ export function applyPost(leagueId, body) {
     seats: room.seats.size,
     orderKnown: !!room.order,
   };
+}
+
+/** One field of advice, trimmed to something a panel can show. */
+function text(value) {
+  return String(value ?? '').slice(0, MAX_ADVICE_TEXT);
+}
+
+/**
+ * Hold what the app worked out, for the bridge to collect.
+ *
+ * A room has to exist already. The app only ever has advice about a draft it
+ * is following, and refusing to create one here means this route cannot be
+ * used to fill the room table with leagues nobody is drafting.
+ */
+export function setAdvice(leagueId, advice) {
+  const room = rooms.get(String(leagueId));
+  if (!room) return false;
+
+  const rows = Array.isArray(advice?.rows) ? advice.rows.slice(0, MAX_ADVICE_ROWS) : [];
+  room.advice = {
+    onClock: !!advice?.onClock,
+    pickLabel: text(advice?.pickLabel),
+    lean: advice?.lean ? text(advice.lean) : null,
+    rows: rows.map((row) => ({
+      position: text(row?.position),
+      name: text(row?.name),
+      cost: Number(row?.cost) || 0,
+      odds: Number(row?.odds) || 0,
+    })),
+    at: Date.now(),
+  };
+  return true;
+}
+
+/** What the app last worked out, or null when it has said nothing yet. */
+export function getAdvice(leagueId) {
+  return rooms.get(String(leagueId))?.advice || null;
 }
 
 /** How many seats the room has, by the most reliable evidence it holds. */

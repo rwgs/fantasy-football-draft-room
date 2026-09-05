@@ -9,6 +9,109 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-05 The panel is a bookmarklet, not part of the bridge
+
+Status: Accepted. Supersedes the shipping half of the entry below, which put the
+panel inside the userscript. The reasoning there about who computes what stands.
+
+### Decision
+
+The panel lives in `userscript/draft-panel.js` and is installed as a bookmarklet
+from `http://127.0.0.1:5178/panel`. The bridge userscript went back to one job:
+carrying frames. It draws nothing.
+
+### Why
+
+They need different privileges and should not share a fate. The bridge has to be
+injected at `document-start`, because it wraps `WebSocket` before Yahoo's bundle
+builds one, and only a userscript manager can do that. The panel needs a DOM and
+one address on the loopback. Putting it in the userscript gave a thing needing no
+privileges every failure mode of a thing that needs several.
+
+That is not hypothetical. The panel spent an entire live draft invisible while
+the bridge in the same file posted every pick correctly. The manager reported the
+script as up to date, the served file was right, and the body being executed was
+not. Nothing about the panel could be debugged, because the only way to change it
+was through the mechanism that was broken.
+
+A bookmarklet has no install, no update, no version, and no manager. It is the
+source, run when clicked.
+
+### Cost, stated plainly
+
+One click per page load, where a userscript would have been none. That is the
+price of the panel not being able to fail silently and invisibly, and on the
+evidence it is worth paying.
+
+### Rejected
+
+Keeping a copy in both places. Two implementations of one panel drift, and the
+argument against a second copy of the pricing in the service applies here for the
+same reason.
+
+## 2026-09-05 The bridge also shows, and still decodes nothing
+
+Status: Accepted. Widens `The bridge carries, the service decodes` below, which
+made the bridge one-way.
+
+### Decision
+
+The Yahoo userscript now draws a small panel in the draft room showing what the
+board makes of the pick. It still decodes nothing and resolves nobody: it reads
+one endpoint on the loopback and paints the words it is handed.
+
+The reading is worked out in the client, posted to the service, and collected
+from the service by the bridge. The service holds it and forms no opinion about
+it.
+
+### Why
+
+The earlier entry split the work by what each part is able to do: only the
+browser can reach Yahoo, so the browser carries; only the service can decode
+without shipping a parser into a page we do not own, so the service decodes.
+Nothing in that reasoning said the bridge may not display, and the case for it
+is the same one that justified the bridge at all. Yahoo answers only the tab the
+user is sitting in, and that tab is also the only surface where an answer can be
+put in front of them without asking them to look away from the pick clock.
+
+The engine stays in the client for the reason it was put there. Pricing a pick
+needs the board, the rosters and a hundred and fifty simulations of the room,
+and moving that into the service would either duplicate it or move the whole
+draft off the browser. Neither is worth a panel. So the client computes, and the
+service is a pigeonhole between two things that cannot address each other: the
+app is a page on this machine, the bridge lives on Yahoo's origin.
+
+### What it must never cost
+
+A panel over a real draft is only acceptable if it cannot break the draft under
+it. The bridge already held that rule for frames, and it now holds for drawing:
+
+- One element appended to the body of the top frame, holding a shadow root.
+  Yahoo's own nodes are never read, moved or restyled, and no stylesheet crosses
+  either way. The top frame rather than the bridge's own, because Yahoo runs the
+  draft in an iframe and `position: fixed` inside one is fixed to the frame's box
+  rather than to the window: pinned to the bottom left of a frame taller than the
+  window, the panel is drawn where nobody can see it.
+  Open rather than closed: the wall is the shadow root and not the mode, and
+  closing it hides the panel from devtools as well, which costs whoever is
+  working out why they cannot see it more than it ever cost a stray stylesheet.
+- Everything in it is `pointer-events: none` bar the button that hides it, so it
+  cannot swallow a click meant for the draft. This is checked in a real browser
+  rather than asserted.
+- No key handler, no focus, no storage, and nothing sent to Yahoo.
+- Every fault swallowed. A broken panel paints nothing and the draft continues.
+
+### Rejected
+
+Parsing Yahoo's own player list and marking it up in place. It reads better and
+binds the tool to markup nobody promised, which can change in a deploy in the
+middle of a draft. `docs/yahoo-draft-protocol.md` already carries that risk for
+the frames, where the payoff is every pick; carrying it again for a decoration
+is a bad trade.
+
+Computing the advice in the service, which would put a second implementation of
+the pricing behind the same question and let the two disagree.
+
 ## 2026-09-05 FantasyPros is not a source on the free tier
 
 Status: Accepted. Reopens only if someone holds a paid key.
