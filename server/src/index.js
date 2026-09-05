@@ -17,6 +17,29 @@ import { PLATFORM_NAMES, platformFor } from './platforms/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
+/*
+ * Settings that belong to this machine rather than to the repository.
+ *
+ * `server/.env` is where a key goes. It is git ignored, and it is read here
+ * rather than by a flag on the command line because this service is started
+ * several ways — `npm start`, `npm run dev`, and `scripts/service.mjs` spawning
+ * it directly — and a flag would have to be remembered in each of them.
+ *
+ * Node reads it natively, so this costs no dependency. Missing is the normal
+ * case and not an error: every feed the service needs is free and keyless, and
+ * only the optional ones look here.
+ *
+ * Anything reading one of these must read it when it is used, not when its
+ * module is imported. Imports are evaluated before this line runs, so a `const`
+ * at the top of a source file would capture the value from before the file was
+ * loaded.
+ */
+try {
+  process.loadEnvFile(join(HERE, '..', '.env'));
+} catch {
+  // No file, or no permission to read it. Both mean "nothing configured here".
+}
+
 const app = express();
 const PORT = Number(process.env.PORT) || 5178;
 const DEFAULT_YEAR = Number(process.env.DRAFT_YEAR) || new Date().getFullYear();
@@ -66,7 +89,7 @@ function readTarget(req, res) {
 }
 
 function readQuery(q) {
-  const format = FORMATS[q.scoring] ? q.scoring : 'half-ppr';
+  const format = FORMATS[q.scoring] ? q.scoring : 'ppr';
   const adpSource = ADP_SOURCES[q.adpSource] ? q.adpSource : 'sleeper';
   const teams = Math.min(16, Math.max(2, Number(q.teams) || 12));
   // A year is a new cache key and a new set of upstream fetches, so an

@@ -96,7 +96,7 @@ export function defaultLeague(): LeagueConfig {
     rounds: rosterSize(DEFAULT_ROSTER),
     mySlot: 6,
     draftType: 'snake',
-    scoring: 'half-ppr',
+    scoring: 'ppr',
     adpSource: 'sleeper',
     year: new Date().getFullYear(),
     roster: { ...DEFAULT_ROSTER },
