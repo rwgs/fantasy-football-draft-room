@@ -84,6 +84,22 @@ function safeName(key) {
 }
 
 /**
+ * The fetches already running, by key.
+ *
+ * A live draft rebuilds the board every eight seconds, and every rebuild asks
+ * for seven of these keys. When one expires mid-draft, or the cache is cold at
+ * the first poll, an upstream slower than the poll means the next poll starts a
+ * second fetch of the same thing and the one after that a third, each holding a
+ * payload of a megabyte or more. Sharing the promise means the first caller
+ * pays for it and the rest wait on it.
+ *
+ * A forced fetch stays out of this. Its whole purpose is to go past what is
+ * held, so joining a request already in flight would hand it the copy it asked
+ * to bypass.
+ */
+const inFlight = new Map();
+
+/**
  * Return a cached value, or produce it with `fetcher` and store it.
  *
  * A stale entry is better than no entry. If `fetcher` throws and a stale copy
@@ -95,6 +111,21 @@ function safeName(key) {
  * @param {boolean} force      ignore the cached copy and re-fetch
  */
 export async function cached(key, maxAgeMs, fetcher, force = false) {
+  if (force) return fetchOnce(key, maxAgeMs, fetcher, true);
+
+  const running = inFlight.get(key);
+  if (running) return running;
+
+  const work = fetchOnce(key, maxAgeMs, fetcher, false);
+  inFlight.set(key, work);
+  try {
+    return await work;
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+async function fetchOnce(key, maxAgeMs, fetcher, force) {
   const file = join(CACHE_DIR, safeName(key));
   const now = Date.now();
 
