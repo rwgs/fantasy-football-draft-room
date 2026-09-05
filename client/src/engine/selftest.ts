@@ -1237,7 +1237,11 @@ async function yahooRoom() {
   const pool = ['9001', '9002', '9003', '9004'].map((id, i) => {
     const p = board.players[i];
     const [fname, ...rest] = p.name.split(' ');
-    return { id, fname, lname: rest.join(' '), display_pos: p.position, team_abbr: p.team };
+    // Yahoo writes a player eligible at two positions as "WR,RB", which a real
+    // pool carries eight of. A board row holds one position, so the pair has to
+    // be reduced or the pick joins nothing.
+    const display_pos = i === 3 ? p.position + ',RB' : p.position;
+    return { id, fname, lname: rest.join(' '), display_pos, team_abbr: p.team };
   });
   const seats = [1, 2, 3].map((id) => ({
     id, teamname: 'Team ' + id, manager: 'manager' + id,
@@ -1281,6 +1285,9 @@ async function yahooRoom() {
     at(1).name === board.players[0].name, at(1).name);
   check('a live pick resolves to the player its frame named',
     at(3).name === board.players[2].name, at(3).name);
+  check('a pick whose position names two still finds its player',
+    at(4).name === board.players[3].name && at(4).offBoard === false,
+    at(4).name + ' offBoard=' + at(4).offBoard);
   check('the round is the pick over the seat count',
     at(1).round === 1 && at(3).round === 1 && at(4).round === 2);
 

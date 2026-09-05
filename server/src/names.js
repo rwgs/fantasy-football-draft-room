@@ -1,12 +1,14 @@
 // One place to decide when two records name the same football player.
 //
-// The two upstream sources disagree in three ways, and every one of them is
-// silent if you ignore it:
+// The sources disagree in four ways, and every one of them is silent if you
+// ignore it:
 //   1. Suffixes. "Marvin Harrison Jr." against "Marvin Harrison".
 //   2. Kickers. Fantasy Football Calculator says PK, Sleeper says K.
 //   3. Team defences. Fantasy Football Calculator says "Seattle Defense",
 //      Sleeper says "Seattle Seahawks". No name match will ever work, so
 //      defences join on the team abbreviation instead.
+//   4. Two positions in one field. Yahoo writes a player eligible at both as
+//      "WR,RB", where the others write one position and mean it.
 
 const SUFFIX = /\b(jr|sr|ii|iii|iv|v)\b/g;
 
@@ -25,7 +27,11 @@ export function normName(name) {
 
 /** Reduce a position label to the six the draft engine knows. */
 export function normPos(pos) {
-  const p = String(pos || '').toUpperCase().trim();
+  // Yahoo lists dual eligibility as "WR,RB". A board row holds one position, so
+  // the first is the one to join on: passing the pair through whole builds a key
+  // that matches nothing, and the pick lands unjoined for no reason a reader
+  // could guess.
+  const p = String(pos || '').toUpperCase().trim().split(',')[0].trim();
   if (p === 'PK') return 'K';
   if (p === 'DST' || p === 'D/ST' || p === 'DEFENSE') return 'DEF';
   if (p === 'FB') return 'RB';
