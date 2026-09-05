@@ -9,9 +9,13 @@
 
 import express from 'express';
 import cors from 'cors';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ADP_SOURCES, FORMATS, buildBoard, nearestSize } from './board.js';
 import { parseRankings } from './rankings.js';
 import { PLATFORM_NAMES, platformFor } from './platforms/index.js';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5178;
@@ -78,6 +82,28 @@ app.get('/api/health', (_req, res) => {
     adpSources: ADP_SOURCES,
     platforms: PLATFORM_NAMES,
   });
+});
+
+/**
+ * The Yahoo bridge userscript, served so a userscript manager can install it.
+ *
+ * Pasting the file into Tampermonkey's editor works once and then rots: the
+ * copy in the browser stops matching the copy in the repository and nothing
+ * says so. Installed from this address instead, the manager records where it
+ * came from and can fetch it again, which is the only way an edit here reaches
+ * a draft room without a human remembering to re-paste it.
+ *
+ * It is served from the service rather than the client because the service is
+ * the half that is running whenever the bridge has anything to post to, and
+ * because this is the origin the bridge already names.
+ */
+app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
+  // The extension is what makes a userscript manager offer to install rather
+  // than the browser offering to display, so the type must not turn it into a
+  // download or a page.
+  res.type('text/javascript; charset=utf-8');
+  res.set('cache-control', 'no-store');
+  res.sendFile(join(HERE, '..', '..', 'userscript', 'yahoo-draft-bridge.user.js'));
 });
 
 /** The merged draft board for one scoring format and league size. */

@@ -126,15 +126,45 @@ straight from the data service. **Yahoo publishes to nobody but your own
 browser**, so following a Yahoo draft takes one extra piece:
 [`userscript/yahoo-draft-bridge.user.js`](userscript/yahoo-draft-bridge.user.js).
 
-Install a userscript manager such as Tampermonkey, add that file to it, and
-start the app as usual. Open your draft room from Yahoo's lobby the way you
-normally would, then choose **Yahoo** on the settings screen and enter the
-number from the room's address. The bridge posts what the room shows to the
-service on your own machine, and the board follows from there.
+Install a userscript manager such as Tampermonkey, then start the app as usual
+and open <http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js>, which
+the manager offers to install. Install it from that address rather than pasting
+the file in: the manager then knows where it came from and can pick up a later
+version, and there is no half-updated copy to wonder about.
+
+**On Chrome and Edge there is one more step, and it fails silently without it.**
+Both gate user scripts behind a switch: turn on developer mode at
+`chrome://extensions` or `edge://extensions`, then turn on **"Allow user
+scripts"** under the manager's own entry. Until you do, the script installs,
+shows as enabled, reports no error, and never runs. The first time the bridge
+posts, the browser also asks permission to reach a local address; that prompt is
+this app, and it needs accepting.
+
+Then open your draft room from Yahoo's lobby the way you normally would, choose
+**Yahoo** on the settings screen, and enter the number from the room's address —
+the room you are in now, not one from earlier. The bridge posts what the room
+shows to the service on your own machine, and the board follows from there.
 
 **Do not paste the room's address into a fresh tab.** The `auth` token in it is
 single use: reloading leaves the draft rather than rejoining it. Open the room
-from the lobby, once.
+from the lobby, once. Coming back in from the lobby is fine, and is how to
+attach to a draft already under way: Yahoo replays every pick so far on connect,
+so a bridge that starts late still catches up.
+
+### If no picks appear
+
+Ask the draft room itself, in its console:
+
+```js
+window.WebSocket.name
+```
+
+`Bridged` means the bridge is running, and the problem is between it and the
+app — check the `[yahoo-bridge]` lines in the same console, and that the league
+number in the app is the room you are actually in. `WebSocket` means the script
+never ran, which is the "Allow user scripts" switch above almost every time. The
+app's own message cannot tell these apart: it says nothing has been posted in
+both cases.
 
 ### What it does and does not do
 

@@ -4,6 +4,8 @@
 // @version      1.0.0
 // @description  Copy your own Yahoo draft room onto the draft board running on your machine. Reads only; never picks.
 // @match        https://football.fantasysports.yahoo.com/draftclient/*
+// @downloadURL  http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js
+// @updateURL    http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
@@ -39,12 +41,19 @@
  *
  * INSTALLING
  *
- *   1. Install a userscript manager, such as Tampermonkey.
- *   2. Add this file to it.
- *   3. Start the draft board on this machine: `npm run dev`.
+ *   1. Install a userscript manager, such as Tampermonkey. On Chrome it also
+ *      needs "Allow User Scripts" turned on, under the manager's own entry in
+ *      `chrome://extensions`. Without it nothing runs and nothing says so.
+ *   2. Start the draft board on this machine: `npm run dev`.
+ *   3. Open http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js and let
+ *      the manager install it. Installing from that address rather than pasting
+ *      the text is what lets a later edit reach the browser, once the `@version`
+ *      above is raised.
  *   4. Open your Yahoo draft room from the lobby, as you normally would. Do not
  *      paste the room's address into a new tab: the `auth` in it is single use,
- *      and reloading it leaves the draft rather than rejoining it.
+ *      and reloading it leaves the draft rather than rejoining it. Coming back
+ *      in from the lobby is fine, and is how to attach to a draft already under
+ *      way: the server replays every pick so far on connect.
  *   5. In the app, choose Yahoo and enter the league number from the room's
  *      address. The console logs `[yahoo-bridge]` lines if you want to watch.
  */
