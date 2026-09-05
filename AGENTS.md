@@ -45,6 +45,10 @@ same player.
     same five questions. See `DECISIONS.md` for why this seam exists.
   - `src/cache.js` — disk and memory cache, bounded at both ends because any
     stranger can name a league ID and each one is a new key.
+- `userscript/` — the Yahoo draft bridge, which runs in the user's own browser
+  because Yahoo answers a session cookie the service must never hold. It is
+  installed by hand into a userscript manager, not built or served from here.
+  Sleeper needs nothing like it.
 
 Nothing is generated or built into the tree. `client/dist` is a build output
 and `server/data/cache` is a cache; neither is edited by hand.

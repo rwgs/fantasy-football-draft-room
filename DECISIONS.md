@@ -9,6 +9,54 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-04 The bridge carries, the service decodes
+
+Status: Accepted. Narrows the entry below, which left the split unstated.
+
+### Decision
+
+The Yahoo userscript fetches the player pool and the seats once, and forwards
+the draft socket's frames as the raw text Yahoo sent. It decodes nothing and
+resolves nobody. `server/src/platforms/yahoo/frames.js` decodes the frames and
+`index.js` joins them onto the board.
+
+### Why
+
+The constraint is that only the browser can *reach* Yahoo. It does not follow
+that the browser must also *interpret* Yahoo, and the two were conflated in the
+first plan, which had the userscript resolve each pick to a person before
+sending it.
+
+Decoding is the part most likely to be wrong and most likely to break, because
+the frame format is Yahoo's private protocol and nobody promised it. Put it in
+the userscript and it can only be tested by drafting; put it in the service and
+`npm run engine:test` replays four real captures through it offline, every run,
+for free. That is the whole argument, and the captures already existed.
+
+It also makes the part that has to be trusted small. A userscript runs inside a
+tab holding the user's Yahoo session, so the less it does the better. What is
+left is: hook `WebSocket`, copy strings aside, POST them.
+
+### Rejected alternatives
+
+- **The userscript resolves picks**, as first planned. Rejected: it puts the
+  fragile code where no test can reach it, and grows the script that runs beside
+  a live session.
+- **Duplicating the decoder** on both sides, canonical copy tested. Rejected:
+  two copies of the one function most likely to change is the worst of both.
+
+### Consequences
+
+- The service holds a league's player pool in memory while a draft runs. Never
+  on disk: it is one person's league, and it is stale the moment the draft ends.
+- The bridge must be told to resend the pool after a service restart, so the
+  ingestion reply carries `needPool`.
+- `POST /api/:platform/room/:id` exists, and is the only route written to. It is
+  offered to platforms exposing `ingest` and refused for the rest, so the router
+  still names no platform.
+- Yahoo is a *pushed* platform behind a seam designed for pulled ones. The five
+  methods still fit; `draftPicks` reads memory instead of fetching.
+
 ## 2026-09-04 Yahoo is read through the browser, not through the Fantasy Sports API
 
 Status: Accepted. Supersedes the consequences of the 2026-09-01 entry below.

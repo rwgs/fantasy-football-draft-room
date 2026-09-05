@@ -14,14 +14,24 @@
 // Adding one is adding a directory here and a line below. Nothing else in the
 // service knows how many there are.
 //
+// A platform may also expose `ingest`, which Yahoo does and Sleeper does not.
+// Sleeper is pulled: the service asks an open feed whenever it needs to know
+// something. Yahoo cannot be pulled at all, because its draft room authenticates
+// on a browser session cookie, so a userscript in the user's own tab posts to
+// the service instead and the five methods answer from what arrived. The route
+// still names no platform: it offers the ingestion path to whichever ones have
+// one. See `DECISIONS.md`.
+//
 // This is deliberately not a plugin loader. Two platforms do not need a
 // registry that scans a directory, and a service that imports whatever it finds
 // on disk is a worse thing to run than one with an explicit list.
 
 import sleeper from './sleeper/index.js';
+import yahoo from './yahoo/index.js';
 
 export const PLATFORMS = {
   [sleeper.id]: sleeper,
+  [yahoo.id]: yahoo,
 };
 
 /** The platform named in a path, or null when nothing answers to that name. */

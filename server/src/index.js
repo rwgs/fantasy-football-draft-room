@@ -238,6 +238,41 @@ app.get('/api/:platform/draft/:id', async (req, res) => {
 });
 
 /**
+ * What a draft room in the user's own browser has seen, posted here.
+ *
+ * The only route in the service that is written to. It exists because Yahoo
+ * cannot be read the way Sleeper is: every endpoint its draft room uses
+ * authenticates on the browser's session cookie, so the service has no way to
+ * ask and must be told instead. A userscript in the user's tab does the telling.
+ *
+ * The route names no platform. It offers the path to whichever platforms have
+ * an `ingest`, and answers 404 for the ones that do not, so a pulled platform
+ * like Sleeper is not quietly writable.
+ *
+ * This is a cross-origin POST, from `football.fantasysports.yahoo.com`. It needs
+ * no allowance added for it because `cors()` above already answers every origin
+ * — which is worth knowing rather than discovering: the service is loopback-only
+ * by default, and that, not CORS, is what keeps it to this machine.
+ *
+ * No cookie, token or credential is sent here, and none would be accepted. What
+ * arrives is a player pool, the seats, and the draft's own frames.
+ */
+app.post('/api/:platform/room/:id', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.ingest) {
+    res.status(404).json({ error: 'That platform is read from its own feed, not posted to.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.ingest(target.id, req.body || {}));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
  * Every pick made in a real draft so far, mapped onto this board.
  * Never cached: a draft in progress is stale the moment it is read.
  */

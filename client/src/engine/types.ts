@@ -270,16 +270,31 @@ export interface NoteSet {
 }
 
 /**
- * A Sleeper league you draft in, with its settings kept.
+ * Which league platform a league is read from.
+ *
+ * Sleeper is the default and needs nothing of the user. Yahoo needs the bridge
+ * userscript running in their own draft room, because Yahoo's endpoints answer
+ * a session cookie the service must never hold. See `DECISIONS.md`.
+ */
+export type Platform = 'sleeper' | 'yahoo';
+
+/**
+ * A league you draft in, with its settings kept.
  *
  * A league's shape barely moves once the season is set, so the settings are
  * pulled once and then read from here. Loading a league is instant and works
- * with the network down. `Refresh from Sleeper` pulls again when you have
- * actually changed something over there.
+ * with the network down. `Refresh` pulls again when you have actually changed
+ * something over there.
  */
 export interface SavedLeague {
   id: string;
   name: string;
+  /**
+   * Where the league is read from. Absent on a league saved before there was
+   * more than one platform, which is why every read of it falls back to
+   * Sleeper rather than treating the gap as an error.
+   */
+  platform?: Platform;
   settings: LeagueImport | null;
   fetchedAt: number | null;
   /**
@@ -309,8 +324,14 @@ export interface LeagueImport {
   status: string | null;
   teams: number;
   rounds: number;
-  roster: RosterSlots;
-  scoring: string;
+  /**
+   * The roster shape and the scoring, or null where the platform does not
+   * publish them. Yahoo's draft room carries neither, so a Yahoo import leaves
+   * both as the user set them rather than inventing a league that is not
+   * theirs, and says so in `warnings`.
+   */
+  roster: RosterSlots | null;
+  scoring: string | null;
   draftType: DraftType;
   receptionPoints: number;
   draftId: string | null;

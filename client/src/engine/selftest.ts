@@ -9,6 +9,8 @@
  * the board in the direction the label promises.
  */
 
+import { existsSync, readFileSync } from 'node:fs';
+
 import { PRESETS, DEFAULT_CPU, applyBias } from './cpu';
 import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
@@ -1178,12 +1180,170 @@ async function main() {
       b.state.picks.length === lg.teams * lg.rounds);
   }
 
+  await yahooRoom();
+
   console.log('');
   if (failures) {
     console.log(failures + ' checks failed.');
     process.exit(1);
   }
   console.log('All checks passed.');
+}
+
+/**
+ * Yahoo's draft room, decoded and joined onto the board.
+ *
+ * Yahoo is pushed rather than pulled — a userscript in the user's own tab posts
+ * what the room sends, because every Yahoo endpoint wants a session cookie the
+ * service must never hold. So this posts frames the way that bridge does and
+ * checks what comes back out, which needs no draft, no cookie and no league.
+ *
+ * The frames below are synthetic: the grammar is real and observed, the player
+ * IDs and seats are invented. That is on purpose. The real captures name real
+ * leagues and real people, so git ignores them, and a check that only ran for
+ * whoever made the capture would be green and worthless everywhere else. When
+ * the captures are present they are replayed too, at the end.
+ */
+async function yahooRoom() {
+  console.log('\nReading a Yahoo draft room');
+
+  // A fresh room per run. The service holds what was posted for the life of the
+  // process, so a fixed ID would arrive already holding a pool on the second run
+  // against the same service and the first check below would be false.
+  const LEAGUE = String(Date.now()).slice(-9);
+  const boardQuery = 'scoring=half-ppr&teams=12';
+  const frames = [
+    'H|S|30|0|0|1',
+    // Three seats and two rounds, deliberately not a snake. The order has to be
+    // read rather than derived: a league with a traded pick or a keeper is
+    // exactly the league a derived snake gets wrong.
+    'R|1|2|3|3|1|2',
+    // The replay form, sent on connect: `<overall>=<player>,<seat>,<cost>`,
+    // with no roster slot in it.
+    'P|1=9001,1,0|2=9002,2,0',
+    // The live form: separate pipe fields, and a slot between the seat and the
+    // cost. Reading either one with the other's layout silently swaps the seat
+    // and the cost, which shows up only as a wrong board mid-draft.
+    '0|3|9003|3|W/R/T|0',
+    '0|4|9004|3|RB|0',
+    // Nobody in the pool. A pick this board cannot place still owns its slot.
+    '0|5|9999|1|TE|0',
+    // Frames a board does not need. None may reach it, and none may break it.
+    'C|24', 'D|6|2|30', 'J|2', 'L|3', 'Q', 'w|3600|20', 'G|[{"pickId":3}]', 'P',
+  ];
+
+  const board = await (await fetch(API + '/api/board?' + boardQuery)).json();
+  // A pool built from the board, so a matched pick can be checked by name.
+  const pool = ['9001', '9002', '9003', '9004'].map((id, i) => {
+    const p = board.players[i];
+    const [fname, ...rest] = p.name.split(' ');
+    return { id, fname, lname: rest.join(' '), display_pos: p.position, team_abbr: p.team };
+  });
+  const seats = [1, 2, 3].map((id) => ({
+    id, teamname: 'Team ' + id, manager: 'manager' + id,
+  }));
+
+  const post = (body: unknown) => fetch(API + '/api/yahoo/room/' + LEAGUE, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+
+  const first = await post({ team: 3, frames });
+  check('a room with no pool yet asks for one', first.needPool === true);
+
+  const reply = await post({ team: 3, pool, seats, frames });
+  check('the pool and the seats are taken', reply.needPool === false && reply.pool === 4);
+  check('the draft order arrived', reply.orderKnown === true);
+  // Both posts carried the same six picks. A pick that arrives twice, once live
+  // and again in a reconnecting tab's replay, is still one pick.
+  check('a pick sent twice is still one pick', reply.picks === 5, String(reply.picks));
+
+  const state = await (await fetch(API + '/api/yahoo/draft/' + LEAGUE)).json();
+  check('the seats are counted', state.teams === 3, String(state.teams));
+  check('the rounds come from the order, not from a roster', state.rounds === 2,
+    String(state.rounds));
+  check('a part-drafted room is under way and not complete',
+    state.started === true && state.complete === false);
+  check('the seat is the identity, as Yahoo models it',
+    state.slotByUser['2'] === 2 && state.orderIsSet === true);
+
+  const live = await (await fetch(
+    API + '/api/yahoo/draft/' + LEAGUE + '/picks?' + boardQuery)).json();
+  check('every pick came back once', live.picks.length === 5, String(live.picks.length));
+  check('the four in the pool found their player', live.matched === 4, String(live.matched));
+
+  const at = (n: number) => live.picks.find((p: { overall: number }) => p.overall === n);
+  check('a replayed pick keeps the seat it named, not the cost',
+    at(1).slot === 1 && at(2).slot === 2, at(1).slot + ',' + at(2).slot);
+  check('a live pick keeps the seat it named', at(3).slot === 3 && at(4).slot === 3);
+  check('a replayed pick resolves to the player its frame named',
+    at(1).name === board.players[0].name, at(1).name);
+  check('a live pick resolves to the player its frame named',
+    at(3).name === board.players[2].name, at(3).name);
+  check('the round is the pick over the seat count',
+    at(1).round === 1 && at(3).round === 1 && at(4).round === 2);
+
+  // A hole in the board is worse than a stranger on it: the board stops lining
+  // up with the room it is meant to mirror.
+  check('a player the board never heard of still owns his slot',
+    at(5) != null && at(5).offBoard === true, JSON.stringify(at(5)));
+  check('and is reported rather than dropped', live.unknown.length === 1,
+    JSON.stringify(live.unknown));
+
+  const setup = await (await fetch(
+    API + '/api/yahoo/league/' + LEAGUE + '/setup?' + boardQuery)).json();
+  check('every seat is named from the league', setup.namedTeams === 3, String(setup.namedTeams));
+  check('no keeper and no trade is invented',
+    setup.keepers.length === 0 && setup.tradedPicks.length === 0);
+
+  const imported = await (await fetch(API + '/api/yahoo/league/' + LEAGUE)).json();
+  check('the import refuses to invent a roster or a scoring rule',
+    imported.roster === null && imported.scoring === null);
+  check('and says so', imported.warnings.some((w: string) => /roster shape/.test(w)));
+
+  const stray = await fetch(API + '/api/sleeper/room/1234567890123456789', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  check('a platform read from its own feed is not writable', stray.status === 404,
+    String(stray.status));
+
+  // ---- The real captures, when whoever is running this has them ------------
+
+  const captures = ['capture-mock1.log', 'capture-mock2.log',
+    'capture-mock3-handshake.log', 'capture-mock3-reconnect.log']
+    .map((f) => '../tools/yahoo/' + f)
+    .filter((p) => existsSync(p));
+
+  if (!captures.length) {
+    console.log('  skipped  no captures in tools/yahoo/. The synthetic frames above still ran.');
+    return;
+  }
+
+  for (const path of captures) {
+    const real = readFileSync(path, 'utf8').split(/\r?\n/)
+      .map((l) => /^\[ws-in\]\s+(.*)$/.exec(l))
+      .filter((m): m is RegExpExecArray => m != null)
+      .map((m) => m[1])
+      // The capture prints a long frame short. A truncated one is not a frame.
+      .filter((p) => !/…\(\d+ chars\)$/.test(p))
+      .filter((p) => /^(?:0|H|R|P)(?:\||$)/.test(p));
+
+    const picks = real.filter((f) => f.startsWith('0|'));
+    // Its own room per capture, so one replay cannot colour another's count.
+    const id = '91' + String(captures.indexOf(path) + 1).padStart(4, '0');
+    const sent = await fetch(API + '/api/yahoo/room/' + id, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ team: 1, frames: real }),
+    }).then((r) => r.json());
+
+    check(path.replace('../tools/yahoo/', '') + ': every pick frame decoded',
+      sent.picks === new Set(picks.map((f) => f.split('|')[1])).size,
+      sent.picks + ' of ' + picks.length);
+  }
 }
 
 /** The average distance between where a player went and their ADP. */

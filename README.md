@@ -6,9 +6,10 @@ What changed and when is in [CHANGELOG.md](CHANGELOG.md).
 A fantasy football draft tool with two modes. **Mock draft** simulates a room
 against you: live ADP for your scoring format, any roster shape, your own
 ranking file, and dials for how hard the computer teams lean on each position.
-**Draft assistant** simulates nothing: it follows your real Sleeper draft as it
-happens, mirroring every pick onto the board so your rankings and availability
-always face the actual room.
+**Draft assistant** simulates nothing: it follows your real draft as it happens
+— Sleeper directly, Yahoo through a userscript in your own draft room —
+mirroring every pick onto the board so your rankings and availability always
+face the actual room.
 
 ---
 
@@ -19,7 +20,9 @@ the Node 20 line. That is the range Vite sets, and it has a hole in the middle:
 Node 21, and Node 22 before 22.12, will not run it.
 
 Nothing else. Neither data feed asks for an API key, there is no database, and
-there is no account to make.
+there is no account to make. Following a **Yahoo** draft additionally needs a
+userscript in your browser; see [Following a Yahoo draft](#following-a-yahoo-draft).
+Sleeper needs nothing at all.
 
 ```
 npm run install:all
@@ -113,6 +116,50 @@ still owns its slot, so the board never drifts out of line with the room.
 league IDs, team names and every manager's Sleeper name on screen, for
 screenshots and streams. It is a display filter: nothing stored changes, and it turns off
 again with nothing lost.
+
+---
+
+## Following a Yahoo draft
+
+Sleeper publishes a league to anyone who asks, so the assistant reads it
+straight from the data service. **Yahoo publishes to nobody but your own
+browser**, so following a Yahoo draft takes one extra piece:
+[`userscript/yahoo-draft-bridge.user.js`](userscript/yahoo-draft-bridge.user.js).
+
+Install a userscript manager such as Tampermonkey, add that file to it, and
+start the app as usual. Open your draft room from Yahoo's lobby the way you
+normally would, then choose **Yahoo** on the settings screen and enter the
+number from the room's address. The bridge posts what the room shows to the
+service on your own machine, and the board follows from there.
+
+**Do not paste the room's address into a fresh tab.** The `auth` token in it is
+single use: reloading leaves the draft rather than rejoining it. Open the room
+from the lobby, once.
+
+### What it does and does not do
+
+- It **reads**. It never sends anything to Yahoo, and it never makes a pick.
+- It never touches `document.cookie` or any storage. Your Yahoo session stays in
+  the browser; the local service is never given it and could not use it.
+- It posts to `http://127.0.0.1:5178` and nowhere else. What it sends is the
+  league's player list, the seats, and the draft's own messages.
+
+### What it costs you
+
+**It can break without warning.** The messages it reads are Yahoo's private
+protocol between their draft client and their draft server. Nobody documents it
+and nobody promised it, so a Yahoo deploy can change it mid-draft and picks stop
+appearing. `docs/yahoo-draft-protocol.md` records what was observed and when.
+
+**Yahoo tells the draft room less than Sleeper tells the world.** The room
+carries the seats, the team names, the full draft order and every pick. It does
+**not** carry your roster shape or your scoring rules, so a Yahoo import leaves
+both as you set them and says so. Keepers and traded picks are not listed
+either — but the draft order already has them applied, which is why the order is
+read from Yahoo rather than worked out from a snake.
+
+**It has been tested against mock drafts only.** Run a mock with the board open
+beside it before you rely on it in a draft that counts.
 
 ---
 

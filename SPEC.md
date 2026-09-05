@@ -99,7 +99,10 @@ browser cannot call directly, cache them, and join them.
   league size) and Sleeper (projections, deeper pool, injury status). Neither
   requires a key.
 - League platforms are read through `server/src/platforms/`, one directory each,
-  behind a common five-method interface.
+  behind a common five-method interface. A platform is pulled where its feed is
+  open, and pushed where it is not: Yahoo answers only the user's own browser, so
+  a userscript in their draft room posts to the service and the same five methods
+  answer from what arrived. The service never holds a platform credential.
 - The service holds a bounded disk and memory cache and no other state.
 - Everything the user sets — leagues, rankings, notes, name mappings, keepers,
   the room's dials — is held in their browser.
@@ -156,7 +159,11 @@ browser cannot call directly, cache them, and join them.
   comes from the mock lobby. Answered by watching one real draft, and it must be
   answered before draft day rather than during it.
 - Whether Yahoo exposes any equivalent of pre-draft traded picks. Nothing found
-  so far, and nothing in the draft room suggests it.
+  so far, and nothing in the draft room suggests it. The draft order Yahoo sends
+  already has them applied, so following a draft does not need them; setting up a
+  mock of that league does.
+- What Yahoo's `settings/nfl/<league>` holds. No capture has opened it, so a
+  Yahoo import carries no roster shape and no scoring rules and says so.
 - Whether the upstream project wants Yahoo support at all, now that it needs a
   userscript rather than an API key. Answered by the upstream maintainer. See
   `DECISIONS.md`.

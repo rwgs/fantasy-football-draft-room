@@ -8,6 +8,37 @@ fixed.
 
 ---
 
+## Unreleased
+
+### Added
+
+**Follow a Yahoo draft.** The assistant already followed a Sleeper draft. Yahoo
+publishes nothing to anyone but your own browser, so this takes a userscript —
+`userscript/yahoo-draft-bridge.user.js` — running in your own draft room. It
+reads the room the way the room reads itself and posts to the service on your
+machine. Your Yahoo session never leaves the browser, and there is still no
+account to make and no API key to get.
+
+The settings screen gained a choice of platform, and a saved league remembers
+which one it came from. A league saved before there was a choice is a Sleeper
+league.
+
+Yahoo's draft room carries the seats, the team names, the full draft order and
+every pick. It does not carry the roster shape or the scoring rules, so a Yahoo
+import leaves those as you set them and warns rather than inventing them. The
+draft order is read from Yahoo rather than worked out from a snake, which is the
+only reading that stays right for a league with keepers or a traded pick.
+
+`docs/yahoo-draft-protocol.md` records what Yahoo's draft room actually sends,
+marked observed or inferred line by line. None of it is documented or promised
+by Yahoo, and a deploy can change it without warning.
+
+**Known limits.** Everything was built from mock drafts; no real Yahoo draft has
+been followed yet, and the userscript itself has no automated test. Run a mock
+beside the board before trusting it.
+
+---
+
 ## 1.1.0 — 2026-09-01
 
 ### Added

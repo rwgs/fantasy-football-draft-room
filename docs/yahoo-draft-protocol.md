@@ -162,10 +162,18 @@ real leagues and real people:
 |---|---|
 | `capture-mock1.log` | 111 picks, mid-draft onward |
 | `capture-mock2.log` | 96 picks from pick 3 |
-| `capture-mock3-handshake.log` | A connect sequence from `[ws-open]` |
+| `capture-mock3-handshake.log` | A connect sequence from `[ws-open]`, and a bare `P` before a draft opened |
+| `capture-mock3-reconnect.log` | A reconnect into a draft 91 picks deep: the `R\|` order and a populated `P\|` |
 
 These are enough to test a decoder offline, which matters because the
-alternative is testing it during a draft.
+alternative is testing it during a draft. `npm run engine:test` replays all four
+when they are present, and falls back to synthetic frames when they are not.
+
+**The pool was never captured.** The watcher records response bodies, but no run
+kept the body of `players/nfl/<league>`, so nothing here maps a real Yahoo player
+ID to a real person. A decoder can be checked against these files; a *join* onto
+the board cannot, and is tested against a synthesised pool instead. Keeping one
+pool response would close that gap.
 
 ## Still unknown
 

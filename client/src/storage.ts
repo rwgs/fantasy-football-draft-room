@@ -71,6 +71,7 @@ export interface Saved {
 const blank = (id: string, name: string): SavedLeague => ({
   id,
   name,
+  platform: 'sleeper',
   settings: null,
   fetchedAt: null,
   rankingSource: null,

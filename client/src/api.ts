@@ -1,6 +1,6 @@
 import type {
   Board, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState, NoteSet,
-  Overrides, RankingSet,
+  Overrides, Platform, RankingSet,
 } from './engine/types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -11,6 +11,17 @@ export interface BoardQuery {
   adpSource: string;
   year: number;
   force?: boolean;
+}
+
+/**
+ * The path a league or draft call goes to.
+ *
+ * The platform is a path segment rather than a query parameter, which is what
+ * kept `/api/sleeper/...` unchanged when the seam went in. A league saved before
+ * there was a choice has no platform on it, so the absence reads as Sleeper.
+ */
+function on(platform: Platform | undefined, path: string): string {
+  return BASE + '/' + (platform || 'sleeper') + path;
 }
 
 function query(q: BoardQuery): string {
@@ -81,12 +92,13 @@ export async function matchNotes(
 
 /** The seats, team names, declared keepers and draft state of a real league. */
 export async function fetchLeagueSetup(
+  platform: Platform,
   leagueId: string,
   q: BoardQuery,
   force = false,
 ): Promise<LeagueSetup> {
   const res = await fetch(
-    BASE + '/sleeper/league/' + encodeURIComponent(leagueId) + '/setup?' + query(q)
+    on(platform, '/league/' + encodeURIComponent(leagueId) + '/setup?' + query(q))
       + (force ? '&force=1' : ''),
   );
   if (!res.ok) return fail(res);
@@ -94,23 +106,33 @@ export async function fetchLeagueSetup(
 }
 
 /** The managers in a league, so you can say which team is yours. */
-export async function fetchLeagueMembers(leagueId: string): Promise<LeagueMember[]> {
-  const res = await fetch(BASE + '/sleeper/league/' + encodeURIComponent(leagueId) + '/users');
+export async function fetchLeagueMembers(
+  platform: Platform,
+  leagueId: string,
+): Promise<LeagueMember[]> {
+  const res = await fetch(on(platform, '/league/' + encodeURIComponent(leagueId) + '/users'));
   if (!res.ok) return fail(res);
   return res.json();
 }
 
 /** Whether a real draft has opened, and who sits in which slot. */
-export async function fetchDraftState(draftId: string): Promise<LiveDraftState> {
-  const res = await fetch(BASE + '/sleeper/draft/' + encodeURIComponent(draftId));
+export async function fetchDraftState(
+  platform: Platform,
+  draftId: string,
+): Promise<LiveDraftState> {
+  const res = await fetch(on(platform, '/draft/' + encodeURIComponent(draftId)));
   if (!res.ok) return fail(res);
   return res.json();
 }
 
 /** Every pick made in a real draft so far, mapped onto this board. */
-export async function fetchDraftPicks(draftId: string, q: BoardQuery): Promise<LivePicks> {
+export async function fetchDraftPicks(
+  platform: Platform,
+  draftId: string,
+  q: BoardQuery,
+): Promise<LivePicks> {
   const res = await fetch(
-    BASE + '/sleeper/draft/' + encodeURIComponent(draftId) + '/picks?' + query(q),
+    on(platform, '/draft/' + encodeURIComponent(draftId) + '/picks?' + query(q)),
     { cache: 'no-store' },
   );
   if (!res.ok) return fail(res);
@@ -118,11 +140,15 @@ export async function fetchDraftPicks(draftId: string, q: BoardQuery): Promise<L
 }
 
 /**
- * Read draft settings out of a real Sleeper league.
+ * Read draft settings out of a real league.
  * `force` skips the service cache, which is what Refresh is for.
  */
-export async function fetchSleeperLeague(id: string, force = false): Promise<LeagueImport> {
-  const res = await fetch(BASE + '/sleeper/league/' + encodeURIComponent(id.trim())
+export async function fetchLeague(
+  platform: Platform,
+  id: string,
+  force = false,
+): Promise<LeagueImport> {
+  const res = await fetch(on(platform, '/league/' + encodeURIComponent(id.trim()))
     + (force ? '?force=1' : ''));
   if (!res.ok) return fail(res);
   return res.json();

@@ -81,7 +81,7 @@ verified rather than inferred from a clean rename diff.
 
 - The self-test itself. That is the point of the phase.
 
-## Phase 5: Yahoo, read-only, through the browser
+## Phase 5: Yahoo, read-only, through the browser — built, unproven
 
 ### Outcome
 
@@ -94,9 +94,10 @@ the default and keeps needing no userscript either.
 - `main` merged into `yahoo-platform`, which was cut before the planning
   documents existed.
 - A userscript matching the draft room, which reads the pool and the draft
-  socket with the browser's own cookies and posts decoded picks to the service.
+  socket with the browser's own cookies and posts the pool and the raw frames to
+  the service. It decodes nothing; see the 2026-09-04 entry in `DECISIONS.md`.
 - A `yahoo` platform directory implementing the five methods, holding what the
-  bridge posts in memory only.
+  bridge posts in memory only, and the one route in the service written to.
 - Joining Yahoo picks onto the board by name, position and team, which the pool
   endpoint supports as it stands.
 - A platform selector in the client, and honest documentation of what a
@@ -111,16 +112,21 @@ the default and keeps needing no userscript either.
 - Name matching moves onto the critical path of a live draft, where a miss puts
   a hole in the board rather than a footnote in an import.
 - Every observation so far comes from a mock room, not a real league.
-- Whether a reconnecting client is sent the picks it missed is unobserved, so a
-  mid-draft reload is of unknown cost.
+- A reconnecting client **is** sent the picks it missed, in a `P|` frame, so a
+  mid-draft reload costs nothing. Observed on a reconnect 91 picks deep.
 - Traded picks and pre-draft draft state still look absent. Expect to lose them
-  rather than to find them.
+  rather than to find them. The `R|` order already has both applied, which is
+  why it is read rather than derived.
+- Yahoo's roster shape and scoring are not in the draft room at all, so a Yahoo
+  import cannot carry them and says so instead.
 
 ### Exit criteria
 
-- A real Yahoo league imports with settings matching the league.
+- A real Yahoo league imports the seats, the order and the round count. The
+  roster shape and the scoring are **not** exit criteria: the draft room does
+  not carry them, and the import warns rather than inventing them.
 - A real Yahoo draft is followed pick by pick, or the phase records that it
-  cannot be and why.
+  cannot be and why. **Outstanding: nothing has run the userscript yet.**
 - Sleeper's behavior is unchanged, proven by the Phase 4 checks still passing.
 
 ### Validation

@@ -12,7 +12,7 @@ import useNarrow from '../useNarrow';
 import { maskLeague } from '../anon';
 import type {
   AppMode, Board, CpuConfig, LeagueConfig, LeagueImport, LeagueSetup, NoteSet,
-  Overrides, PendingKeeper, Position, PresetPick, RankingSet, RosterSlots, SavedLeague,
+  Overrides, PendingKeeper, Platform, Position, PresetPick, RankingSet, RosterSlots, SavedLeague,
 } from '../engine/types';
 import { POSITIONS } from '../engine/types';
 
@@ -76,10 +76,10 @@ interface Props {
   onForgetOverride: (key: string) => void;
   onRankColumn: (index: number) => void;
   onClearRankings: () => void;
-  onLoadSleeperLeague: (id: string) => void;
-  onAddSleeperLeague: (id: string) => void;
-  onRefreshSleeperLeague: (id: string) => void;
-  onRemoveSleeperLeague: (id: string) => void;
+  onLoadLeague: (id: string) => void;
+  onAddLeague: (platform: Platform, id: string) => void;
+  onRefreshLeague: (id: string) => void;
+  onRemoveLeague: (id: string) => void;
   onStart: () => void;
   onRefreshBoard: () => void;
 
@@ -135,8 +135,8 @@ export default function SetupScreen(props: Props) {
     noteSet, notesBusy, onNotes, onClearNotes,
     savedLeagues, activeLeagueId, importedLeague, leagueBusy, leagueError,
     onLeague, onCpu, onPace, onRankings, onOverride, onForgetOverride, onRankColumn,
-    onClearRankings, onLoadSleeperLeague, onAddSleeperLeague, onRefreshSleeperLeague,
-    onRemoveSleeperLeague, onStart, onRefreshBoard,
+    onClearRankings, onLoadLeague, onAddLeague, onRefreshLeague,
+    onRemoveLeague, onStart, onRefreshBoard,
     mode, onMode, anonymous, leagueLabel,
     keepers, pendingKeepers, onKeeperRound, onDropPending,
     onAddKeeper, onRemoveKeeper, onClearKeepers, onImportKeepers,
@@ -329,10 +329,10 @@ export default function SetupScreen(props: Props) {
             imported={importedLeague}
             busy={leagueBusy}
             error={leagueError}
-            onLoad={onLoadSleeperLeague}
-            onAdd={onAddSleeperLeague}
-            onRefresh={onRefreshSleeperLeague}
-            onRemove={onRemoveSleeperLeague}
+            onLoad={onLoadLeague}
+            onAdd={onAddLeague}
+            onRefresh={onRefreshLeague}
+            onRemove={onRemoveLeague}
             anonymous={anonymous}
             setup={setup}
             myUserId={myUserId}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { maskLeague, maskTeam } from '../anon';
-import type { LeagueImport, LeagueSetup, SavedLeague } from '../engine/types';
+import type { LeagueImport, LeagueSetup, Platform, SavedLeague } from '../engine/types';
 
 interface Props {
   leagues: SavedLeague[];
@@ -9,7 +9,7 @@ interface Props {
   busy: boolean;
   error: string | null;
   onLoad: (id: string) => void;
-  onAdd: (id: string) => void;
+  onAdd: (platform: Platform, id: string) => void;
   onRefresh: (id: string) => void;
   onRemove: (id: string) => void;
   anonymous: boolean;
@@ -32,12 +32,31 @@ const SCORING_WORDS: Record<string, string> = {
   standard: 'standard', 'half-ppr': 'half PPR', ppr: 'PPR', '2qb': 'superflex', dynasty: 'dynasty',
 };
 
+/** What each platform costs a user, and what it can be asked for. */
+const PLATFORMS: { id: Platform; label: string; hint: string }[] = [
+  {
+    id: 'sleeper',
+    label: 'Sleeper',
+    hint: 'The long number in the Sleeper web address of your league. Nothing else is needed.',
+  },
+  {
+    id: 'yahoo',
+    label: 'Yahoo',
+    hint: 'The number in your Yahoo draft room address. Yahoo answers only your own browser, '
+      + 'so this needs the bridge userscript running in your draft room; see the README. '
+      + 'Yahoo does not publish the roster shape or the scoring, so set those yourself.',
+  },
+];
+
 /**
- * Load the settings out of a Sleeper league you actually play in.
+ * Load the settings out of a league you actually play in.
  *
  * Sleeper publishes a league without a key, so the whole setup is a league ID.
- * What it cannot tell us is which slot is yours: the draft order is not set
- * until the draft starts. That one field stays yours to pick.
+ * Yahoo publishes nothing to anyone but your own browser, so a Yahoo league
+ * arrives through the bridge instead and carries less with it.
+ *
+ * What neither can tell us before the draft is which slot is yours, so that one
+ * field stays yours to pick.
  */
 export default function LeaguePanel(props: Props) {
   const {
@@ -52,7 +71,12 @@ export default function LeaguePanel(props: Props) {
     return maskLeague(found ? found.name : 'Sleeper league', i < 0 ? 0 : i, anonymous);
   };
   const [typed, setTyped] = useState('');
+  const [platform, setPlatform] = useState<Platform>('sleeper');
   const active = leagues.find((l) => l.id === activeId) || null;
+  const chosen = PLATFORMS.find((p) => p.id === platform) || PLATFORMS[0];
+  // A league saved before there was a choice is a Sleeper league.
+  const activeLabel = PLATFORMS.find((p) => p.id === (active?.platform ?? 'sleeper'))?.label
+    ?? 'Sleeper';
 
   // Trades change which picks are yours, so they change what a mock of this
   // league is worth. The seat alone no longer answers "when do I pick".
@@ -130,6 +154,20 @@ export default function LeaguePanel(props: Props) {
     <div className="grid-2">
       <div className="field">
         <label htmlFor="leagueId">Add a league by ID</label>
+        <div className="preset-row" role="group" aria-label="Where the league is">
+          {PLATFORMS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="preset"
+              aria-pressed={platform === p.id}
+              disabled={busy}
+              onClick={() => setPlatform(p.id)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <input
             id="leagueId"
@@ -139,21 +177,19 @@ export default function LeaguePanel(props: Props) {
             placeholder="the long number from your league address"
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && typed.trim()) { onAdd(typed.trim()); setTyped(''); }
+              if (e.key === 'Enter' && typed.trim()) { onAdd(platform, typed.trim()); setTyped(''); }
             }}
           />
           <button
             type="button"
             className="btn"
             disabled={!typed.trim() || busy}
-            onClick={() => { onAdd(typed.trim()); setTyped(''); }}
+            onClick={() => { onAdd(platform, typed.trim()); setTyped(''); }}
           >
             Add
           </button>
         </div>
-        <p className="hint">
-          The ID is the long number in your league's Sleeper web address.
-        </p>
+        <p className="hint">{chosen.hint}</p>
       </div>
 
       <div>
@@ -167,13 +203,18 @@ export default function LeaguePanel(props: Props) {
               {imported.season ? ', ' + imported.season : ''}
             </p>
             <p className="hint">
-              {imported.teams + ' teams, ' + imported.rounds + ' rounds, '
-                + (SCORING_WORDS[imported.scoring] || imported.scoring) + ', '
-                + (imported.draftType === 'snake' ? 'snake' : imported.draftType) + '. '}
-              {imported.roster.K === 0 ? 'No kicker. ' : ''}
-              {imported.roster.FLEX > 1 ? imported.roster.FLEX + ' flex slots. ' : ''}
-              Pick your own draft slot below; Sleeper does not set the order until the draft
-              starts.
+              {imported.teams + ' teams, ' + imported.rounds + ' rounds, '}
+              {/* Yahoo's draft room carries neither, and the import says so in
+                  its warnings rather than filling them in. */}
+              {imported.scoring
+                ? (SCORING_WORDS[imported.scoring] || imported.scoring) + ', '
+                : ''}
+              {(imported.draftType === 'snake' ? 'snake' : imported.draftType) + '. '}
+              {imported.roster && imported.roster.K === 0 ? 'No kicker. ' : ''}
+              {imported.roster && imported.roster.FLEX > 1
+                ? imported.roster.FLEX + ' flex slots. '
+                : ''}
+              {'Pick your own draft slot below; the order is not set until the draft starts.'}
             </p>
             <p className="hint" style={{ marginTop: 6 }}>
               {'Settings ' + pulledWhen(active?.fetchedAt ?? null) + '. '}
@@ -183,7 +224,7 @@ export default function LeaguePanel(props: Props) {
                 disabled={busy}
                 onClick={() => onRefresh(imported.id)}
               >
-                Refresh from Sleeper
+                {'Refresh from ' + activeLabel}
               </button>
             </p>
           </>

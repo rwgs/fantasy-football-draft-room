@@ -19,20 +19,26 @@ Phase 4: prove the platform seam against real leagues.
   - Dependencies or blockers: needs real Sleeper league IDs from the repository
     owner. Nothing else blocks it.
 
-- [ ] Phase 5: follow a Yahoo draft through the browser.
-  - No longer blocked. The draft room does not use the API this project applied
-    for, so nothing waits on that application. See the 2026-09-04 entry in
-    `DECISIONS.md` for what was observed and `PLAN.md` for the build.
-  - Scope: merge `main` into `yahoo-platform`, then the userscript, the
-    `yahoo` platform behind the seam, and the platform selector in the client.
+- [ ] Phase 5: follow a Yahoo draft through the browser. **Code complete, not
+      yet proven against a live room.**
+  - Built: `main` merged into `yahoo-platform`; the frame decoder, the room
+    store and the `yahoo` platform behind the seam; the ingestion route; the
+    bridge userscript; the platform selector in the client; a Yahoo block in
+    `engine:test`.
   - Acceptance criteria: every pick in a live Yahoo room appears on the board,
-    in the right slot, against the right seat, with none unmatched.
-  - Automated validation: a decode check against the captured frames in
-    `tools/yahoo/`, which runs offline. Then the full local gate.
-  - Manual validation: a live mock beside the app, then a real league before
-    draft day.
-  - Dependencies or blockers: none outstanding. Phase 4 is worth closing first
-    rather than required.
+    in the right slot, against the right seat, with none unmatched. **Not met
+    yet** — see the manual validation below, which is what meets it.
+  - Automated validation: run and passing. `engine:test` replays the four real
+    captures in `tools/yahoo/` plus a synthetic set that runs anywhere;
+    typecheck, lint and build all clean. What this does *not* cover is the
+    userscript, which no check touches.
+  - Manual validation: **outstanding.** A live mock beside the app, then a real
+    league before draft day. Until that runs, the bridge is unproven code.
+  - Dependencies or blockers: none. Phase 4 is worth closing first rather than
+    required.
+  - Known gap worth closing while mocking: keep one `players/nfl/<league>`
+    response. No capture has one, so nothing has ever joined a real Yahoo player
+    ID to a real person.
 
 ## Blocked
 

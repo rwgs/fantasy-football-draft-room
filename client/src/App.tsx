@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  fetchBoard, fetchDraftPicks, fetchLeagueSetup, fetchSleeperLeague, matchNotes, matchRankings,
+  fetchBoard, fetchDraftPicks, fetchLeague, fetchLeagueSetup, matchNotes, matchRankings,
 } from './api';
 import { maskLeague } from './anon';
 import { keeperPicksIn } from './engine/order';
@@ -13,7 +13,7 @@ import type { DraftEngine } from './engine/draft';
 import { rosterSize } from './engine/roster';
 import type {
   AppMode, Board, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
-  NoteSet, Overrides, PendingKeeper, PresetPick, RankingSet, SavedLeague,
+  NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague,
 } from './engine/types';
 import type { RankingSource } from './storage';
 import { load, save } from './storage';
@@ -98,6 +98,8 @@ export default function App() {
     preset, pace, mode, anonymous, myManager, resumeLive]);
 
   const activeLeague = savedLeagues.find((l) => l.id === activeLeagueId) || null;
+  /** A league saved before there was a choice of platform is a Sleeper league. */
+  const activePlatform: Platform = activeLeague?.platform ?? 'sleeper';
   const keepers = activeLeague?.keepers ?? [];
   const pendingKeepers = activeLeague?.pendingKeepers ?? [];
   const liveDraftId = importedLeague?.draftId ?? null;
@@ -288,8 +290,11 @@ export default function App() {
       ...current,
       teams: imported.teams,
       rounds: imported.rounds,
-      roster: imported.roster,
-      scoring: imported.scoring,
+      // A platform that does not publish these leaves what you set alone. Yahoo
+      // keeps neither in its draft room, and a roster invented here would look
+      // exactly like one that had been read.
+      roster: imported.roster ?? current.roster,
+      scoring: imported.scoring ?? current.scoring,
       draftType: imported.draftType,
       mySlot: Math.min(current.mySlot, imported.teams),
     }));
@@ -301,21 +306,22 @@ export default function App() {
    * A league's shape does not move once the season is set, so this runs on the
    * first use of a league and then only when you press Refresh.
    */
-  const pullSleeperLeague = useCallback(async (id: string, force = false) => {
+  const pullLeague = useCallback(async (platform: Platform, id: string, force = false) => {
     setLeagueBusy(true);
     setLeagueError(null);
     try {
-      const imported = await fetchSleeperLeague(id, force);
+      const imported = await fetchLeague(platform, id, force);
       applyImport(imported);
-      void loadSetup(id, force);
+      void loadSetup(platform, id, force);
       const stamp = Date.now();
       setSavedLeagues((list) => (list.some((l) => l.id === imported.id)
         ? list.map((l) => (l.id === imported.id
-          ? { ...l, name: imported.name, settings: imported, fetchedAt: stamp }
+          ? { ...l, name: imported.name, platform, settings: imported, fetchedAt: stamp }
           : l))
         : [...list, {
           id: imported.id,
           name: imported.name,
+          platform,
           settings: imported,
           fetchedAt: stamp,
           rankingSource: null,
@@ -340,11 +346,13 @@ export default function App() {
    * teams, keepers get declared right up to the deadline, and the draft order
    * appears at some point before the draft.
    */
-  const loadSetup = useCallback(async (leagueId: string, force = false) => {
+  const loadSetup = useCallback(async (
+    platform: Platform, leagueId: string, force = false,
+  ) => {
     setLeagueBusy(true);
     setLeagueError(null);
     try {
-      const got = await fetchLeagueSetup(leagueId, {
+      const got = await fetchLeagueSetup(platform, leagueId, {
         scoring: league.scoring,
         teams: league.teams,
         adpSource: league.adpSource,
@@ -403,7 +411,9 @@ export default function App() {
     setKeeperImportBusy(true);
     setKeeperImportNote(null);
     try {
-      const got = setup?.leagueId === activeLeagueId ? setup : await loadSetup(activeLeagueId, true);
+      const got = setup?.leagueId === activeLeagueId
+        ? setup
+        : await loadSetup(activePlatform, activeLeagueId, true);
       if (!got) return;
 
       const teams = got.teams || league.teams;
@@ -474,7 +484,7 @@ export default function App() {
     } finally {
       setKeeperImportBusy(false);
     }
-  }, [activeLeagueId, setup, loadSetup, league, patchLeague]);
+  }, [activeLeagueId, activePlatform, setup, loadSetup, league, patchLeague]);
 
   /**
    * Settle a pending keeper by saying which round he costs.
@@ -510,18 +520,19 @@ export default function App() {
   }, [activeLeagueId, activeLeague, patchLeague]);
 
   /** Load a saved league from what is already kept, pulling only if it is new. */
-  const loadSleeperLeague = useCallback((id: string) => {
+  const loadSavedLeague = useCallback((id: string) => {
     const existing = savedLeagues.find((l) => l.id === id);
+    const platform: Platform = existing?.platform ?? 'sleeper';
     if (existing?.settings) {
       setLeagueError(null);
       applyImport(existing.settings);
     } else {
-      void pullSleeperLeague(id);
+      void pullLeague(platform, id);
     }
     // Team names, keepers and the draft order all move, so they are read every
     // time even though the league's own shape is cached.
-    void loadSetup(id);
-  }, [savedLeagues, applyImport, pullSleeperLeague, loadSetup]);
+    void loadSetup(platform, id);
+  }, [savedLeagues, applyImport, pullLeague, loadSetup]);
 
   /**
    * Begin a mock, optionally from where the real draft has got to.
@@ -541,7 +552,7 @@ export default function App() {
       setStartError(null);
       setStarting(true);
       try {
-        const live = await fetchDraftPicks(liveDraftId, {
+        const live = await fetchDraftPicks(activePlatform, liveDraftId, {
           scoring: league.scoring,
           teams: league.teams,
           adpSource: league.adpSource,
@@ -565,7 +576,7 @@ export default function App() {
       createDraft(league, cpu, players, rankings?.entries ?? null, presets),
     ));
     setScreen('draft');
-  }, [board, league, cpu, rankings, keepers, resumeLive, liveDraftId]);
+  }, [board, league, cpu, rankings, keepers, resumeLive, liveDraftId, activePlatform]);
 
   /** Ask how far the real draft has got, without starting anything. */
   const checkLive = useCallback(async () => {
@@ -573,7 +584,7 @@ export default function App() {
     setLiveBusy(true);
     setStartError(null);
     try {
-      const live = await fetchDraftPicks(liveDraftId, {
+      const live = await fetchDraftPicks(activePlatform, liveDraftId, {
         scoring: league.scoring,
         teams: league.teams,
         adpSource: league.adpSource,
@@ -585,7 +596,7 @@ export default function App() {
     } finally {
       setLiveBusy(false);
     }
-  }, [liveDraftId, league.scoring, league.teams, league.adpSource, league.year]);
+  }, [liveDraftId, activePlatform, league.scoring, league.teams, league.adpSource, league.year]);
 
   // How far along the draft is goes stale by the minute once it opens, so it is
   // read when you ask for it and whenever the league changes under it.
@@ -711,10 +722,13 @@ export default function App() {
             lastMatched.current = '';
             setCpu((c) => ({ ...c, cpuUsesMyRankings: false }));
           }}
-          onLoadSleeperLeague={loadSleeperLeague}
-          onAddSleeperLeague={(id) => { void pullSleeperLeague(id); }}
-          onRefreshSleeperLeague={(id) => { void pullSleeperLeague(id, true); }}
-          onRemoveSleeperLeague={(id) => {
+          onLoadLeague={loadSavedLeague}
+          onAddLeague={(platform, id) => { void pullLeague(platform, id); }}
+          onRefreshLeague={(id) => {
+            const at = savedLeagues.find((l) => l.id === id)?.platform ?? 'sleeper';
+            void pullLeague(at, id, true);
+          }}
+          onRemoveLeague={(id) => {
             setSavedLeagues((list) => list.filter((l) => l.id !== id));
             if (activeLeagueId === id) { setActiveLeagueId(null); setImportedLeague(null); }
           }}
@@ -765,7 +779,9 @@ export default function App() {
             // The name follows you to your other leagues.
             if (seat?.manager) setMyManager(seat.manager);
           }}
-          onCheckDraft={() => { if (activeLeagueId) void loadSetup(activeLeagueId, true); }}
+          onCheckDraft={() => {
+            if (activeLeagueId) void loadSetup(activePlatform, activeLeagueId, true);
+          }}
         />
       )}
 
@@ -777,6 +793,7 @@ export default function App() {
           mode={mode}
           anonymous={anonymous}
           draftId={importedLeague?.draftId ?? null}
+          platform={activePlatform}
           rankingEntries={rankings?.entries ?? null}
           notes={notes}
           onEngine={setEngine}

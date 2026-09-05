@@ -11,7 +11,7 @@ import type { DraftEngine } from '../engine/draft';
 import { fetchDraftPicks } from '../api';
 import { maskTeam } from '../anon';
 import { livePresets, offBoardPlayer } from '../engine/live';
-import type { AppMode, Board } from '../engine/types';
+import type { AppMode, Board, Platform } from '../engine/types';
 
 /** How often the assistant asks Sleeper for new picks. */
 const POLL_MS = 8000;
@@ -23,6 +23,8 @@ interface Props {
   mode: AppMode;
   anonymous: boolean;
   draftId: string | null;
+  /** Which platform the followed draft is on. Sleeper unless a league says so. */
+  platform: Platform;
   rankingEntries: import('../engine/types').RankingEntry[] | null;
   /** What you wrote about a player, by player id. Null when you wrote none. */
   notes: Map<string, string> | null;
@@ -41,7 +43,7 @@ function label(overall: number, teams: number): string {
 
 export default function DraftScreen(props: Props) {
   const {
-    engine, board, pace, mode, anonymous, draftId, rankingEntries, notes,
+    engine, board, pace, mode, anonymous, draftId, platform, rankingEntries, notes,
     onEngine, onFinish, onLeave,
   } = props;
 
@@ -108,7 +110,7 @@ export default function DraftScreen(props: Props) {
 
     const poll = async () => {
       try {
-        const live = await fetchDraftPicks(draftId, {
+        const live = await fetchDraftPicks(platform, draftId, {
           scoring: state.league.scoring,
           teams: state.league.teams,
           adpSource: state.league.adpSource,
@@ -141,7 +143,7 @@ export default function DraftScreen(props: Props) {
     void poll();
     const timer = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(timer); };
-  }, [assistant, draftId, paused, board, rankingEntries,
+  }, [assistant, draftId, platform, paused, board, rankingEntries,
     state.league.scoring, state.league.teams, state.league.adpSource, state.league.year]);
 
   // Run the room. One pick per tick so the board reads like a draft, or the
