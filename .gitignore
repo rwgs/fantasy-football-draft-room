@@ -15,6 +15,9 @@ tools/
 # Playwright MCP scratch output from browser checks
 .playwright-mcp/
 
+# What `npm run shots` photographs. Evidence for one change, not an asset.
+client/shots/
+
 # Editor and OS noise
 .vs/
 .DS_Store

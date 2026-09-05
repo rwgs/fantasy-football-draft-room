@@ -435,6 +435,7 @@ place so the client never has to guess whether two records name the same player.
 | `npm run typecheck` | TypeScript, app and tests |
 | `npm run engine:test` | run the draft engine against a live board |
 | `npm run server:test` | the data service's own internals |
+| `npm run shots` | drive the app in a browser and photograph it. Needs `npm run dev` |
 
 ---
 

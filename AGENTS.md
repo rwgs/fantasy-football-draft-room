@@ -106,6 +106,7 @@ npm run typecheck        # tsc against both the app and the test config
 npm --prefix client run lint    # oxlint
 npm run engine:test      # the engine self-test. See below: needs the service up.
 npm run server:test      # node --test, for service code no endpoint can show
+npm run shots            # photograph the app in a real browser. Needs the client up
 npm run build            # tsc -b, then the Vite production build
 ```
 
@@ -149,6 +150,8 @@ changes nothing rather than blocking on a prompt nobody will answer.
 - Inspect the final status and diff, and confirm every changed line traces to
   something the task asked for.
 - Verify visible behavior with screenshots or equivalent rendered output.
+  `npm run shots` drives the app to the draft screen in both modes and writes
+  `client/shots/`, and fails on a console error, which a screenshot cannot show.
 - Report skipped checks and outstanding manual testing rather than omitting
   them.
 

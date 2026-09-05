@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.test.json",
     "engine:test": "tsx src/engine/selftest.ts",
+    "shots": "node scripts/shots.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -22,6 +23,7 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "oxlint": "^1.79.0",
+    "playwright": "^1.63.0",
     "tsx": "^4.23.12",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
