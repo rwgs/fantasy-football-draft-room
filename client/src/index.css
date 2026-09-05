@@ -451,6 +451,19 @@ input[type='range']::-moz-range-thumb {
   border-top: 1px solid var(--line-soft);
 }
 
+/* The board on its way out as a file. A quiet row under the rankings controls:
+   it is an escape hatch, not the thing the section is for. */
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.export-row .hint { flex: 1 1 260px; }
+
 /* ------------------------------------------------------------- draft screen */
 
 .clock {

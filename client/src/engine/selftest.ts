@@ -16,6 +16,7 @@ import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
   nextUserChoice, nextUserPick, presetFor, runCpuPick, runPresetsOnly, runToUserTurn, undoPick,
 } from './draft';
+import { boardCsv } from './exportBoard';
 import { NO_FIXTURES, loadFixtures } from './fixtures';
 import { biggestSteals, gradeDraft } from './grade';
 import { mergePresets } from './live';
@@ -945,6 +946,26 @@ async function main() {
       etr.entries.map((e: Row) => e.name).join(' | '));
     check('every header is offered back so the column can be changed',
       etr.columns.headers.length === 10, String(etr.columns.headers.length));
+
+    // THE BOARD HAS TO SURVIVE ITS OWN EXPORT.
+    // The download writes the headers this same reader scores, and `Rank` has
+    // to beat `ADP` at 40 or the file comes back sorted by the market and
+    // still calls itself yours. Every name in it came off
+    // the board, so anything short of an exact match on every row is the
+    // writer's fault rather than the matcher's.
+    const exported = await post(boardCsv(shallowBoard.players));
+    check('the exported board picks its own rank column',
+      exported.columns.rank === 'rank', String(exported.columns.rank));
+    check('the exported board comes back whole',
+      exported.entries.length === shallowBoard.players.length
+        && exported.unmatched.length === 0,
+      exported.entries.length + ' of ' + shallowBoard.players.length + ' rows, '
+        + exported.unmatched.length + ' unmatched');
+    check('every exported row matches exactly',
+      exported.entries.every((e: Row) => e.matchedBy === 'exact'),
+      Object.keys(exported.tiers).join(', '));
+    check('the exported order is the board order',
+      exported.entries.every((e: Row, i: number) => e.name === shallowBoard.players[i].name));
 
     // And when detection is wrong anyway, pointing at a column wins.
     const forced = await fetch(API + '/api/rankings?scoring=standard&teams=12&adpSource=sleeper', {

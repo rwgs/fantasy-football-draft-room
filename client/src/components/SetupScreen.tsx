@@ -721,6 +721,7 @@ export default function SetupScreen(props: Props) {
         >
           <RankingsPanel
             board={board?.players ?? []}
+            meta={board?.meta ?? null}
             rankings={rankings}
             overrides={overrides}
             busy={rankingsBusy || loading}

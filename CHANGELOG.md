@@ -140,6 +140,19 @@ starts with and in the format the service falls back to. ESPN publishes a rank
 table for PPR and none for half PPR, so this is also the format where its
 opinion is its own rather than borrowed.
 
+**Take the board away as a file.** The three-source board was readable on screen
+and had no way out of the browser. Your rankings section now downloads it as a
+CSV: every player, what Sleeper, Fantasy Football Calculator and ESPN each said,
+how far apart they were, the projection and the bye. It is written to be read
+back by the same matcher that reads a ranking file, so the round trip is to sort
+it in a spreadsheet and load it in again as your own.
+
+The headers are chosen against that matcher's column scoring rather than picked
+for looks: it scores header names, and a file whose `Rank` column loses to its
+`ADP` column comes back in market order while still calling itself yours. The
+self test exports a real board, feeds it back, and checks every row returns on
+an exact match in the order it left.
+
 ### Fixed
 
 **A player eligible at two positions joins the board again.** Yahoo writes dual

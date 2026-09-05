@@ -1,9 +1,12 @@
 import { useRef, useState } from 'react';
 import PlayerPicker from './PlayerPicker';
-import type { Overrides, Player, RankingSet } from '../engine/types';
+import { boardCsv, boardFilename } from '../engine/exportBoard';
+import type { BoardMeta, Overrides, Player, RankingSet } from '../engine/types';
 
 interface Props {
   board: Player[];
+  /** What the board is, for naming the file it downloads as. Null before one loads. */
+  meta: BoardMeta | null;
   rankings: RankingSet | null;
   overrides: Overrides;
   busy: boolean;
@@ -25,7 +28,7 @@ const TIER_WORDS: Record<string, string> = {
 
 export default function RankingsPanel(props: Props) {
   const {
-    board, rankings, overrides, busy, onLoad, onOverride, onForget, onRankColumn, onClear,
+    board, meta, rankings, overrides, busy, onLoad, onOverride, onForget, onRankColumn, onClear,
   } = props;
 
   const [pasted, setPasted] = useState('');
@@ -37,6 +40,22 @@ export default function RankingsPanel(props: Props) {
     const reader = new FileReader();
     reader.onload = () => onLoad(String(reader.result || ''), file.name);
     reader.readAsText(file);
+  };
+
+  /**
+   * The board, out of the browser and onto the disk.
+   *
+   * Built here rather than asked of the service: the client already holds every
+   * player, so a round trip would fetch back what is on screen.
+   */
+  const download = () => {
+    if (!meta) return;
+    const url = URL.createObjectURL(new Blob([boardCsv(board)], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = boardFilename(meta);
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const inexact = rankings?.entries.filter((e) => e.matchedBy !== 'exact') ?? [];
@@ -312,6 +331,26 @@ export default function RankingsPanel(props: Props) {
             : ''}
         </p>
       </>
+    )}
+
+    {/* ---------------------------------------- the board, as a file
+      * Shown whether or not a list is loaded. With one loaded it is how you
+      * take the board away and come back with it edited; with none it is the
+      * starting point, and either way it is the only way the numbers on screen
+      * leave the browser.
+      */}
+    {meta && board.length > 0 && (
+      <div className="export-row">
+        <button type="button" className="btn is-quiet" onClick={download} disabled={busy}>
+          Download this board
+        </button>
+        <p className="hint" style={{ margin: 0 }}>
+          {board.length}
+          {' players, with what Sleeper, Fantasy Football Calculator and ESPN each said and '}
+          {'how far apart they were. It loads back in here, so you can sort it in a '}
+          {'spreadsheet and bring it back as your own.'}
+        </p>
+      </div>
     )}
     </>
   );
