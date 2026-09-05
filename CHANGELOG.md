@@ -43,6 +43,39 @@ gate user scripts: until "Allow user scripts" is on for the manager, the bridge
 installs, enables, reports no error and never runs. The README leads with it and
 gives the one console probe that tells that failure apart from every other one.
 
+**What a position costs to skip.** Above your roster, each position now carries
+the best player left at it in points over a replacement starter, the value you
+can expect to still be there at your next pick, and the gap between them. The
+costliest position to skip sorts to the top. The survival bar already said
+whether a player lasts; this says whether that matters, which is the question
+you actually have on the clock. A back with a one in five chance of lasting is a
+crisis when the next back is forty points worse and a shrug when the next one is
+three points worse.
+
+Replacement level is read off the market rather than a table of invented flex
+shares, so a superflex league moves the quarterback replacement down on its own
+without being told to.
+
+**Odds read off your room, not off the average of thousands.** When the
+assistant is following a real draft, the board now plays the rest of the round
+out from the real picks and the real rosters, a hundred and fifty times, and
+reports how often each player was still there when your turn came round. Those
+odds replace the ADP ones, and the pool marks which is which. A receiver run
+already under way moves these numbers where it cannot move ADP. If the room is
+leaning hard somewhere, the panel says so in a sentence.
+
+This is for a real draft only. A mock room's lean is the one you dialled in
+yourself, so measuring it and applying it again would count it twice.
+
+**Enter the picks by hand.** Assistant mode used to refuse to open without a
+league carrying a draft. A room on a site this app cannot read, or one whose
+feed turns out not to publish picks while it runs, is still a room worth having
+the board for, so it now opens ready to take the picks typed in, and does that
+by default when there is nothing to follow. Everything downstream treats a typed
+pick as a pick: rosters fill, the board fills, and the grade at the end reads it
+like any other draft. Where there is a feed you can switch between the two, and
+the poll stops while you are typing so it cannot overwrite what you entered.
+
 ### Fixed
 
 **A player eligible at two positions joins the board again.** Yahoo writes dual
@@ -50,6 +83,23 @@ eligibility as `WR,RB` where every other source writes one position, and the
 whole pair was being used as a lookup key, so the pick found nobody and landed
 as a stranger on the board. Only fringe players carry it, which is why a full
 mock draft never tripped over it.
+
+**The blended ADP no longer invents a number neither source measured.**
+Sleeper's board runs past pick 700 and Fantasy Football Calculator's stops
+around 230, so a player one puts at 142 and the other at 700 is not a player
+they disagree about by five hundred picks: one measured a pick, the other is
+saying nobody takes him. Averaging the two put him at 421 and out of the
+draft. Twenty six players Fantasy Football Calculator drafts inside a fifteen
+round board were being pushed out of it this way, nine of them receivers,
+along with most of the kickers and defences. A source with no pick to report
+now abstains, and the blend is of whoever measured one.
+
+**A slow feed is no longer asked the same question three times.** Following a
+draft rebuilds the board every eight seconds, and every rebuild asks for seven
+cached feeds. If one had expired and the upstream took longer than the poll to
+answer, the next poll started a second fetch of the same thing and the one after
+that a third, each holding a payload of a megabyte or more. Callers now share
+the one fetch.
 
 **Known limits.** Everything was built from mock drafts, and a mock is the only
 thing the bridge has ever followed live: a 14 team room, followed pick by pick
