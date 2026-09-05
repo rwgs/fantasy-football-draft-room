@@ -446,15 +446,35 @@ async function main() {
       while (e.state.picks.length < n && !e.state.done) e = runCpuPick(e);
       return e;
     };
-    const leanOf = (id: string) => {
+    const leanOf = (id: string, picks = 36) => {
       const preset = PRESETS.find((p) => p.id === id)!;
-      return observedLean(play(preset.cpu, 36));
+      return observedLean(play(preset.cpu, picks));
     };
+
+    /*
+     * Quarterbacks need a deeper draft before the reading means anything.
+     *
+     * A lean is a surplus counted against a no-lean room, so its signal is only
+     * as big as the number of picks the position has taken. Three rounds of a
+     * twelve team draft hold two or three quarterbacks, and the difference
+     * between a room forcing them and an ordinary one was a single pick: over
+     * eight seeds the gap ran 0.8 to 3.3, and one seed in eight read under the
+     * threshold on noise alone. Four rounds is enough that quarterbacks are
+     * actually coming off the board, and the same eight seeds then run 1.7 to
+     * 4.2 with none under it.
+     *
+     * The backs need no such thing, and are still read at three rounds: they go
+     * from the first pick, so the sample is there from the start. This is a
+     * fact about scarce positions rather than a weakness in the reading, and it
+     * is the same reason `observedLean` says nothing at all before a full round.
+     */
+    const QB_PICKS = 48;
 
     const market = leanOf('market');
     const robust = leanOf('robust-rb');
     const zero = leanOf('zero-rb');
-    const earlyQb = leanOf('early-qb');
+    const marketDeep = leanOf('market', QB_PICKS);
+    const earlyQb = leanOf('early-qb', QB_PICKS);
 
     console.log('        market ' + POSITIONS.map((p) => p + ' ' + market[p].toFixed(1)).join(' '));
     console.log('        zero RB ' + POSITIONS.map((p) => p + ' ' + zero[p].toFixed(1)).join(' '));
@@ -477,7 +497,8 @@ async function main() {
     check('a receiver room reads as a receiver room', zero.WR > market.WR + 1.5,
       zero.WR.toFixed(1) + ' vs ' + market.WR.toFixed(1));
     check('a quarterback run reads on the quarterback dial',
-      earlyQb.QB > market.QB + 1, earlyQb.QB.toFixed(1) + ' vs ' + market.QB.toFixed(1));
+      earlyQb.QB > marketDeep.QB + 1,
+      earlyQb.QB.toFixed(1) + ' vs ' + marketDeep.QB.toFixed(1) + ' at ' + QB_PICKS + ' picks');
 
     check('less than a round is not a reading',
       POSITIONS.every((p) => observedLean(play(PRESETS[3].cpu, 6))[p] === 0));
