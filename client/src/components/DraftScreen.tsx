@@ -6,7 +6,7 @@ import RosterPanel from './RosterPanel';
 import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
   nextUserChoice, playersOf, presetFor, runCpuPick, runPresetsOnly, runToUserTurn,
-  undoToMyLastPick,
+  undoPick, undoToMyLastPick,
 } from '../engine/draft';
 import type { DraftEngine } from '../engine/draft';
 import { fetchDraftPicks } from '../api';
@@ -54,6 +54,16 @@ export default function DraftScreen(props: Props) {
   const [liveError, setLiveError] = useState<string | null>(null);
   const [liveAt, setLiveAt] = useState<number | null>(null);
   const [unknownPicks, setUnknownPicks] = useState(0);
+  /**
+   * Entering the room's picks yourself instead of reading them off a feed.
+   *
+   * The engine records a pick against whoever is on the clock, so a pick you
+   * type is the same pick to everything downstream: the rosters fill, the board
+   * fills, and the grade at the end reads them like any other. It stops the poll
+   * while it is on, because a feed rebuilding the board underneath you would
+   * throw away what you just typed.
+   */
+  const [manual, setManual] = useState(!draftId);
   const assistant = mode === 'assistant';
 
   const { state } = engine;
@@ -65,6 +75,8 @@ export default function DraftScreen(props: Props) {
   // it rather than sit waiting for a decision that was taken weeks ago.
   const settledNow = presetFor(engine, pick);
   const yourTurn = !!onClock?.isUser && !settledNow;
+  /** In manual entry every pick is yours to record, not just your own. */
+  const canPick = (yourTurn || (assistant && manual)) && !state.done;
   const myNext = nextUserChoice(engine);
 
   // The survival bar always answers "will this player last until the next time
@@ -106,7 +118,7 @@ export default function DraftScreen(props: Props) {
   engineRef.current = engine;
 
   useEffect(() => {
-    if (!assistant || !draftId || paused) return undefined;
+    if (!assistant || !draftId || paused || manual) return undefined;
     let alive = true;
 
     const poll = async () => {
@@ -144,7 +156,7 @@ export default function DraftScreen(props: Props) {
     void poll();
     const timer = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(timer); };
-  }, [assistant, draftId, platform, paused, board, rankingEntries,
+  }, [assistant, draftId, platform, paused, manual, board, rankingEntries,
     state.league.scoring, state.league.teams, state.league.adpSource, state.league.year]);
 
   // Run the room. One pick per tick so the board reads like a draft, or the
@@ -191,7 +203,9 @@ export default function DraftScreen(props: Props) {
             <p className="clock-pick">{label(pick, teams)}</p>
           </div>
           <div className="clock-team">
-            <p className="eyebrow">{assistant ? 'Waiting on' : 'On the clock'}</p>
+            <p className="eyebrow">
+              {assistant ? (manual ? 'Recording for' : 'Waiting on') : 'On the clock'}
+            </p>
             <p className="clock-who" style={yourTurn ? { color: 'var(--gold)' } : undefined}>
               {onClock
                 ? maskTeam(onClock.name, onClock.index, onClock.isUser, anonymous)
@@ -215,15 +229,47 @@ export default function DraftScreen(props: Props) {
         <div className="clock-acts">
           {assistant ? (
             <>
-              <span className={'live-dot' + (liveError ? ' is-down' : '')}>
+              <span className={'live-dot' + (liveError || manual ? ' is-down' : '')}>
                 <span className="on-wide">
-                  {liveError ? 'Sleeper not answering' : 'Following live'}
+                  {manual ? 'Entering picks by hand'
+                    : (liveError ? 'Feed not answering' : 'Following live')}
                 </span>
-                <span className="on-narrow">{liveError ? 'No answer' : 'Live'}</span>
+                <span className="on-narrow">
+                  {manual ? 'By hand' : (liveError ? 'No answer' : 'Live')}
+                </span>
               </span>
-              <button type="button" className="btn" onClick={() => setPaused((p) => !p)}>
-                {paused ? 'Resume' : 'Pause'}
+              {/* Only offered when there is a feed to go back to. Without one,
+                  leaving manual entry would stop you recording picks and put
+                  nothing in its place. */}
+              {draftId && (
+                <button
+                  type="button"
+                  className={'btn' + (manual ? ' is-primary' : '')}
+                  onClick={() => setManual((m) => !m)}
+                  title={manual
+                    ? 'Go back to reading picks off the feed'
+                    : 'Type the room’s picks in yourself'}
+                >
+                  <span className="on-wide">
+                    {manual ? 'Follow the feed' : 'Enter picks by hand'}
+                  </span>
+                  <span className="on-narrow">{manual ? 'Feed' : 'By hand'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn"
+                disabled={!state.picks.length}
+                onClick={() => onEngine(undoPick(engine))}
+              >
+                <span className="on-wide">Undo last pick</span>
+                <span className="on-narrow">Undo</span>
               </button>
+              {!manual && (
+                <button type="button" className="btn" onClick={() => setPaused((p) => !p)}>
+                  {paused ? 'Resume' : 'Pause'}
+                </button>
+              )}
               <button type="button" className="btn is-quiet act-settings" onClick={onLeave}>
                 Settings
               </button>
@@ -310,7 +356,7 @@ export default function DraftScreen(props: Props) {
             myNextPick={oddsTarget}
             teams={teams}
             onDraft={draft}
-            canDraft={yourTurn}
+            canDraft={canPick}
             queue={queue}
             onQueue={toggleQueue}
             formatLabel={board.meta.formatLabel}

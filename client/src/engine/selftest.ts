@@ -584,6 +584,46 @@ async function main() {
       tail.every((p) => Number.isFinite(p.adp) && p.adp > deepest), String(tail.length));
   }
 
+  console.log('\nEntering the picks by hand');
+  {
+    /*
+     * A draft on a site this app cannot read is still a draft worth having the
+     * board for, so assistant mode can take the picks typed in instead. The
+     * whole feature rests on one property of the engine: a pick is recorded
+     * against whoever is on the clock, not against you. Typing somebody else's
+     * pick has to fill their roster, or a board built this way is a board of
+     * one team holding everyone.
+     */
+    const lg = league({ mySlot: 5 });
+    let e = createDraft(lg, DEFAULT_CPU, board.players, null);
+    const byAdp = [...board.players].sort((a, b) => a.adp - b.adp);
+
+    check('the first pick is not yours', !currentTeam(e.state)?.isUser);
+    e = draftPlayer(e, byAdp[0].id);
+    check('a pick typed on their turn is theirs, not yours',
+      e.state.teams[0].playerIds[0] === byAdp[0].id
+        && e.state.teams.find((t) => t.isUser)!.playerIds.length === 0);
+
+    // Four more, taking the board down to your own turn at slot 5.
+    for (let i = 1; i < 4; i += 1) e = draftPlayer(e, byAdp[i].id);
+    check('the clock reaches you after four more', !!currentTeam(e.state)?.isUser,
+      'pick ' + currentPick(e.state));
+    e = draftPlayer(e, byAdp[4].id);
+    check('your own pick is still yours',
+      e.state.teams.find((t) => t.isUser)!.playerIds[0] === byAdp[4].id);
+
+    check('every pick landed on a different team',
+      new Set(e.state.picks.map((p) => p.teamIndex)).size === 5);
+    check('the counts follow the players',
+      e.state.teams.every((t) => t.playerIds.length === (t.index < 5 ? 1 : 0)));
+
+    // Undo is the only correction a typed board has, so it has to put the
+    // player back rather than merely forget the pick.
+    const back = undoPick(e);
+    check('undo returns the player to the pool',
+      back.state.picks.length === 4 && back.state.availableIds.includes(byAdp[4].id));
+  }
+
   console.log('\nThe name matcher');
   {
     const post = async (csv: string, overrides: Record<string, string | null> = {}) => {
