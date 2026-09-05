@@ -12,6 +12,7 @@ import {
 import type { DraftEngine } from '../engine/draft';
 import { fetchDraftPicks } from '../api';
 import { maskTeam } from '../anon';
+import { pickLabel } from '../picks';
 import { livePresets, offBoardPlayer } from '../engine/live';
 import { ADP_SOURCES } from '../engine/types';
 import type { AppMode, Board, Platform, Player } from '../engine/types';
@@ -51,12 +52,6 @@ interface Props {
 }
 
 type Pane = 'pool' | 'board' | 'roster';
-
-function label(overall: number, teams: number): string {
-  const round = Math.floor((overall - 1) / teams) + 1;
-  const slot = ((overall - 1) % teams) + 1;
-  return round + '.' + String(slot).padStart(2, '0');
-}
 
 export default function DraftScreen(props: Props) {
   const {
@@ -276,7 +271,10 @@ export default function DraftScreen(props: Props) {
         <div className="clock-read">
           <div>
             <p className="eyebrow">Pick</p>
-            <p className="clock-pick">{label(pick, teams)}</p>
+            <p className="clock-pick">
+              {pickLabel(pick, teams)}
+              <span className="clock-overall">{'#' + pick}</span>
+            </p>
           </div>
           <div className="clock-team">
             <p className="eyebrow">
@@ -291,14 +289,19 @@ export default function DraftScreen(props: Props) {
 
           <div className="clock-next">
             <p className="eyebrow">Your next pick</p>
-            <p className="clock-who">
-              {oddsTarget == null ? 'None left' : label(oddsTarget, teams)}
-              {away != null && away > 0 && (
-                <span className="hint" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}>
-                  {away === 1 ? '1 pick away' : away + ' picks away'}
-                </span>
-              )}
-            </p>
+            {oddsTarget == null ? (
+              <p className="clock-who">None left</p>
+            ) : (
+              <p className="clock-nextpick">
+                {pickLabel(oddsTarget, teams)}
+                <span className="clock-overall">{'#' + oddsTarget}</span>
+                {away != null && away > 0 && (
+                  <span className="hint" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}>
+                    {away === 1 ? '1 pick away' : away + ' picks away'}
+                  </span>
+                )}
+              </p>
+            )}
           </div>
         </div>
 

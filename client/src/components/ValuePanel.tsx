@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { positionValues } from '../engine/value';
 import { describeLean } from '../engine/forecast';
+import { pickLabelWithOverall } from '../picks';
 import type { Forecast } from '../engine/forecast';
 import type { Player, RosterSlots } from '../engine/types';
 
@@ -17,12 +18,6 @@ interface Props {
    * answer the same question and only one of them has seen the draft.
    */
   room: Forecast | null;
-}
-
-function pickLabel(overall: number, teams: number): string {
-  const round = Math.floor((overall - 1) / teams) + 1;
-  const slot = ((overall - 1) % teams) + 1;
-  return round + '.' + String(slot).padStart(2, '0');
 }
 
 /**
@@ -68,7 +63,7 @@ export default function ValuePanel(props: Props) {
     <div className="value-panel">
       <div className="panel-head">
         <h2 className="eyebrow">Cost of waiting</h2>
-        <span className="hint">{'to ' + pickLabel(myNextPick, teams)}</span>
+        <span className="hint">{'to ' + pickLabelWithOverall(myNextPick, teams)}</span>
       </div>
 
       {room && lean && <p className="value-lean">{lean}</p>}

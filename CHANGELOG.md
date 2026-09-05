@@ -85,6 +85,15 @@ earlier session answers a health check perfectly happily while serving something
 older, and now says so instead. On Windows `.\serve.ps1 restart` avoids npm's
 `--` for passing the action through.
 
+**A pick is named the way the draft room names it.** The draft screen called a
+pick `3.05`, the round and the seat inside it, which is the reading a snake
+draft turns on and the one the board is laid out by. Yahoo counts picks
+straight through and calls the same pick 29, so matching the screen against the
+room in front of you meant counting seats. The clock, your next pick, the
+survival odds and the cost of waiting now carry both. The board, the keepers
+and the results tables are unchanged: the board already says the seat by which
+column a pick is in, so the round and the seat is the only reading it needs.
+
 **Change which ADP without leaving the draft.** The choice of ADP source lived
 in settings, which meant walking out of a draft to see the same room read
 against different numbers. In assistant mode it now sits in the pool header

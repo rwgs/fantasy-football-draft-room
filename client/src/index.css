@@ -465,7 +465,10 @@ input[type='range']::-moz-range-thumb {
 
 .clock.is-yours { background: linear-gradient(180deg, #2a2717, var(--felt-1)); border-bottom-color: var(--gold-dim); }
 
-.clock-pick {
+/* The pick on the clock and the pick you get back read as the same kind of
+   number, so they are sized together. Only the one on the clock goes gold. */
+.clock-pick,
+.clock-nextpick {
   font-family: var(--mono);
   font-size: 26px;
   font-weight: 600;
@@ -474,6 +477,16 @@ input[type='range']::-moz-range-thumb {
 }
 
 .clock.is-yours .clock-pick { color: var(--gold); }
+
+/* The number the draft room itself calls this pick. Secondary to where the
+   pick sits in the round, and it stays quiet on your own turn so the gold
+   still marks one thing. */
+.clock-overall {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--chalk-3);
+}
 
 .clock-who {
   font-family: var(--narrow);
@@ -1473,7 +1486,7 @@ input[type='range']::-moz-range-thumb {
   .clock-read { gap: 10px; }
   .clock-read .eyebrow { display: none; }
   .clock-read p { margin: 0; }
-  .clock-pick { font-size: 21px; }
+  .clock-pick, .clock-nextpick { font-size: 21px; }
   .clock-who { font-size: 13px; }
   .clock-team { min-width: 0; }
   .clock-team .clock-who {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { survivalOdds } from '../engine/survival';
 import useNarrow from '../useNarrow';
+import { pickLabelWithOverall } from '../picks';
 import type { Player, Position } from '../engine/types';
 import { POSITIONS } from '../engine/types';
 
@@ -60,12 +61,6 @@ function PlayerNote({ text }: { text: string }) {
       <span className="player-note-more">{open ? 'LESS' : 'MORE'}</span>
     </button>
   );
-}
-
-function pickLabel(overall: number, teams: number): string {
-  const round = Math.floor((overall - 1) / teams) + 1;
-  const slot = ((overall - 1) % teams) + 1;
-  return round + '.' + String(slot).padStart(2, '0');
 }
 
 export default function PlayerPool(props: Props) {
@@ -257,7 +252,7 @@ export default function PlayerPool(props: Props) {
                     />
                   </span>
                   <span className="survival-odds">
-                    {pct + '% to ' + pickLabel(myNextPick, teams)}
+                    {pct + '% to ' + pickLabelWithOverall(myNextPick, teams)}
                     {roomOdds?.has(player.id) ? ' · room' : ''}
                   </span>
                 </span>
