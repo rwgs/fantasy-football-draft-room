@@ -64,8 +64,9 @@ odds replace the ADP ones, and the pool marks which is which. A receiver run
 already under way moves these numbers where it cannot move ADP. If the room is
 leaning hard somewhere, the panel says so in a sentence.
 
-This is for a real draft only. A mock room's lean is the one you dialled in
-yourself, so measuring it and applying it again would count it twice.
+This is for a draft you are following only, not for this app's own mock draft:
+there the room's lean is the one you dialled in yourself, so measuring it and
+applying it again would count it twice.
 
 **Enter the picks by hand.** Assistant mode used to refuse to open without a
 league carrying a draft. A room on a site this app cannot read, or one whose
@@ -101,11 +102,15 @@ answer, the next poll started a second fetch of the same thing and the one after
 that a third, each holding a payload of a megabyte or more. Callers now share
 the one fetch.
 
-**Known limits.** Everything was built from mock drafts, and a mock is the only
-thing the bridge has ever followed live: a 14 team room, followed pick by pick
-with every pick joined and none unmatched. No real Yahoo draft has been followed
-yet, and the userscript itself still has no automated test. Run a mock beside the
-board before trusting it.
+**Known limits.** Everything was built from public mock drafts, and a mock is
+the only thing the bridge has ever followed live: a 14 team room, followed pick
+by pick with every pick joined and none unmatched. A public mock is real people
+drafting rather than a simulation, about half the seats live throughout, so a
+live room's timing, its seats dropping to autopick, and catching up after a
+reload have all been watched working. What has not been seen is a league someone
+configured: keepers, traded picks, your own roster and scoring rules, any format
+but a 14 team snake. The userscript itself still has no automated test. Run a
+mock beside the board before trusting it.
 
 ---
 

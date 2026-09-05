@@ -188,8 +188,12 @@ both as you set them and says so. Keepers and traded picks are not listed
 either — but the draft order already has them applied, which is why the order is
 read from Yahoo rather than worked out from a snake.
 
-**It has been tested against mock drafts only.** Run a mock with the board open
-beside it before you rely on it in a draft that counts.
+**It has been tested against public mock drafts only.** Those are real people
+drafting, not bots, so the parts that depend on a live room — pick timing,
+seats falling to autopick, catching up after a reload — have been watched
+working. What no test covers is a league someone set up: keepers, traded
+picks, your own roster and scoring, anything but a 14-team snake. Run a mock
+with the board open beside it before you rely on it in a draft that counts.
 
 ---
 

@@ -81,7 +81,7 @@ verified rather than inferred from a clean rename diff.
 
 - The self-test itself. That is the point of the phase.
 
-## Phase 5: Yahoo, read-only, through the browser — proven in a mock
+## Phase 5: Yahoo, read-only, through the browser — proven in a public mock
 
 ### Outcome
 
@@ -111,7 +111,12 @@ the default and keeps needing no userscript either.
   bridge with no warning, mid-draft.
 - Name matching moves onto the critical path of a live draft, where a miss puts
   a hole in the board rather than a footnote in an import.
-- Every observation so far comes from a mock room, not a real league.
+- Every observation so far comes from a public mock, so the room was real
+  people drafting in real time and the protocol, pick timing, autopick on
+  inactivity and reconnect replay are all observed. What no observation covers
+  is a league someone configured: keepers, traded picks, a commissioner's
+  roster and scoring, any format but 14-team snake. That is what is left, and
+  it is why this phase stays open.
 - A reconnecting client **is** sent the picks it missed, in a `P|` frame, so a
   mid-draft reload costs nothing. Observed on a reconnect 91 picks deep.
 - Traded picks and pre-draft draft state still look absent. Expect to lose them
@@ -153,7 +158,8 @@ the default and keeps needing no userscript either.
 - The frames captured in `tools/yahoo/` decoded offline, so the pick decode is
   checked without needing a draft to be running.
 - The `engine:test` suites, extended to cover Yahoo where fixtures allow.
-- Manual: a live mock beside the app, then a real draft, followed live.
+- Manual: a live public mock beside the app, done. Then a configured league,
+  followed live, which is the part still outstanding.
 
 ## Phase 6: Release readiness
 

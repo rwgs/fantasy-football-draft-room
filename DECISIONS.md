@@ -85,8 +85,10 @@ own browser.
 
 ### What was observed
 
-Against live 14-team mocks on 2026-09-04, using the tools in `tools/yahoo/`.
-Everything here was watched happening, not read in a document. The frame-by-frame
+Against live 14-team public mocks on 2026-09-04, using the tools in
+`tools/yahoo/`. Public, so the rooms held real people drafting in real time,
+about half the seats at a time. Everything here was watched happening, not read
+in a document. The frame-by-frame
 reference is `docs/yahoo-draft-protocol.md`; only what bears on the decision is
 repeated here.
 
@@ -164,9 +166,12 @@ repeated here.
   replays every pick in a `P|` frame on connect, observed on a reconnect into a
   draft 91 picks deep. A reloaded tab catches itself up, so the bridge needs to
   remember nothing across a crash. See `docs/yahoo-draft-protocol.md`.
-- **Whether a real Yahoo draft behaves like a mock.** Every observation above
-  comes from the mock lobby. This is cheap to recheck and must happen before
-  draft day.
+- **Whether a configured league behaves like a public mock.** Not the room
+  itself, which held real people: human drafting, pick timing, autopick on
+  inactivity and the reconnect burst are observed. What is unseen is a league
+  someone set up — keepers, traded picks, a commissioner's roster and scoring,
+  any format but 14-team snake. Cheap to recheck and must happen before draft
+  day.
 
 ## 2026-09-01 Yahoo support is for its author, not for the project's users
 

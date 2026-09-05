@@ -9,6 +9,15 @@ against mock drafts on 2026-09-04: leagues `10711906`, `10713141` and
 `10713845`, all 14-team snake. Nothing here comes from Yahoo documentation,
 because none covers it.
 
+**A mock here means a public mock, not a simulation.** The rooms held real
+people drafting in real time, about half the seats at a time: the `A|` frames
+captured from `10713845` read seven of fourteen seats live at the open and
+eight of fourteen ninety-one picks later. That is what makes these captures
+worth anything. Human pick timing, seats falling to autopick when someone
+stops acting, and the reconnect burst are all behaviour of a real room, not of
+a lobby full of bots. What a mock is not is a league that counts, and
+`Open questions` below says which parts of this document that leaves untested.
+
 **None of this is promised by Yahoo.** It is the private protocol between their
 draft client and their draft server. It can change in any deploy, without
 notice, mid-draft. Treat every line below as a description of one afternoon, not
@@ -207,5 +216,10 @@ pool response would close that gap.
 - **What the two middle `H|` zeros mean**, and whether `S` becomes something
   else for an auction or a linear draft.
 - **What `cost` holds in an auction.** It was `0` in every snake draft watched.
-- **Whether a real league behaves like a mock.** Every observation here is from
-  the mock lobby, and this must be rechecked before a real draft.
+- **Whether a configured league behaves like a public mock.** Not the room
+  itself: the mocks held real people, so human drafting, pick timing, autopick
+  on inactivity and the reconnect burst are all observed. What no capture holds
+  is a league someone set up. Keepers, traded picks, a commissioner's roster
+  shape and scoring rules, and any format but 14-team snake are all unseen, and
+  the first three are exactly what move the draft order away from a plain
+  snake. Recheck before a draft that counts.

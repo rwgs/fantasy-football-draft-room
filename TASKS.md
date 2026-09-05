@@ -20,7 +20,8 @@ Phase 4: prove the platform seam against real leagues.
     owner. Nothing else blocks it.
 
 - [ ] Phase 5: follow a Yahoo draft through the browser. **Proven against a live
-      mock 2026-09-04. A real league is what is left.**
+      public mock 2026-09-04, real people drafting. A configured league is what
+      is left.**
   - Built: `main` merged into `yahoo-platform`; the frame decoder, the room
     store and the `yahoo` platform behind the seam; the ingestion route; the
     bridge userscript; the platform selector in the client; a Yahoo block in
@@ -44,9 +45,13 @@ Phase 4: prove the platform seam against real leagues.
     typecheck, lint and build all clean. What this does *not* cover is the
     userscript, which no check touches — the live mock above is the only thing
     that has ever exercised it.
-  - Manual validation: **the mock is done; a real league is not.** Everything
-    known still comes from mock rooms, and that has to be rechecked before draft
-    day.
+  - Manual validation: **the public mock is done; a configured league is not.**
+    The mock was real people drafting, about half the seats live, so human pick
+    timing, autopick on inactivity and reconnect replay are all observed. What
+    is unseen is a league someone set up: keepers, traded picks, a
+    commissioner's roster and scoring, any format but 14-team snake. Those move
+    the draft order off a plain snake, which is the part most likely to break.
+    Recheck before draft day.
   - Dependencies or blockers: none. Phase 4 is worth closing first rather than
     required.
   - Known gap, now closed: `tools/yahoo/dump/pool-10720547.json` holds a real
