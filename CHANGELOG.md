@@ -77,6 +77,14 @@ pick as a pick: rosters fill, the board fills, and the grade at the end reads it
 like any other draft. Where there is a feed you can switch between the two, and
 the poll stops while you are typing so it cannot overwrite what you entered.
 
+**One command for the data service.** `npm run serve` says what is on port 5178
+and offers to restart or stop it, and starts it when nothing is running. It also
+answers the question that used to have no command behind it: whether the service
+you are talking to is running the code you have. A service left up from an
+earlier session answers a health check perfectly happily while serving something
+older, and now says so instead. On Windows `.\serve.ps1 restart` avoids npm's
+`--` for passing the action through.
+
 ### Fixed
 
 **A player eligible at two positions joins the board again.** Yahoo writes dual

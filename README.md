@@ -429,9 +429,12 @@ place so the client never has to guess whether two records name the same player.
 | `npm run dev:server` | the data service alone, on 5178 |
 | `npm run dev:client` | the interface alone, on 5177 |
 | `npm start` | the data service, without reload |
+| `npm run serve` | what is on 5178, and the choice to restart or stop it |
+| `npm run serve -- restart` | also `start`, `stop`, `status`. Windows: `.\serve.ps1 restart` |
 | `npm run build` | a production bundle in `client/dist`. Not needed to run it |
 | `npm run typecheck` | TypeScript, app and tests |
 | `npm run engine:test` | run the draft engine against a live board |
+| `npm run server:test` | the data service's own internals |
 
 ---
 
