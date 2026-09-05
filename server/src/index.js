@@ -21,6 +21,9 @@ const app = express();
 const PORT = Number(process.env.PORT) || 5178;
 const DEFAULT_YEAR = Number(process.env.DRAFT_YEAR) || new Date().getFullYear();
 
+/** When this process came up, reported on /api/health so a stale one shows. */
+const STARTED_AT = Date.now();
+
 // The Vite proxy puts the client on this origin, so a normal run never meets
 // CORS at all. It is open here for anyone running the two halves apart.
 app.use(cors());
@@ -81,6 +84,13 @@ app.get('/api/health', (_req, res) => {
     formats: FORMATS,
     adpSources: ADP_SOURCES,
     platforms: PLATFORM_NAMES,
+    // Who is answering, and since when. A health check that only says "ok"
+    // cannot tell a service that just started from one left running since
+    // yesterday on code that has since changed, and the second one answers
+    // just as cheerfully. `scripts/service.mjs` reads these two to say so.
+    // Loopback only by default, so this tells a stranger nothing.
+    pid: process.pid,
+    startedAt: STARTED_AT,
   });
 });
 

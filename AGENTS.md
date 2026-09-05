@@ -98,7 +98,9 @@ scripts delegate with `--prefix`.
 ```bash
 npm run install:all      # root, server and client. Needed before anything else.
 npm run dev              # both halves at once. Client on 5177, service on 5178.
-npm run start            # the data service alone, on 5178.
+npm run start            # the data service alone, on 5178, in the foreground.
+npm run serve            # say what is on 5178, offer to restart or stop it
+npm run serve -- status  # or start, stop, restart. Windows: .\serve.ps1 status
 
 npm run typecheck        # tsc against both the app and the test config
 npm --prefix client run lint    # oxlint
@@ -114,8 +116,8 @@ caller does. What lands here is what a caller cannot see, such as two requests
 racing for one cold cache key. It talks to nothing and needs no service running.
 
 `npm run engine:test` fetches a real board from `http://localhost:5178`, so the
-data service has to be running or every check fails at the first fetch. Start it
-with `npm run start` first, or use `npm run dev`.
+data service has to be running or every check fails at the first fetch. Bring
+one up with `npm run serve`, or use `npm run dev` for both halves.
 
 Two of its suites — "Following a real draft" and "Reading a real league" — skip
 unless `client/fixtures.local.json` exists. They are the only checks that
@@ -123,9 +125,22 @@ exercise `server/src/platforms/`, so a green run without that file says nothing
 about league or draft code. Copy `client/fixtures.example.json` and fill it in;
 git ignores it because it names real leagues and real people.
 
-Port 5178 is easy to leave occupied by a previous run. A stale service answers
-`/api/health` perfectly well while serving the old code, so confirm the service
-under test is the one that just started rather than assuming the port is free.
+Port 5178 is easy to leave occupied by a previous run, and the trap is not the
+busy port, which announces itself. It is that a service left running from an
+earlier session answers `/api/health` perfectly well while serving code that has
+since changed, so a check passes against the old build and says nothing about
+the new one.
+
+`npm run serve -- status` is the answer to that. It reports the pid, how long
+the process has been up, and whether anything under `server/src` has changed
+since it started, which is the question worth asking before trusting a run. Use
+`npm run serve -- restart` rather than hunting the process, and prefer it to
+killing a port by hand. It refuses to touch a port held by something that is not
+this service.
+
+Run without an action it reports and then offers the choices that apply, and
+starts the service when nothing is up. Piped or run by an agent it reports and
+changes nothing rather than blocking on a prompt nobody will answer.
 
 ## Validation
 
