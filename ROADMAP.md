@@ -81,7 +81,7 @@ verified rather than inferred from a clean rename diff.
 
 - The self-test itself. That is the point of the phase.
 
-## Phase 5: Yahoo, read-only, through the browser — built, unproven
+## Phase 5: Yahoo, read-only, through the browser — proven in a mock
 
 ### Outcome
 
@@ -124,10 +124,29 @@ the default and keeps needing no userscript either.
 
 - A real Yahoo league imports the seats, the order and the round count. The
   roster shape and the scoring are **not** exit criteria: the draft room does
-  not carry them, and the import warns rather than inventing them.
+  not carry them, and the import warns rather than inventing them. **Met in a
+  mock:** league 10720547 imported 14 named seats, a 15 round draft and the full
+  order, and refused to invent the roster or the scoring.
 - A real Yahoo draft is followed pick by pick, or the phase records that it
-  cannot be and why. **Outstanding: nothing has run the userscript yet.**
+  cannot be and why. **Met in a mock, 2026-09-04**, first pick to last: 210 of
+  210 joined, none unmatched, every seat holding exactly 15 and every slot
+  agreeing with the snake. A league that counts is still outstanding.
 - Sleeper's behavior is unchanged, proven by the Phase 4 checks still passing.
+
+### What the live mock taught
+
+- **The bridge cannot rely on a userscript manager alone.** Chrome and Edge gate
+  user scripts in MV3, and Tampermonkey installs, enables and reports success
+  while injecting nothing: `window.WebSocket` stays native and no frame is ever
+  seen. This cost a whole mock room before it was spotted, so the README now
+  leads with the switch and gives `window.WebSocket.name` as the one probe that
+  tells the two failures apart. `tools/yahoo/cdp-bridge.mjs` injects the same
+  file over the DevTools protocol when the manager will not.
+- **The first post prompts for local network access**, which is a permission
+  dialog appearing mid-draft to somebody who does not know what asked for it.
+- **Reading the pool rather than the screen is what makes the join work.** Chris
+  Olave was drafted and matched. He is the exact name the 2026-09-04 decision
+  used to reject DOM scraping, because `C. Olave` fails `forenamesAgree`.
 
 ### Validation
 

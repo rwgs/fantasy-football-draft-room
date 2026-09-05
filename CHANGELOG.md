@@ -29,13 +29,33 @@ import leaves those as you set them and warns rather than inventing them. The
 draft order is read from Yahoo rather than worked out from a snake, which is the
 only reading that stays right for a league with keepers or a traded pick.
 
+The service serves the bridge at
+`http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js`, so a userscript
+manager installs it from an address and can fetch a later version, rather than
+holding a pasted copy that quietly stops matching the one in the repository.
+
 `docs/yahoo-draft-protocol.md` records what Yahoo's draft room actually sends,
 marked observed or inferred line by line. None of it is documented or promised
 by Yahoo, and a deploy can change it without warning.
 
-**Known limits.** Everything was built from mock drafts; no real Yahoo draft has
-been followed yet, and the userscript itself has no automated test. Run a mock
-beside the board before trusting it.
+**Chrome and Edge need one switch thrown, and say nothing when it is not.** Both
+gate user scripts: until "Allow user scripts" is on for the manager, the bridge
+installs, enables, reports no error and never runs. The README leads with it and
+gives the one console probe that tells that failure apart from every other one.
+
+### Fixed
+
+**A player eligible at two positions joins the board again.** Yahoo writes dual
+eligibility as `WR,RB` where every other source writes one position, and the
+whole pair was being used as a lookup key, so the pick found nobody and landed
+as a stranger on the board. Only fringe players carry it, which is why a full
+mock draft never tripped over it.
+
+**Known limits.** Everything was built from mock drafts, and a mock is the only
+thing the bridge has ever followed live: a 14 team room, followed pick by pick
+with every pick joined and none unmatched. No real Yahoo draft has been followed
+yet, and the userscript itself still has no automated test. Run a mock beside the
+board before trusting it.
 
 ---
 
