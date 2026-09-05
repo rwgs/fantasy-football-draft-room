@@ -104,6 +104,21 @@ running on its ADP rather than looking through it, so that one still asks in
 settings. The swap lands while the draft is paused or being entered by hand
 too, which is where it is most likely to be wanted.
 
+**The room is read before it drafts, not a round after.** The odds a player
+lasts used to come from ADP until a full round of real picks was in, which in a
+14 team league is the whole of the first round. Yahoo publishes what its own
+drafters do, and only to a browser holding your session, so the bridge now
+carries it back with the picks. Where it exists, the room's lean is known from
+the first pick.
+
+It is worth about one thing, honestly: Yahoo drafts quarterbacks earlier than
+the wider market, and almost nothing else differs. Measured against a real
+Yahoo pool that reads as a lean of 1.7 on the dials, enough to say "this room is
+forcing QB" on the board where nothing was said before, and enough to move the
+best quarterback's chance of lasting to your next pick from 90 per cent to 75.
+Once a round of real picks exists they win: what this draft did beats what
+Yahoo's drafts do in general.
+
 ### Fixed
 
 **A player eligible at two positions joins the board again.** Yahoo writes dual

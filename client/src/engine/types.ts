@@ -432,4 +432,12 @@ export interface LivePicks {
   matched: number;
   unknown: { name: string; position: string; team: string }[];
   poolSize: number;
+  /**
+   * What this room's own site says its drafters do, by board player id.
+   *
+   * Only Yahoo sends it, and only for the few hundred players it reports a pick
+   * for. Absent everywhere else, which is why every reader of it treats an
+   * empty list as "no reading" rather than as "no lean".
+   */
+  roomAdp?: { id: string; adp: number }[];
 }

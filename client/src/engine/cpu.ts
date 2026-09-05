@@ -126,7 +126,20 @@ export const PRESETS: CpuPreset[] = [
 /** Move an ADP by one position setting, in the -5 to +5 range. */
 export function applyBias(adp: number, level: number): number {
   const tilt = Math.max(-5, Math.min(5, level)) / 5;
-  return adp * (1 - BIAS_SHARE * tilt) - BIAS_FLAT * tilt;
+  return adp - tilt * biasLever(adp);
+}
+
+/**
+ * How far a full dial moves this ADP, in picks.
+ *
+ * `applyBias` is this lever times the dial, which makes it linear in the dial
+ * and so invertible: given where a board sits and where a room actually drafts,
+ * the dial that best explains the difference has a closed form. `priorLean` in
+ * `forecast.ts` is that inversion, and it reads the lever from here rather than
+ * restating the constants, so the two cannot drift apart.
+ */
+export function biasLever(adp: number): number {
+  return BIAS_SHARE * adp + BIAS_FLAT;
 }
 
 /** The sentence the settings panel shows under a position slider. */

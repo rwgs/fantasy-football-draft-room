@@ -159,7 +159,20 @@
     return res.json();
   }
 
-  /** The pool, trimmed to the five fields the board needs to place a pick. */
+  /**
+   * The pool, trimmed to what the board needs.
+   *
+   * Five fields place a pick. The last two are not needed for that at all, and
+   * are here because this response is the only place they can be had: Yahoo
+   * publishes how its own drafters behave, and only to a browser holding the
+   * session cookie. `average-pick` is an ADP measured over the people you are
+   * actually drafting against, rather than over Sleeper or Fantasy Football
+   * Calculator's very different populations, and `o_rank` is Yahoo's own
+   * ranking, which covers every player rather than only the drafted ones.
+   *
+   * Both are sent as they arrive, unrounded and unjudged. What they are worth
+   * is decided on the board, not here.
+   */
   async function readPool() {
     const body = await pubApi('players/nfl/' + LEAGUE);
     const list = body?.service?.player_list || [];
@@ -172,6 +185,8 @@
       lname: p.lname || '',
       display_pos: p.display_pos || '',
       team_abbr: p.team_abbr || '',
+      adp: p['average-pick'] ?? null,
+      rank: p.o_rank ?? null,
     }));
   }
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DraftBoard from './DraftBoard';
 import PlayerPool from './PlayerPool';
 import ValuePanel from './ValuePanel';
-import { forecast } from '../engine/forecast';
+import { forecast, priorLean } from '../engine/forecast';
 import RosterPanel from './RosterPanel';
 import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
@@ -69,6 +69,14 @@ export default function DraftScreen(props: Props) {
    * than counted because a rebuild needs them back: drop them and every pick
    * after one of them sits a slot out of place.
    */
+  /**
+   * What this room's own site says its drafters do, when it says anything.
+   *
+   * Only Yahoo publishes it, and only to the bridge, so it arrives with the
+   * picks rather than from a feed this app could fetch itself. Kept as it
+   * comes: what it is worth is decided in the engine.
+   */
+  const [roomAdp, setRoomAdp] = useState<Map<string, number> | null>(null);
   const [offBoard, setOffBoard] = useState<Player[]>([]);
   /**
    * Entering the room's picks yourself instead of reading them off a feed.
@@ -154,6 +162,9 @@ export default function DraftScreen(props: Props) {
         const extras = live.picks.filter((p) => p.offBoard).map(offBoardPlayer);
 
         setOffBoard(extras);
+        setRoomAdp(live.roomAdp?.length
+          ? new Map(live.roomAdp.map((r) => [r.id, r.adp]))
+          : null);
         setLiveError(null);
         setLiveAt(Date.now());
 
@@ -245,9 +256,20 @@ export default function DraftScreen(props: Props) {
    * frame for most of it. Following a real draft the engine changes only when a
    * pick actually lands, a poll apart at most, so there is nothing to throttle.
    */
+  /*
+   * Where the room publishes its own ADP, that is the lean until the picks can
+   * speak for themselves. `observedLean` reads nothing at all until a full
+   * round is in, which in a 14 team league is the whole of the first round, and
+   * the first round is not the part of a draft worth flying blind through.
+   */
+  const prior = useMemo(
+    () => (roomAdp ? priorLean(board.players, roomAdp) : null),
+    [board.players, roomAdp],
+  );
+
   const room = useMemo(
-    () => (assistant ? forecast(engine, FORECAST_RUNS) : null),
-    [engine, assistant],
+    () => (assistant ? forecast(engine, FORECAST_RUNS, prior) : null),
+    [engine, assistant, prior],
   );
 
   const draft = (id: string) => {

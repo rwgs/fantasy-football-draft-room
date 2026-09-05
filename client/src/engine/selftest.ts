@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 
-import { PRESETS, DEFAULT_CPU, applyBias } from './cpu';
+import { PRESETS, DEFAULT_CPU, applyBias, biasLever } from './cpu';
 import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
   nextUserChoice, nextUserPick, presetFor, runCpuPick, runPresetsOnly, runToUserTurn, undoPick,
@@ -24,7 +24,7 @@ import {
 } from './order';
 import { DEFAULT_ROSTER, bestLineup, rosterSize, startersFilled } from './roster';
 import { positionValues, replacementPoints } from './value';
-import { forecast, observedLean } from './forecast';
+import { forecast, observedLean, priorLean } from './forecast';
 import type { Board, CpuConfig, LeagueConfig, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
@@ -405,6 +405,76 @@ async function main() {
 
     const runs = POSITIONS.map((p) => p + ' ' + f.taken[p].toFixed(1)).join(' ');
     console.log('        of the ' + (target - from) + ' picks before your turn: ' + runs);
+  }
+
+  console.log('\nWhat the room says before it drafts');
+  {
+    /*
+     * Yahoo publishes its own ADP, so a room that drafts quarterbacks early can
+     * be read before a pick is made rather than a round late. The fit has to
+     * recover a dial that was actually applied, or it is not measuring one.
+     */
+    const all = board.players;
+    /** A room exactly like this board, except it moves one position by `level`. */
+    const roomWhere = (pos: Position, level: number, cap = 140) => new Map(
+      all.filter((p) => p.adp <= cap)
+        .map((p) => [p.id, p.position === pos ? applyBias(p.adp, level) : p.adp]),
+    );
+
+    check('a room that drafts nothing differently reads as no lean',
+      POSITIONS.every((p) => Math.abs(priorLean(all, roomWhere('QB', 0))[p]) < 0.05),
+      POSITIONS.map((p) => p + ' ' + priorLean(all, roomWhere('QB', 0))[p].toFixed(2)).join(' '));
+
+    for (const level of [3, -3, 1.5]) {
+      const got = priorLean(all, roomWhere('QB', level)).QB;
+      check('a room forcing quarterbacks at ' + level + ' is read back as ' + level,
+        Math.abs(got - level) < 0.25, got.toFixed(2));
+    }
+
+    const only = priorLean(all, roomWhere('QB', 4));
+    check('the position that moved is the only one that reads',
+      POSITIONS.filter((p) => p !== 'QB').every((p) => Math.abs(only[p]) < 0.05),
+      POSITIONS.map((p) => p + ' ' + only[p].toFixed(2)).join(' '));
+
+    /*
+     * Yahoo reported an ADP for three kickers and fifty four receivers, and
+     * those three fitted a dial of 2.3. A number about three players is not a
+     * number about kickers.
+     */
+    const thin = new Map([...roomWhere('K', 5)].filter(([id]) => {
+      const p = all.find((x) => x.id === id)!;
+      return p.position !== 'K' || all.filter((x) => x.position === 'K').indexOf(p) < 3;
+    }));
+    check('three of a position is not a reading about the position',
+      priorLean(all, thin).K === 0, priorLean(all, thin).K.toFixed(2));
+
+    check('no readings at all is no lean, not a lean of zero confidence',
+      POSITIONS.every((p) => priorLean(all, new Map())[p] === 0));
+
+    // The fit inverts applyBias, so it has to be reading the same lever.
+    check('the fit and the dial agree on what a dial does',
+      Math.abs(applyBias(100, 5) - (100 - biasLever(100))) < 1e-9,
+      applyBias(100, 5).toFixed(3) + ' vs ' + (100 - biasLever(100)).toFixed(3));
+
+    /*
+     * The prior is a stand-in, not a rival. Once the picks can speak the
+     * measurement of this draft wins over a measurement of Yahoo at large.
+     */
+    const teams = 12;
+    const lg = league({ teams });
+    const fresh = createDraft(lg, DEFAULT_CPU, all, null);
+    const loud = { QB: 5, RB: -5, WR: 0, TE: 0, K: 0, DEF: 0 } as Record<Position, number>;
+    check('before a round is in, the prior is what the forecast leans on',
+      forecast(fresh, 20, loud)?.lean.QB === 5);
+    check('and without one it still leans on nothing',
+      forecast(fresh, 20)?.lean.QB === 0);
+
+    let full = fresh;
+    while (full.state.picks.length < teams) full = runCpuPick(full);
+    const after = forecast(full, 20, loud)?.lean;
+    check('once a round is in, what happened wins over what was published',
+      !!after && after.QB !== 5 && after.RB !== -5,
+      after ? 'QB ' + after.QB.toFixed(1) + ' RB ' + after.RB.toFixed(1) : 'none');
   }
 
   console.log('\nA full draft, market settings');
@@ -1486,7 +1556,11 @@ async function yahooRoom() {
     // pool carries eight of. A board row holds one position, so the pair has to
     // be reduced or the pick joins nothing.
     const display_pos = i === 3 ? p.position + ',RB' : p.position;
-    return { id, fname, lname: rest.join(' '), display_pos, team_abbr: p.team };
+    // Yahoo publishes how its own drafters behave, and only here. The last one
+    // carries no reading, which is the ordinary case: Yahoo reports an ADP for
+    // a few hundred of about twelve hundred players, and writes the rest as 0.
+    const adp = i === 3 ? 0 : 10 + i;
+    return { id, fname, lname: rest.join(' '), display_pos, team_abbr: p.team, adp, rank: i + 1 };
   });
   const seats = [1, 2, 3].map((id) => ({
     id, teamname: 'Team ' + id, manager: 'manager' + id,
@@ -1507,6 +1581,23 @@ async function yahooRoom() {
   // Both posts carried the same six picks. A pick that arrives twice, once live
   // and again in a reconnecting tab's replay, is still one pick.
   check('a pick sent twice is still one pick', reply.picks === 5, String(reply.picks));
+
+  /*
+   * Yahoo's own ADP is the one thing here no feed this service can reach will
+   * tell it, so it has to survive the trip from the bridge intact and land
+   * against the ids the board uses rather than Yahoo's.
+   */
+  // The same board the pool above was built from, or the ids will not line up.
+  const withAdp = await (await fetch(API + '/api/yahoo/draft/' + LEAGUE
+    + '/picks?scoring=half-ppr&teams=12&adpSource=sleeper')).json();
+  const said = new Map((withAdp.roomAdp || []).map(
+    (r: { id: string; adp: number }) => [r.id, r.adp],
+  ));
+  check('the room’s own ADP came back on board ids',
+    said.get(board.players[0].id) === 10 && said.get(board.players[1].id) === 11,
+    JSON.stringify(withAdp.roomAdp));
+  check('a player Yahoo has no reading on is left out, not sent as nothing',
+    !said.has(board.players[3].id) && said.size === 3, String(said.size));
 
   const state = await (await fetch(API + '/api/yahoo/draft/' + LEAGUE)).json();
   check('the seats are counted', state.teams === 3, String(state.teams));

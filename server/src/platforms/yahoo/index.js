@@ -241,7 +241,34 @@ export async function draftPicks(leagueId, boardQuery) {
     matched: picks.filter((p) => !p.offBoard).length,
     unknown,
     poolSize: board.players.length,
+    roomAdp: roomAdp(room, byKey),
   };
+}
+
+/**
+ * Yahoo's own ADP, against the ids this board uses.
+ *
+ * The same join the picks take, run over the whole pool rather than over the
+ * players already gone. It is what lets the room be modelled on how Yahoo
+ * drafts rather than on how Sleeper and Fantasy Football Calculator do, and it
+ * cannot be fetched here: Yahoo answers a session cookie, so it arrives from
+ * the bridge or not at all.
+ *
+ * Only the few hundred Yahoo reports a pick for appear. Anyone it has no
+ * reading on is left out rather than sent as a null, because the client's job
+ * is to compare the ones that exist, not to walk past the ones that do not.
+ */
+function roomAdp(room, byKey) {
+  const out = [];
+  for (const person of room.pool.values()) {
+    if (person.adp == null) continue;
+    const position = normPos(person.position);
+    const team = normTeam(person.team);
+    let player = person.name ? byKey.get(joinKey(person.name, position, team)) || null : null;
+    if (!player && position === 'DEF' && team) player = byKey.get('DEF|' + team) || null;
+    if (player) out.push({ id: player.id, adp: person.adp });
+  }
+  return out;
 }
 
 /**

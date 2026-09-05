@@ -29,6 +29,19 @@ const MAX_FRAMES = 1000;
 /** leagueId to room. Insertion order is eviction order; see `touch`. */
 const rooms = new Map();
 
+/**
+ * A number Yahoo actually reported, or null.
+ *
+ * Yahoo writes these as strings, and writes a player it has no reading on as
+ * `0` or an empty string rather than leaving the field out. Zero is not a pick
+ * anyone made, so it is absence and is stored as such: a nought here would
+ * otherwise read as the first overall selection.
+ */
+function positive(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function blank(leagueId) {
   return {
     leagueId,
@@ -97,6 +110,12 @@ export function applyPost(leagueId, body) {
         name: `${entry.fname || ''} ${entry.lname || ''}`.trim(),
         position: String(entry.display_pos || '').trim(),
         team: String(entry.team_abbr || '').trim(),
+        // What Yahoo's own drafters do, which no feed this service can reach
+        // will tell it. Absent for anyone Yahoo has no reading on, which is
+        // most of the pool: it reports an ADP for the few hundred that get
+        // drafted and a rank for everybody.
+        adp: positive(entry.adp),
+        rank: positive(entry.rank),
       });
     }
   }

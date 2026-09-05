@@ -1,4 +1,4 @@
-import { chooseCpuPick } from './cpu';
+import { biasLever, chooseCpuPick } from './cpu';
 import { availablePlayers, currentPick, currentTeam, nextUserPick, presetFor } from './draft';
 import { mulberry32 } from './random';
 import { replacementPoints } from './value';
@@ -122,6 +122,61 @@ function baseline(engine: DraftEngine, picks: number): Record<Position, number> 
   return out;
 }
 
+/** How many readings a position needs before its fit is about the position. */
+const PRIOR_MIN_SAMPLE = 8;
+
+/**
+ * The dials this room's own ADP implies, before a single pick is in.
+ *
+ * `observedLean` says nothing until a full round has happened, which in a 14
+ * team league is the whole of the first round. Some rooms publish what their
+ * drafters actually do — Yahoo does, to a browser holding the session cookie —
+ * and where that is known the lean can be read before the draft starts rather
+ * than discovered a round late.
+ *
+ * Fitted, not guessed. `applyBias` moves an ADP by its lever times the dial, so
+ * it is linear in the dial and the setting that best turns this board's ADP
+ * into the room's is a least squares fit with a closed form. That keeps the
+ * answer in the units the dials and `observedLean` already use, which is what
+ * lets it stand in for one.
+ *
+ * Two things it refuses to read. A room's ADP runs out long before the board
+ * does, and past that the gap between them is the end of one list rather than a
+ * disagreement, so the fit stops where the room's own deepest reading does. And
+ * a position with too few readings gets none: Yahoo reported three kickers
+ * against fifty four receivers, and those three fitted a dial of 2.3, which is
+ * a number about three players rather than about kickers.
+ */
+export function priorLean(
+  players: Player[],
+  roomAdp: Map<string, number>,
+): Record<Position, number> {
+  const lean = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 } as Record<Position, number>;
+  if (!roomAdp.size) return lean;
+
+  let deepest = 0;
+  for (const adp of roomAdp.values()) deepest = Math.max(deepest, adp);
+
+  for (const pos of POSITIONS) {
+    let weighted = 0;
+    let weight = 0;
+    let seen = 0;
+    for (const p of players) {
+      if (p.position !== pos || p.adp > deepest) continue;
+      const theirs = roomAdp.get(p.id);
+      if (theirs == null) continue;
+      const lever = biasLever(p.adp);
+      weighted += lever * (p.adp - theirs);
+      weight += lever * lever;
+      seen += 1;
+    }
+    if (seen >= PRIOR_MIN_SAMPLE && weight > 0) {
+      lean[pos] = Math.max(-5, Math.min(5, (weighted / weight) * 5));
+    }
+  }
+  return lean;
+}
+
 export interface Forecast {
   sims: number;
   /** The pick this forecast runs to. */
@@ -144,13 +199,23 @@ export interface Forecast {
  * time. What survives a hundred of those is a probability that knows about this
  * room, which is exactly what reading ADP alone cannot give you.
  */
-export function forecast(engine: DraftEngine, sims = 120): Forecast | null {
+export function forecast(
+  engine: DraftEngine,
+  sims = 120,
+  prior: Record<Position, number> | null = null,
+): Forecast | null {
   const { state } = engine;
   const target = nextUserPick(state);
   const from = currentPick(state);
   if (target == null || target <= from || state.done) return null;
 
-  const lean = observedLean(engine);
+  // Before a full round `observedLean` has nothing to say. Where the room
+  // publishes how it drafts, that stands in until then. After it, what actually
+  // happened wins: a measurement of this draft beats a measurement of the site's
+  // drafts in general.
+  const lean = state.picks.length >= state.league.teams || !prior
+    ? observedLean(engine)
+    : prior;
   const cpu: CpuConfig = {
     ...state.cpu,
     // The room's own lean sits on top of whatever the dials say, so a setting
