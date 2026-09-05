@@ -553,13 +553,23 @@ input[type='range']::-moz-range-thumb {
 
 .pool-list { flex: 1; overflow-y: auto; }
 
+/*
+ * Six columns for six cells. It was five, and the third number, the consensus,
+ * had nowhere to go, so it wrapped onto a second grid row underneath the
+ * queue star and pushed the survival bar down to a third. Every row in the
+ * pool carried the cost of that, which on six hundred rows is most of a screen
+ * of scrolling spent on a gap.
+ */
 .player {
   display: grid;
-  grid-template-columns: 20px 34px minmax(0, 1fr) 52px 46px;
+  grid-template-columns: 18px 30px minmax(0, 1fr) 44px 44px 40px;
   align-items: center;
-  gap: 8px;
+  /* Columns need the air; the survival bar under the name does not, and the
+     row gap is paid six hundred times. */
+  column-gap: 6px;
+  row-gap: 2px;
   width: 100%;
-  padding: 6px var(--pad);
+  padding: 5px var(--pad);
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--line-soft);
@@ -576,7 +586,7 @@ input[type='range']::-moz-range-thumb {
  */
 .player {
   content-visibility: auto;
-  contain-intrinsic-size: auto 83px;
+  contain-intrinsic-size: auto 64px;
 }
 
 .player:hover { background: var(--felt-1); border-left-color: var(--pos); }
@@ -692,7 +702,6 @@ input[type='range']::-moz-range-thumb {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 8px;
-  margin-top: 3px;
 }
 
 .survival-track {

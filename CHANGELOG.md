@@ -155,6 +155,13 @@ an exact match in the order it left.
 
 ### Fixed
 
+**The player pool stopped spending a row on nothing.** Adding the consensus
+column gave the pool a sixth cell and left it with five columns, so the third
+number wrapped underneath the queue star and pushed the survival bar onto a
+third line. Every row in the pool paid for it. The grid has six columns again
+and a row is 64 pixels rather than 83, which is about three more players on
+screen without changing what any of them says.
+
 **A player eligible at two positions joins the board again.** Yahoo writes dual
 eligibility as `WR,RB` where every other source writes one position, and the
 whole pair was being used as a lookup key, so the pick found nobody and landed
