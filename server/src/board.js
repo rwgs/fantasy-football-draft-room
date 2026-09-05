@@ -10,7 +10,7 @@
 // The caller picks the rule with `adpSource`:
 //   sleeper  Sleeper first, Fantasy Football Calculator where Sleeper is blank.
 //   ffc      Fantasy Football Calculator first, Sleeper where it is blank.
-//   blend    The mean of the two when both exist.
+//   blend    The mean of the two, over whichever of them named a pick.
 //
 // HOW THEY JOIN
 // Name plus position, with team defences on the team abbreviation. See names.js
@@ -47,9 +47,44 @@ function estimateStdev(adp) {
   return Math.min(MAX_MEASURED_STDEV, Math.max(1.5, adp * 0.11));
 }
 
-function pickAdp(source, sleeperAdp, ffcAdp) {
+/**
+ * How deep a real draft goes, in rounds.
+ *
+ * Past this a number is not a pick, because no draft makes one. Sleeper's board
+ * runs to about pick 700, measured over its own deep and best ball drafts,
+ * while Fantasy Football Calculator stops at about 230. So a player Fantasy
+ * Football Calculator puts at 142 and Sleeper at 700 is not a player the two
+ * disagree about by five hundred picks: one measured a pick, the other is
+ * saying nobody takes him. Averaging those two gives 421, a number neither
+ * source would recognise, and it lands the player outside every draft he was
+ * actually in.
+ *
+ * Twenty rounds is past the end of almost every redraft league, so nothing
+ * inside a draft is silenced by it. It is a fixed number of rounds rather than
+ * this league's own because the board is built per league size and cached
+ * there: it never learns the roster shape, so it cannot know where the draft
+ * really ends.
+ */
+const DRAFTABLE_ROUNDS = 20;
+
+/** A source's ADP where it named a pick some draft would make, else null. */
+function votes(adp, teams) {
+  if (adp == null) return null;
+  return adp <= teams * DRAFTABLE_ROUNDS ? adp : null;
+}
+
+function pickAdp(source, sleeperAdp, ffcAdp, teams) {
   if (source === 'ffc') return ffcAdp ?? sleeperAdp ?? null;
   if (source === 'blend') {
+    // Only a source that named a pick votes, so one that has run out of players
+    // cannot drag a real pick out of the draft.
+    const s = votes(sleeperAdp, teams);
+    const f = votes(ffcAdp, teams);
+    if (s != null && f != null) return (s + f) / 2;
+    if (s != null) return s;
+    if (f != null) return f;
+    // Neither named a pick. The mean is still the best ordering on offer for a
+    // tail no draft reaches, and dropping the player would shorten the board.
     if (sleeperAdp != null && ffcAdp != null) return (sleeperAdp + ffcAdp) / 2;
     return sleeperAdp ?? ffcAdp ?? null;
   }
@@ -116,7 +151,7 @@ export async function buildBoard({ format, teams, year, adpSource = 'sleeper', f
 
   const players = [];
   for (const p of byKey.values()) {
-    const adp = pickAdp(adpSource, p.sleeperAdp, p.ffcAdp);
+    const adp = pickAdp(adpSource, p.sleeperAdp, p.ffcAdp, teams);
     if (adp == null) continue;
     const borrowed = adpSource !== 'ffc' && p.sleeperAdpFrom && p.sleeperAdpFrom !== format;
     players.push({

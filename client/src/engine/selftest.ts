@@ -466,6 +466,43 @@ async function main() {
     check('a 4 team, 5 round draft completes', tinyEngine.state.picks.length === 20);
   }
 
+  console.log('\nBlending two ADP sources');
+  {
+    // Sleeper's board runs past pick 700 and Fantasy Football Calculator stops
+    // around 230, so the two do not disagree about a player one puts at 142 and
+    // the other at 700. One measured a pick; the other is saying nobody takes
+    // him. A source with no pick to report does not vote, and the blend is of
+    // whoever did.
+    const blendRes = await fetch(API + '/api/board?scoring=half-ppr&teams=12&adpSource=blend');
+    const blend: Board = await blendRes.json();
+    const deepest = 12 * 20;
+
+    const exiled = blend.players.filter((p) => {
+      const best = Math.min(p.sleeperAdp ?? Infinity, p.ffcAdp ?? Infinity);
+      return best <= deepest && p.adp > deepest;
+    });
+    check('a player one source drafts is not blended out of the draft',
+      exiled.length === 0,
+      exiled.slice(0, 3).map((p) => p.name + ' ' + p.sleeperAdp + '/' + p.ffcAdp
+        + ' -> ' + p.adp).join(', '));
+
+    // The fix is abstention, not "Fantasy Football Calculator first". Where both
+    // sources actually measured a pick the blend is still the mean of the two.
+    const agreed = blend.players.filter((p) => p.sleeperAdp != null && p.ffcAdp != null
+      && p.sleeperAdp <= deepest && p.ffcAdp <= deepest);
+    const meaned = agreed.filter((p) => Math.abs(p.adp - ((p.sleeperAdp! + p.ffcAdp!) / 2)) < 0.01);
+    check('two sources that both measured a pick are averaged',
+      agreed.length > 100 && meaned.length === agreed.length,
+      meaned.length + ' of ' + agreed.length);
+
+    // Both past the end of any draft is not a reason to drop a player: the
+    // board still has to put the tail in some order.
+    const tail = blend.players.filter((p) => (p.sleeperAdp ?? 0) > deepest
+      && (p.ffcAdp ?? 0) > deepest);
+    check('a player no source drafts still holds a place in the tail',
+      tail.every((p) => Number.isFinite(p.adp) && p.adp > deepest), String(tail.length));
+  }
+
   console.log('\nThe name matcher');
   {
     const post = async (csv: string, overrides: Record<string, string | null> = {}) => {
