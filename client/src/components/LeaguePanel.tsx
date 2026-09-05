@@ -16,6 +16,9 @@ interface Props {
   setup: LeagueSetup | null;
   myUserId: string | null;
   onMyUser: (userId: string) => void;
+  /** Whether the Yahoo league being added is one of Yahoo's own mock drafts. */
+  yahooMock: boolean;
+  onYahooMock: (on: boolean) => void;
 }
 
 /** How long ago a league's settings were pulled, in plain words. */
@@ -61,7 +64,7 @@ const PLATFORMS: { id: Platform; label: string; hint: string }[] = [
 export default function LeaguePanel(props: Props) {
   const {
     leagues, activeId, imported, busy, error, onLoad, onAdd, onRefresh, onRemove, anonymous,
-    setup, myUserId, onMyUser,
+    setup, myUserId, onMyUser, yahooMock, onYahooMock,
   } = props;
   const seats = setup?.slots ?? [];
   const mySeat = seats.find((s2) => s2.userId === myUserId) || null;
@@ -190,6 +193,33 @@ export default function LeaguePanel(props: Props) {
           </button>
         </div>
         <p className="hint">{chosen.hint}</p>
+
+        {/*
+          * Yahoo's own mock rooms are all the same shape and never say so.
+          * Ticking this fills in what Yahoo will not: the roster it runs, and
+          * the decision to open the board the moment the room is readable,
+          * which is what makes a mock worth joining on a whim.
+          */}
+        {platform === 'yahoo' && (
+          /* Wrapped, so the tick is not a direct child of `.field`, whose own
+             label rule would set it in small caps as a heading. */
+          <div style={{ marginTop: 8 }}>
+          <label className="resume-switch">
+            <input
+              type="checkbox"
+              checked={yahooMock}
+              disabled={busy}
+              onChange={(e) => onYahooMock(e.target.checked)}
+            />
+            <span>
+              <b>This is a Yahoo mock draft.</b>
+              {' Sets the roster Yahoo mocks always run, QB, WR, WR, RB, RB, TE, W/R/T, K '}
+              {'and DEF with six on the bench, and follows the draft as soon as the room '}
+              {'is readable. The lobby shows the league number before it starts.'}
+            </span>
+          </label>
+          </div>
+        )}
       </div>
 
       <div>

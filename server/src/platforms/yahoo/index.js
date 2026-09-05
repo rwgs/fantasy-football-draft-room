@@ -137,6 +137,11 @@ export async function draftState(leagueId) {
     teams,
     slotByUser,
     orderIsSet: !!room.order,
+    // Which seat is the user's own, which Yahoo settles rather than leaves to
+    // be worked out: the draft room address the bridge runs on names the team,
+    // so the person watching is never in doubt about where they sit. Sleeper
+    // has no equivalent and leaves this absent.
+    mySeat: room.mySeat,
   };
 }
 

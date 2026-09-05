@@ -10,7 +10,7 @@ import ResultsScreen from './components/ResultsScreen';
 import SetupScreen from './components/SetupScreen';
 import { createDraft, runToUserTurn } from './engine/draft';
 import type { DraftEngine } from './engine/draft';
-import { rosterSize } from './engine/roster';
+import { YAHOO_MOCK_ROSTER, rosterSize } from './engine/roster';
 import type {
   AppMode, Board, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
   NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague,
@@ -51,6 +51,7 @@ export default function App() {
    * This reads what the room has actually taken and simulates only the rest.
    */
   const [resumeLive, setResumeLive] = useState(saved.resumeLive);
+  const [yahooMock, setYahooMock] = useState(saved.yahooMock);
   const [liveCount, setLiveCount] = useState<{ picks: number; at: number } | null>(null);
   const [liveBusy, setLiveBusy] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -92,10 +93,10 @@ export default function App() {
   useEffect(() => {
     save({
       league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
-      cpuPreset: preset, pace, mode, anonymous, myManager, resumeLive,
+      cpuPreset: preset, pace, mode, anonymous, myManager, resumeLive, yahooMock,
     });
   }, [league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
-    preset, pace, mode, anonymous, myManager, resumeLive]);
+    preset, pace, mode, anonymous, myManager, resumeLive, yahooMock]);
 
   const activeLeague = savedLeagues.find((l) => l.id === activeLeagueId) || null;
   /** A league saved before there was a choice of platform is a Sleeper league. */
@@ -616,6 +617,48 @@ export default function App() {
     void startMock();
   }, [board, league, cpu, rankings, mode, startMock]);
 
+  /**
+   * Ticking the mock box fills in the two things Yahoo will not.
+   *
+   * Its draft room carries the seats, the order and every pick, and no roster
+   * shape at all, so a mock imported from it otherwise keeps whatever was last
+   * set for a real league. Every Yahoo mock runs the same nine starters, so the
+   * one thing the import cannot answer is the one thing the tick can.
+   */
+  const applyYahooMock = useCallback((on: boolean) => {
+    setYahooMock(on);
+    if (!on) return;
+    setLeague((current) => ({
+      ...current,
+      roster: { ...YAHOO_MOCK_ROSTER },
+      rounds: rosterSize(YAHOO_MOCK_ROSTER),
+    }));
+  }, []);
+
+  /**
+   * Open the board the moment a Yahoo mock can be read.
+   *
+   * A mock is worth joining on a whim, and the two clicks between joining one
+   * and watching it are the ones that make it not worth bothering. The import
+   * only succeeds once the bridge has posted the room, so a league that loads
+   * at all is a room that is being watched.
+   *
+   * Once per room, and never over a draft already on screen. The seat comes
+   * from the room address rather than a guess at which manager is you, which
+   * is the whole reason it can start without being asked anything.
+   */
+  const followedRoom = useRef<string | null>(null);
+  useEffect(() => {
+    if (!yahooMock || mode !== 'assistant' || screen !== 'setup') return;
+    if (activePlatform !== 'yahoo' || !board || !liveDraftId) return;
+    if (followedRoom.current === liveDraftId) return;
+    followedRoom.current = liveDraftId;
+
+    const seat = setup?.draft?.mySeat;
+    if (seat) setLeague((current) => ({ ...current, mySlot: seat }));
+    start();
+  }, [yahooMock, mode, screen, activePlatform, board, liveDraftId, setup, start]);
+
   // A new seed, drawn once and used for both the saved settings and the draft
   // that runs off them. Two draws here would mean the settings no longer
   // describe the draft on screen.
@@ -785,6 +828,8 @@ export default function App() {
           onCheckLive={() => { void checkLive(); }}
 
           setup={setup}
+          yahooMock={yahooMock}
+          onYahooMock={applyYahooMock}
           myUserId={activeLeague?.myUserId ?? null}
           onMyUser={(userId) => {
             if (!activeLeagueId) return;

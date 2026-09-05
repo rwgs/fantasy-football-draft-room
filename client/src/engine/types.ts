@@ -391,6 +391,14 @@ export interface LiveDraftState {
   teams: number;
   slotByUser: Record<string, number>;
   orderIsSet: boolean;
+  /**
+   * The seat belonging to whoever is watching, where the platform settles it.
+   *
+   * Yahoo does: the draft room address the bridge runs in names the team, so
+   * there is nothing to work out. Sleeper has no equivalent and leaves this
+   * absent, which is why it is optional rather than nullable everywhere.
+   */
+  mySeat?: number | null;
 }
 
 export interface LivePick {

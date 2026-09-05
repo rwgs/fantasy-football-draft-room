@@ -8,6 +8,18 @@ export const DEFAULT_ROSTER: RosterSlots = {
   QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 1, SUPERFLEX: 0, K: 1, DEF: 1, BENCH: 6,
 };
 
+/**
+ * The roster a Yahoo mock draft runs, which it never offers to change.
+ *
+ * QB, WR, WR, RB, RB, TE, W/R/T, K and DEF, with six on the bench, so fifteen
+ * rounds. Written out rather than pointed at `DEFAULT_ROSTER`, which holds the
+ * same shape today for its own reasons: this one is a fact about Yahoo and has
+ * to stay right when the app's default moves.
+ */
+export const YAHOO_MOCK_ROSTER: RosterSlots = {
+  QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 1, SUPERFLEX: 0, K: 1, DEF: 1, BENCH: 6,
+};
+
 export const STARTER_SLOTS: (keyof RosterSlots)[] = ['QB', 'RB', 'WR', 'TE', 'FLEX', 'SUPERFLEX', 'K', 'DEF'];
 
 export function rosterSize(roster: RosterSlots): number {

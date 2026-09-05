@@ -65,6 +65,8 @@ export interface Saved {
    * how the next few rounds might fall.
    */
   resumeLive: boolean;
+  /** Whether a Yahoo league being added is one of Yahoo's own mock drafts. */
+  yahooMock: boolean;
 }
 
 /** The leagues this copy ships knowing about, blank until one is loaded. */
@@ -122,6 +124,7 @@ export function defaults(): Saved {
     pace: 140,
     myManager: DEFAULT_MANAGER,
     resumeLive: false,
+    yahooMock: false,
   };
 }
 
@@ -156,6 +159,7 @@ export function load(): Saved {
       noteSource: saved.noteSource ?? null,
       myManager: saved.myManager ?? DEFAULT_MANAGER,
       resumeLive: saved.resumeLive ?? false,
+      yahooMock: saved.yahooMock ?? false,
       // Older saves predate the per league fields. Fill them rather than let a
       // missing array reach a component that maps over it.
       savedLeagues: leagues.map((l) => ({

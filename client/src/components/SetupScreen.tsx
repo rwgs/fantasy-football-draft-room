@@ -107,6 +107,8 @@ interface Props {
   setup: LeagueSetup | null;
   myUserId: string | null;
   onMyUser: (userId: string) => void;
+  yahooMock: boolean;
+  onYahooMock: (on: boolean) => void;
   onCheckDraft: () => void;
 }
 
@@ -137,7 +139,7 @@ export default function SetupScreen(props: Props) {
     keeperImportBusy, keeperImportNote, canImport, declared,
     resumeLive, onResumeLive, liveCount, liveBusy, liveStarted, hasDraft, startError,
     onCheckLive,
-    setup, myUserId, onMyUser, onCheckDraft,
+    setup, myUserId, onMyUser, yahooMock, onYahooMock, onCheckDraft,
   } = props;
 
   const activeLeague = savedLeagues.find((l) => l.id === activeLeagueId) || null;
@@ -339,6 +341,8 @@ export default function SetupScreen(props: Props) {
             setup={setup}
             myUserId={myUserId}
             onMyUser={onMyUser}
+            yahooMock={yahooMock}
+            onYahooMock={onYahooMock}
           />
         </Section>
 

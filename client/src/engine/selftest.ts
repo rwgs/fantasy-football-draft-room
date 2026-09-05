@@ -1783,6 +1783,11 @@ async function yahooRoom() {
     imported.roster === null && imported.scoring === null);
   check('and says so', imported.warnings.some((w: string) => /roster shape/.test(w)));
 
+  // The bridge posted from seat 3, because that is the seat in the room address
+  // it was loaded from. Nobody had to be asked which one was theirs.
+  check('the seat the bridge runs in is reported, so nobody has to be asked',
+    state.mySeat === 3, String(state.mySeat));
+
   // ---- What the board tells the room ---------------------------------------
   //
   // The panel over a Yahoo draft is fed from here: the app writes what it has

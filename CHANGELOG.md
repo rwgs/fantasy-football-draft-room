@@ -69,6 +69,18 @@ Everything in it ignores the mouse except the button that hides it, so a click
 where it sits still reaches the draft. Every fault is swallowed: a panel that
 breaks paints nothing and the draft carries on.
 
+**A tick for a Yahoo mock draft.** Yahoo's mock rooms all run the same roster
+and never say so, and Yahoo's draft room publishes no roster shape at all, so a
+mock used to arrive wearing whatever was last set for a real league. Ticking the
+box on a Yahoo league sets what Yahoo will not: QB, WR, WR, RB, RB, TE, W/R/T, K
+and DEF, with six on the bench, for fifteen rounds.
+
+It also opens the board as soon as the room can be read, in the seat you are
+actually sitting in. The draft room address the bridge runs in names your team,
+so the app no longer has to ask which manager is you; that seat now comes back
+with the rest of the draft state. Paste the league number from the mock lobby,
+which shows it before the draft starts, and the board is up when the room is.
+
 **What a position costs to skip.** Above your roster, each position now carries
 the best player left at it in points over a replacement starter, the value you
 can expect to still be there at your next pick, and the gap between them. The
