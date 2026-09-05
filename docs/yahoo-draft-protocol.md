@@ -170,6 +170,55 @@ irrelevant to a board, so Yahoo adding, removing or changing them cannot break
 a bridge that only reads picks. That is the main reason to prefer the socket
 over the DOM, whose class names are build-hashed and change on any deploy.
 
+### What a pick's timing says
+
+**Observed**, from `dump/frames-2026-09-05T03-16-12-613Z.jsonl`, the one capture
+carrying wall-clock timestamps. Measuring each pick as the gap between the `D|`
+that passed the clock and the `0|` that filled it, over 52 picks of a 14-team
+room:
+
+| seat | picks | under 1s | median |
+|---|---|---|---|
+| 1 | 2 | 0 | 7.72s |
+| 2 | 2 | 0 | 22.40s |
+| 5 | 4 | 4 | 0.57s |
+| 9 | 4 | 0 | 19.37s |
+| 13 | 4 | 4 | 0.96s |
+| 14 | 4 | 4 | 0.89s |
+
+Six of fourteen seats never took more than a second and four never took less
+than two, and two picks landed inside 100 ms, which is faster than a click. So
+automation is legible **per seat rather than per pick**: a seat is consistently
+instant or consistently not, and a single fast pick means nothing. Seats do
+flip mid-draft, which is what falling to autopick for inactivity looks like.
+
+**Observed: an instant pick is not simply Yahoo's rank order.** Joined against
+`o_rank` in `dump/pool-10720547.json`, seat 14 took ranks 85 and 88 back to
+back, both under a second, while 65, 67, 69 and 72 were still on the board and
+went in the next four picks. So a sub-second pick is either a queue firing or an
+autopick weighting positional need, and the timing cannot separate those two.
+
+**A queue is invisible to everyone but its owner.** No frame carries one, and
+the only trace of the feature in any capture is the room preloading
+`add_to_queue.mp3`. Nothing watching the socket from another seat can tell a
+queued pick from an autopicked one.
+
+**Counting `C|` ticks instead of timestamps does not work.** The clock frames
+arrive about every six seconds and 53 to 80 per cent of all picks land before
+the first one, so tick counting has no resolution in the window where nearly
+every pick happens.
+
+**The `A|` flag does not predict any of this.** Cross-referencing the two
+captures that carry it, the seats it marks `1` picked *slower* than the seats
+reading `0` — mean 1.74 ticks against 0.26 in `capture-mock3-reconnect`, where
+77 of 87 picks by `0` seats were instant. Either the connect-time snapshot goes
+stale within a round or two, or `1` does not mean what one reading of one seat
+suggested.
+
+None of this reaches the board. The bridge forwards `0`, `H`, `R` and `P` only,
+so it drops `D|`, and measuring any of it live would mean the bridge timestamping
+picks itself.
+
 ## Joining onto this project's board
 
 A pick names a Yahoo player ID, and only `players/nfl/<league>` maps it to a
@@ -216,7 +265,15 @@ pool response would close that gap.
 ## Still unknown
 
 - **What `Q`, `w|`, `5|`, `X|` and `6|` are.** None is needed to read picks.
-- **What `A|` means**, now that it is known not to be a boolean.
+- **What `A|` means**, now that it is known not to be a boolean, and now that
+  the seats it marks are also known not to behave like autopickers.
+- **Whether a queue fires for a manager who is present**, or only on expiry and
+  under autopick. It decides whether a consistently instant seat is a robot or a
+  human with a deep queue, and so whether pick timing can be used to keep
+  Yahoo's own algorithm out of a reading of how a room drafts. Not answerable
+  from any capture: a queue is private to its owner. Answerable in two minutes
+  from inside a room, by queueing a player and watching whether your own turn
+  fills without a click.
 - **What the two middle `H|` zeros mean**, and whether `S` becomes something
   else for an auction or a linear draft.
 - **What `cost` holds in an auction.** It was `0` in every snake draft watched.
