@@ -10,6 +10,53 @@ fixed.
 
 ## Unreleased
 
+### Fixed
+
+**The draft assistant says what to pick, and both modes say it the same way.**
+The recommendation was held back to picks you could make, which in the assistant
+meant naming one for every seat while you entered a room's picks by hand and
+naming none at all while a feed ran the room. The mode that simulates nothing,
+and so has the most use for a read, was the one that showed it least. It now
+names a pick in both modes whether or not the clock is on you. Off the clock it
+is tagged `Target` rather than `Take` and says what goes before your turn rather
+than what goes if you wait, because the number was always priced against your
+own next pick and only the word was wrong.
+
+**"Take best available" is offered in the assistant too.** It only ever existed
+in the mock. It follows your own turn in both modes, not every seat you can
+record: the best available to you is not what somebody else took.
+
+**A Yahoo mock and this app's mock draft are told apart.** They share a word and
+almost nothing else: a Yahoo mock is a public room of real people drafting a team
+that is not for their league, so it is followed with the Draft assistant, while
+this app's mock draft simulates a room. Ticking "This is a Yahoo mock draft" in
+the mock draft used to hold the league number and wait for a draft room, and the
+banner promised the board would open by itself once the room was up. Only the
+assistant opens a board off a room, so that promise could not be kept. In the
+mock draft the tick now sets Yahoo's roster shape and nothing else, and a pasted
+number is read at once or refused at once. The waiting, and the board that opens
+by itself, stay with the assistant, where they work.
+
+The two modes now say which is which on the switch that picks them, the Yahoo
+tab says in the mock draft that a new Yahoo number needs your draft room open
+either way and that a league already saved does not, and the league list is no
+longer titled for one platform when it offers two.
+
+**A panel shown for two platforms stops naming one of them.** "Follow a real
+draft" said Check Sleeper, Press Check Sleeper, and "it appears here once
+Sleeper sets it" while a Yahoo league was loaded. It names the platform of the
+league in hand, and the draft order sentence says where the order actually comes
+from: Sleeper publishes it, Yahoo puts it in the draft room where only the
+bridge can read it. The same panel offered to "run a mock instead", which is the
+overloaded word again; it says this app's own mock draft.
+
+**The clock says when the pick is yours, in words.** The gold wash and the gold
+seat name both said it in colour, to somebody already reading the clock, and on
+a phone the row's labels are stripped out. A `Your pick` badge now sits in the
+clock strip on your own turn in both modes. The assistant's clock also read
+"Recording for You" on your own pick, which was the screen calling your pick
+somebody else's; it reads "On the clock" there now.
+
 ### Added
 
 **The panel over the Yahoo room says what to pick.** It showed three positions,

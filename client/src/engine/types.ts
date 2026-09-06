@@ -39,7 +39,7 @@ export const ADP_FEEDS: AdpFeed[] = [
   {
     id: 'room',
     label: 'Your draft room',
-    what: 'What the people you are actually drafting against do. Only your own browser can read it, so it needs a live Yahoo draft and is not available in a mock.',
+    what: 'What the people you are actually drafting against do. Only your own browser can read it, so it needs a live Yahoo draft and is not available in this app’s own mock draft.',
   },
 ];
 
@@ -396,6 +396,17 @@ export interface NoteSet {
  * a session cookie the service must never hold. See `DECISIONS.md`.
  */
 export type Platform = 'sleeper' | 'yahoo';
+
+/**
+ * What to call a platform on screen.
+ *
+ * Here rather than in the panel that lists them, because two screens name a
+ * platform and one of them was naming Sleeper while a Yahoo league was loaded.
+ */
+export const PLATFORM_LABEL: Record<Platform, string> = {
+  sleeper: 'Sleeper',
+  yahoo: 'Yahoo',
+};
 
 /**
  * A league you draft in, with its settings kept.

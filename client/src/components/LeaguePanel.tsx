@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { maskLeague, maskTeam } from '../anon';
+import { PLATFORM_LABEL } from '../engine/types';
 import type { LeagueImport, LeagueSetup, Platform, SavedLeague } from '../engine/types';
 
 interface Props {
@@ -18,6 +19,8 @@ interface Props {
   onMyUser: (userId: string) => void;
   /** Whether the Yahoo league being added is one of Yahoo's own mock drafts. */
   yahooMock: boolean;
+  /** Which mode the setup screen is in. A Yahoo mock is the assistant's job. */
+  assistant: boolean;
   onYahooMock: (on: boolean) => void;
   /** A Yahoo mock whose room has not been posted yet, and is being waited for. */
   waitingRoom: string | null;
@@ -41,12 +44,12 @@ const SCORING_WORDS: Record<string, string> = {
 const PLATFORMS: { id: Platform; label: string; hint: string }[] = [
   {
     id: 'sleeper',
-    label: 'Sleeper',
+    label: PLATFORM_LABEL.sleeper,
     hint: 'The long number in the Sleeper web address of your league. Nothing else is needed.',
   },
   {
     id: 'yahoo',
-    label: 'Yahoo',
+    label: PLATFORM_LABEL.yahoo,
     hint: 'The number in your Yahoo draft room address. Yahoo answers only your own browser, '
       + 'so this needs the bridge userscript running in your draft room; see the README. '
       + 'Yahoo does not publish the roster shape or the scoring, so set those yourself.',
@@ -66,7 +69,7 @@ const PLATFORMS: { id: Platform; label: string; hint: string }[] = [
 export default function LeaguePanel(props: Props) {
   const {
     leagues, activeId, imported, busy, error, onLoad, onAdd, onRefresh, onRemove, anonymous,
-    setup, myUserId, onMyUser, yahooMock, onYahooMock, waitingRoom,
+    setup, myUserId, onMyUser, yahooMock, onYahooMock, assistant, waitingRoom,
   } = props;
   const seats = setup?.slots ?? [];
   const mySeat = seats.find((s2) => s2.userId === myUserId) || null;
@@ -81,7 +84,7 @@ export default function LeaguePanel(props: Props) {
   const chosen = PLATFORMS.find((p) => p.id === platform) || PLATFORMS[0];
   // A league saved before there was a choice is a Sleeper league.
   const activeLabel = PLATFORMS.find((p) => p.id === (active?.platform ?? 'sleeper'))?.label
-    ?? 'Sleeper';
+    ?? PLATFORM_LABEL.sleeper;
 
   // Trades change which picks are yours, so they change what a mock of this
   // league is worth. The seat alone no longer answers "when do I pick".
@@ -197,10 +200,29 @@ export default function LeaguePanel(props: Props) {
         <p className="hint">{chosen.hint}</p>
 
         {/*
+          * Said where the number is typed, because this is where the two
+          * meanings of "mock" meet. Yahoo answers nothing but a draft room, so
+          * a number added here without one is refused in either mode; what the
+          * mock draft cannot do is follow the room once it exists.
+          */}
+        {platform === 'yahoo' && !assistant && (
+          <p className="hint" style={{ marginTop: 4, color: 'var(--te)' }}>
+            {'A Yahoo league can only be read while your draft room is open, so a new '}
+            {'number needs one here too. A league already in this list loads without it. '}
+            {'A Yahoo mock draft is a public room of real people, so the Draft assistant '}
+            {'is what follows one; this mode simulates a room instead of reading it.'}
+          </p>
+        )}
+
+        {/*
           * Yahoo's own mock rooms are all the same shape and never say so.
           * Ticking this fills in what Yahoo will not: the roster it runs, and
           * the decision to open the board the moment the room is readable,
           * which is what makes a mock worth joining on a whim.
+          *
+          * That second half is the assistant's alone. A Yahoo mock is a room of
+          * real people, so following one is reading a real draft; this app's own
+          * mock draft can borrow the roster shape and nothing else.
           */}
         {platform === 'yahoo' && (
           /* Wrapped, so the tick is not a direct child of `.field`, whose own
@@ -216,9 +238,15 @@ export default function LeaguePanel(props: Props) {
             <span>
               <b>This is a Yahoo mock draft.</b>
               {' Sets the roster Yahoo mocks always run, QB, WR, WR, RB, RB, TE, W/R/T, K '}
-              {'and DEF with six on the bench. Paste the league number from the lobby, '}
-              {'which shows it before the draft starts, and the board waits for your '}
-              {'draft room. In the draft assistant it opens by itself when the room is up.'}
+              {'and DEF with six on the bench. '}
+              {assistant
+                ? 'A Yahoo mock is a public room of real people, so the assistant follows '
+                  + 'one like any other real draft. Paste the league number from the lobby, '
+                  + 'which shows it before the draft starts, and the board waits for your '
+                  + 'draft room and opens by itself once it is up.'
+                : 'Here that is all it does: the shape is borrowed, the room is not '
+                  + 'followed. Waiting for one, and opening the board when it is up, '
+                  + 'belong to the Draft assistant.'}
             </span>
           </label>
           </div>

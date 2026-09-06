@@ -304,14 +304,21 @@ export default function DraftScreen(props: Props) {
   );
 
   /*
-   * The pick this turn is for, named only while it is yours to make.
+   * The pick to spend, named whether or not the clock is on you.
    *
-   * Out of turn it would be a recommendation about a pick somebody else is
-   * making, which is a different question and not one worth answering.
+   * It is never an opinion about somebody else's pick. `priced` is measured
+   * against `oddsTarget`, which off the clock is your own next turn rather than
+   * the one being made, so out of turn this answers who to target and on your
+   * turn it answers who to take. The pool words those two differently: a
+   * heads-up read as a verdict is one you act on a pick too early.
+   *
+   * It used to be held back to `canPick`, which named a pick for every seat
+   * while you entered a room's picks by hand and named none at all while a feed
+   * ran the room. Both were the wrong way round.
    */
   const recommended = useMemo(
-    () => (canPick ? recommendPick(priced, myCounts, state.league.roster) : null),
-    [canPick, priced, myCounts, state.league.roster],
+    () => (state.done ? null : recommendPick(priced, myCounts, state.league.roster)),
+    [state.done, priced, myCounts, state.league.roster],
   );
 
   /*
@@ -377,6 +384,12 @@ export default function DraftScreen(props: Props) {
     <>
       <div className={'clock' + (yourTurn ? ' is-yours' : '')}>
         <div className="clock-read">
+          {/* The gold wash and the gold seat name both answer whose turn it is,
+              and both answer it in colour, to somebody already reading the
+              clock. This answers it in words, so it survives a glance from
+              across a desk and a phone, where the row's labels are stripped
+              out. */}
+          {yourTurn && <p className="clock-yours">Your pick</p>}
           <div>
             <p className="eyebrow">Pick</p>
             <p className="clock-pick">
@@ -386,7 +399,13 @@ export default function DraftScreen(props: Props) {
           </div>
           <div className="clock-team">
             <p className="eyebrow">
-              {assistant ? (manual ? 'Recording for' : 'Waiting on') : 'On the clock'}
+              {/* Your own turn is on the clock in either mode. The assistant's
+                  labels describe watching somebody else pick, and "Recording
+                  for You" was the screen calling your own pick somebody
+                  else's. */}
+              {!assistant || yourTurn
+                ? 'On the clock'
+                : (manual ? 'Recording for' : 'Waiting on')}
             </p>
             <p className="clock-who" style={yourTurn ? { color: 'var(--gold)' } : undefined}>
               {onClock
@@ -414,6 +433,22 @@ export default function DraftScreen(props: Props) {
         </div>
 
         <div className="clock-acts">
+          {/* The same offer either side of the split: on your own turn, the top
+              of your queue or the best left. A mock waits for it and a real
+              room does not, which changes how long you have to press it and
+              nothing about what it does.
+
+              Your own turn, not `canPick`. Entering a room's picks by hand
+              makes every seat yours to record, and the best available to you is
+              not what somebody else took. */}
+          {yourTurn && (
+            <button type="button" className="btn is-primary" onClick={takeBest}>
+              <span className="on-wide">
+                {queue.length ? 'Take top of queue' : 'Take best available'}
+              </span>
+              <span className="on-narrow">{queue.length ? 'Take queued' : 'Take best'}</span>
+            </button>
+          )}
           {assistant ? (
             <>
               <span className={'live-dot' + (liveError || manual ? ' is-down' : '')}>
@@ -463,14 +498,6 @@ export default function DraftScreen(props: Props) {
             </>
           ) : (
             <>
-              {yourTurn && (
-                <button type="button" className="btn is-primary" onClick={takeBest}>
-                  <span className="on-wide">
-                    {queue.length ? 'Take top of queue' : 'Take best available'}
-                  </span>
-                  <span className="on-narrow">{queue.length ? 'Take queued' : 'Take best'}</span>
-                </button>
-              )}
               {!yourTurn && !state.done && (
                 <button type="button" className="btn" onClick={() => setPaused((p) => !p)}>
                   {paused ? 'Resume' : 'Pause'}
@@ -563,6 +590,7 @@ export default function DraftScreen(props: Props) {
             replacement={replacement}
             roomOdds={room?.survival ?? null}
             recommended={recommended}
+            yourTurn={yourTurn}
           />
         </div>
 

@@ -705,15 +705,20 @@ export default function App() {
    * it names may still be minutes from existing. Holding it and asking is what
    * the tick is for. Every other league is read now or not at all, because
    * every other league is one the service can already answer for.
+   *
+   * Only the assistant holds. A Yahoo mock is a public room of real people and
+   * the assistant is what follows one, so waiting for a room is waiting for
+   * something this app's own mock draft will never open. There the tick means
+   * only the roster shape, and an ID is read now or refused now.
    */
   const addLeague = useCallback((platform: Platform, id: string) => {
-    if (platform === 'yahoo' && yahooMock) {
+    if (platform === 'yahoo' && yahooMock && mode === 'assistant') {
       setLeagueError(null);
       setWaitingRoom(id);
       return;
     }
     void pullLeague(platform, id);
-  }, [yahooMock, pullLeague]);
+  }, [yahooMock, mode, pullLeague]);
 
   /**
    * Ask a held Yahoo mock whether its room is there yet, and read it when it is.
@@ -726,6 +731,10 @@ export default function App() {
    */
   useEffect(() => {
     if (!waitingRoom || !yahooMock || screen !== 'setup') return undefined;
+    // Switching to the mock draft mid-wait stops it rather than ends it. What
+    // is being waited for is a room only the assistant opens, and switching
+    // back is the one action that says you still want it.
+    if (mode !== 'assistant') return undefined;
     let alive = true;
 
     const ask = async () => {
@@ -738,7 +747,7 @@ export default function App() {
     void ask();
     const timer = setInterval(() => { void ask(); }, ROOM_WAIT_MS);
     return () => { alive = false; clearInterval(timer); };
-  }, [waitingRoom, yahooMock, screen, pullLeague]);
+  }, [waitingRoom, yahooMock, mode, screen, pullLeague]);
 
   /**
    * Open the board the moment a Yahoo mock's room can be read.

@@ -581,6 +581,32 @@ input[type='range']::-moz-range-thumb {
   text-transform: uppercase;
 }
 
+/*
+ * YOUR PICK
+ *
+ * The gold wash behind the clock and the gold seat name both say the turn is
+ * yours, and both say it in colour, to somebody already reading the clock. This
+ * says it in words, which is what survives a glance from across a desk.
+ *
+ * It spends the fill rather than the tint, because this is the one moment the
+ * screen is asking for something rather than reporting it. The pair is the
+ * primary button's, so it is already held to the contrast floor in both themes,
+ * and gold still means one thing.
+ */
+.clock-yours {
+  flex: none;
+  margin: 0;
+  padding: 4px 8px;
+  font-family: var(--narrow);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--on-gold);
+  background: var(--gold);
+  border-radius: var(--r);
+}
+
 .clock-read { display: flex; align-items: center; gap: 18px; flex: 1; min-width: 0; }
 .clock-next { margin-left: auto; text-align: right; }
 .clock-acts { display: flex; gap: 6px; }
@@ -1711,6 +1737,9 @@ input[type='range']::-moz-range-thumb {
   .clock-read p { margin: 0; }
   .clock-pick, .clock-nextpick { font-size: 21px; }
   .clock-who { font-size: 13px; }
+  /* The row is three readings wide already, so the badge pays for its words in
+     tracking and padding rather than in the space they need. */
+  .clock-yours { font-size: 10px; padding: 3px 5px; letter-spacing: 0.06em; }
   .clock-team { min-width: 0; }
   .clock-team .clock-who {
     overflow: hidden;

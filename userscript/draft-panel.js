@@ -142,18 +142,25 @@
    * Shown only when the board sent one. It says nothing when the top two are
    * close enough that naming one would invent a decision rather than report it,
    * and an empty box would read as a failure rather than as that answer.
+   *
+   * On the clock it is a verdict and off it a heads-up, priced against your own
+   * next turn either way. The app draws the same two wordings on the same
+   * reading, so the panel and the tab it was opened from cannot disagree.
    */
-  function take(p) {
+  function take(p, onClock) {
     const box = el('div', 'take');
     const head = el('div', 'take-head');
     head.append(
-      el('span', 'take-tag', 'Take'),
+      el('span', 'take-tag', onClock ? 'Take' : 'Target'),
       el('span', 'take-name', p.name || ''),
       el('span', 'take-pos', p.position || ''),
     );
 
     const why = '+' + Math.round(p.worth) + ' over a replacement ' + (p.position || '')
-      + (p.urgency >= 1 ? ', and ' + Math.round(p.urgency) + ' of that goes if you wait' : '')
+      + (p.urgency >= 1
+        ? ', and ' + Math.round(p.urgency) + ' of that goes '
+          + (onClock ? 'if you wait' : 'before your turn')
+        : '')
       + (p.fillsStarter
         ? '. You still have to start one.'
         : '. Your lineup is full, so this is on worth alone.');
@@ -212,7 +219,7 @@
     wrap.append(head);
 
     if (advice && advice.lean) wrap.append(el('p', 'lean', advice.lean));
-    if (advice && advice.pick) wrap.append(take(advice.pick));
+    if (advice && advice.pick) wrap.append(take(advice.pick, !!advice.onClock));
 
     const rows = (advice && advice.rows) || [];
     if (!rows.length) {

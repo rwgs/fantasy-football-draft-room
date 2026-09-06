@@ -244,7 +244,7 @@ export default function SetupScreen(props: Props) {
                 onClick={() => onMode('mock')}
               >
                 Mock draft
-                <span>a simulated room</span>
+                <span>a room this app simulates</span>
               </button>
               <button
                 type="button"
@@ -252,7 +252,7 @@ export default function SetupScreen(props: Props) {
                 onClick={() => onMode('assistant')}
               >
                 Draft assistant
-                <span>follows your real draft</span>
+                <span>any real room, Yahoo mocks too</span>
               </button>
             </div>
           </div>
@@ -321,11 +321,14 @@ export default function SetupScreen(props: Props) {
           </div>
         )}
 
+        {/* Named for one platform while it listed two, and the note promised
+            what only one of them publishes: Yahoo keeps neither the roster nor
+            the scoring in its draft room. */}
         <Section
-          title="Your Sleeper leagues"
+          title="Your leagues"
           summary={states.leagues}
-          note="One click sets the teams, rounds, roster and scoring. Settings are kept, not
-            re-read."
+          note="One click sets what the platform publishes: teams, rounds, and from Sleeper
+            the roster and scoring too. Settings are kept, not re-read."
           wide
           collapsible={narrow}
           startOpen
@@ -346,7 +349,11 @@ export default function SetupScreen(props: Props) {
             onMyUser={onMyUser}
             yahooMock={yahooMock}
             onYahooMock={onYahooMock}
-            waitingRoom={waitingRoom}
+            assistant={assistant}
+            // The wait belongs to the mode that can end it. Only the assistant
+            // opens a board off a room, so a mock draft neither runs the wait
+            // nor says it is waiting.
+            waitingRoom={assistant ? waitingRoom : null}
           />
         </Section>
 

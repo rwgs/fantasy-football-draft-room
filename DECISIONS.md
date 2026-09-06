@@ -620,6 +620,9 @@ It returns nothing when the top two are within three points of each other, when
 the pick is not yours, or when every position that could be named is filled to
 its cap.
 
+Status: the "when the pick is not yours" clause is amended by the 2026-09-05
+entry below on saying the same thing in both modes. The rest stands.
+
 ### Why
 
 Three readings decide a pick and the app had them in three places: worth in the
@@ -670,3 +673,131 @@ decide, which is the right answer once the lineup is full.
   in three places — the payload, that whitelist, and the panel itself — and the
   round trip is checked in the engine self-test, because a field that does not
   survive it draws an empty box rather than failing.
+
+## 2026-09-05 Both modes read the same, and the recommendation is worded for the clock
+
+### Decision
+
+The draft screen offers "take best available" on your own turn in either mode,
+not only in a mock, and the pool names a pick whether or not the clock is on
+you. Off the clock the flag is tagged `Target` rather than `Take` and says what
+goes "before your turn" rather than "if you wait". A gold `Your pick` badge sits
+in the clock strip on your own turn, in both modes, and the assistant's clock
+reads "On the clock" for your own pick rather than "Recording for".
+
+### Why
+
+The recommendation was gated on `canPick`, which is
+`yourTurn || (assistant && manual)`. That was the wrong test in both directions
+at once. Entering a room's picks by hand makes every seat pickable, so the pool
+named a pick for you while you transcribed somebody else's — advice that was
+always up and therefore read as decoration. Following a feed, it named none at
+all except during your own turn, which in a real draft is a minute in an hour.
+The one mode that simulates nothing, and so has the most use for a read, was the
+one that showed it least.
+
+Off the clock the number was never about the seat picking. `pricedPositions` is
+measured against `oddsTarget`, which out of turn is your own next turn. So the
+arithmetic was already answering "who to target", and only the word `Take` was
+wrong. Fixing the word is cheaper than withholding the reading.
+
+The badge exists because the two things that said whose turn it was — the gold
+wash and the gold seat name — both said it in colour, to somebody already
+reading the clock. On a phone the row's labels are stripped out entirely.
+
+### Rejected alternatives
+
+- **Gating the take button on `canPick` for symmetry with the pool rows.**
+  Rejected: rows are clickable off the clock so you can record what the room
+  did, and "the best available to you" is not what somebody else took. The
+  button follows `yourTurn` in both modes instead.
+- **Showing the recommendation only on your own turn, in both modes.**
+  Rejected: it makes the assistant's most useful screen blank for the eleventh
+  of a draft that is not your turn, and the reading is already priced against
+  your next pick.
+- **Converging the rest of the two screens.** Rejected: the in-draft ADP picker
+  and the room forecast are deliberately assistant-only, and both have reasons
+  recorded above. This app's own mock draft runs its simulation off the ADP and
+  so cannot re-price mid-draft, and forecasting a room whose bias you dialled
+  yourself double-counts it. Neither reason reaches a Yahoo mock, which is a
+  public room of real people and is followed by the assistant like any other.
+
+### Consequences
+
+- The badge spends the primary button's `--gold` / `--on-gold` pair, already
+  held to the contrast floor in both themes, so gold still means one thing.
+- The panel over a Yahoo draft room takes the same two wordings from the same
+  payload, which already carried `onClock`. The panel and the tab that fed it
+  cannot disagree.
+- `recommendPick` is unchanged and its self-test coverage still holds. What
+  moved is the caller's gate, now the draft being live rather than `canPick`.
+
+## 2026-09-06 A Yahoo mock and this app's mock draft share a word and nothing else
+
+### Decision
+
+The word "mock" names two different things and the UI says which it means. A
+**Yahoo mock draft** is a public Yahoo room of real people drafting a team that
+is not for their league; it is followed with the **draft assistant**, like any
+other real room. **This app's mock draft** simulates a room. The mode switch,
+the Yahoo tab and the mock tick all name the distinction where it can be acted
+on.
+
+Behaviour follows the naming. Ticking "This is a Yahoo mock draft" holds the
+league number and waits for a draft room **only in the assistant**. In the mock
+draft it sets Yahoo's roster shape and nothing else, and a pasted number is read
+now or refused now. The wait pauses rather than ends when the mode is switched
+away from the assistant, because switching back is the one action that says you
+still want it.
+
+The Yahoo tab keeps its ID field in the mock draft, with a note saying what that
+mode can and cannot do with a number.
+
+### Why
+
+The tick armed a wait with no mode check while the board only ever opened for
+the assistant, so in the mock draft the banner said "the board opens by itself
+once your Yahoo draft room is up" about a board that never would. The checkbox
+one paragraph above already said "**in the draft assistant** it opens by
+itself", so the panel contradicted itself on screen.
+
+Hiding the Yahoo ID in the mock draft was tempting, because a fresh Yahoo number
+cannot be read without a live room in either mode: `importLeague` refuses when
+nothing has been posted. But a league already read is applied from storage
+without touching the service, so a Yahoo league can be reloaded to rehearse its
+shape as a simulation. Hiding the field would have taken the one Yahoo path that
+does belong in the mock draft.
+
+### Rejected alternatives
+
+- **Hiding the Yahoo tab or its ID field in the mock draft.** Rejected: it
+  breaks reloading a saved Yahoo league to rehearse it, and the field's own hint
+  already says a Yahoo league needs the bridge running in your draft room.
+- **Clearing the held league number when the mode is switched.** Rejected:
+  switching modes is not a decision to stop waiting. Untick is, and it already
+  is. Pausing leaves the wait recoverable by switching back.
+- **Leaving the behaviour and fixing only the banner's words.** Rejected: it
+  would have to explain that the mock draft waits for a room in order to do
+  nothing with it. The wait had no purpose there to word.
+
+### Consequences
+
+- A pasted Yahoo number in the mock draft now takes the same path an unticked
+  one always took, refusal included. The browser logs the refusal's 400 exactly
+  as it already did for any league the service cannot read.
+- `npm run shots` still covers the assistant's wait end to end, including the
+  board opening once a room is posted, so the path that kept the behaviour keeps
+  its guard.
+- The league section is titled "Your leagues" rather than "Your Sleeper
+  leagues", and its note no longer promises the roster and scoring that only
+  Sleeper publishes.
+- `PLATFORM_LABEL` in `client/src/engine/types.ts` is the one place that names a
+  platform on screen, next to the `Platform` type it labels. Two panels name one
+  and they had drifted: "Follow a real draft" said Sleeper throughout while
+  being shown for a Yahoo league. A league saved before the field existed reads
+  as Sleeper, the same default `App` applies when it loads one.
+- Where a sentence is about how a platform works rather than what it is called,
+  it stays a conditional rather than a substitution. "It appears here once
+  Sleeper sets it" is not made true by swapping the noun: Yahoo puts the draft
+  order in the room, where only the bridge can read it.
+

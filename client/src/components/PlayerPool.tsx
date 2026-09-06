@@ -57,6 +57,8 @@ interface Props {
    * you already chose is the better guide.
    */
   recommended: Recommendation | null;
+  /** Whether the pick being made is your own. Decides how the flag is worded. */
+  yourTurn: boolean;
 }
 
 /**
@@ -115,7 +117,7 @@ function sourceTitle(p: Player): string {
 export default function PlayerPool(props: Props) {
   const {
     players, myRank, notes, currentPick, myNextPick, teams, onDraft, canDraft, queue, onQueue,
-    replacement, roomOdds, recommended,
+    replacement, roomOdds, recommended, yourTurn,
   } = props;
 
   const [search, setSearch] = useState('');
@@ -392,12 +394,19 @@ export default function PlayerPool(props: Props) {
                 <small>WORTH</small>
               </span>
 
+              {/*
+                * On the clock this is a verdict, and off it a heads-up: the
+                * same arithmetic, but priced against your next turn rather
+                * than the one after it. Naming it "take" while somebody else
+                * picks would ask for a pick you do not have.
+                */}
               {pick && (
                 <p className="pick-flag">
-                  <span className="pick-flag-tag">Take</span>
+                  <span className="pick-flag-tag">{yourTurn ? 'Take' : 'Target'}</span>
                   {'+' + Math.round(pick.worth) + ' over a replacement ' + player.position}
                   {pick.urgency >= 1
-                    ? ', and ' + Math.round(pick.urgency) + ' of that goes if you wait'
+                    ? ', and ' + Math.round(pick.urgency) + ' of that goes '
+                      + (yourTurn ? 'if you wait' : 'before your turn')
                     : ''}
                   {pick.fillsStarter
                     ? '. You still have to start one.'
