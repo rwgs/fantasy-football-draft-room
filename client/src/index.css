@@ -873,6 +873,10 @@ input[type='range']::-moz-range-thumb {
 
 .survival-fill.is-thin { background: var(--qb); }
 
+/* Nothing but the word, so it sits where the bar would have started rather
+   than hanging off the right of a track that is not there. */
+.survival.is-gone { grid-template-columns: auto 1fr; }
+
 .survival-odds {
   font-family: var(--mono);
   font-size: 10px;

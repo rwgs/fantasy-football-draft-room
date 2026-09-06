@@ -12,6 +12,32 @@ fixed.
 
 ### Fixed
 
+**The survival bar is drawn where it says something, and says the word where it
+does not.** It was on every row and moved on almost none of them. Measured on a
+real board: of 620 players 593 read exactly 100 per cent and 7 read 0, leaving
+20 anywhere in between; several rounds in it was 547, 2 and 34. The model is
+why — a player goes at his ADP with a spread of about a ninth of it, so "might
+or might not last" is a band roughly twenty five players wide and everyone
+outside it is certain either way. Because the pool is sorted by ADP or by worth,
+the top of the screen was always the certainly-gone end, and it drew a two per
+cent stub that looked like a broken control rather than a confident zero.
+Scrolling past your own next pick only reached hundreds of identical full ones.
+
+The bar now appears only where the answer is in doubt. A player who will not
+reach your turn says "gone by 5.06 #54" instead, and one who certainly will says
+nothing and gives the row back its height. As a side effect the bars that remain
+carry their position's colour again: the rule that paints a bar under 25 per
+cent as a warning used to catch every row at the top of the list at once, so
+they were all the same red.
+
+**The consensus column says which feeds it means.** It was labelled CONS, which
+named neither the sources nor the arithmetic. It is now ALL 3, because that is
+what distinguishes it from ADP: it is always the mean of Sleeper, Fantasy
+Football Calculator and ESPN, whichever of them you chose to price the board
+with. The key also now says the thing that was silently true — choose Averaged
+with all three feeds and ALL 3 is the same arithmetic as ADP, so the two columns
+show the same number and only one of them is telling you anything.
+
 **"Refresh ADP" forces one fetch, not every fetch for the rest of the session.**
 The token behind the button only ever counted up and was tested against zero, so
 one press at setup left every later board fetch forcing its way past the cache
@@ -91,6 +117,13 @@ clock strip on your own turn in both modes. The assistant's clock also read
 somebody else's; it reads "On the clock" there now.
 
 ### Added
+
+**A rookie is marked, and ADP says how firm it is.** A player with no NFL season
+behind his projection carries an R next to his team and bye. Hovering ADP now
+says the spread in picks and how many real drafts measured it, or that no feed
+measures him and the spread is estimated from his ADP — which is what the bar
+under the row is worked out from, and the difference between 1,806 drafts
+agreeing to within half a pick and forty agreeing to within twelve.
 
 **The order the player pool opens on is a setting.** It opened on your own
 ranking where you had a file loaded and on ADP where you did not, and "Worth"

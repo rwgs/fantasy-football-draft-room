@@ -15,6 +15,29 @@ import { POOL_SORTS, POSITIONS } from '../engine/types';
  */
 const SPLIT_WORTH_MARKING = 12;
 
+/**
+ * WHERE THE SURVIVAL BAR IS WORTH DRAWING AT ALL.
+ *
+ * Measured on a real board: of 620 players, 593 read exactly 100 per cent and 7
+ * read 0, leaving 20 anywhere in between. Several rounds in it was 547, 2 and
+ * 34. The model is why — a player goes at his ADP with a spread of about a
+ * ninth of it, so "might or might not last" is a band about twenty five players
+ * wide and everyone outside it is certain either way.
+ *
+ * Drawn on every row, that is a bar which never moves. The list is sorted by
+ * ADP or by worth, so the top of the screen is always the certainly-gone end
+ * and scrolling past your own next pick only reaches hundreds of identical full
+ * ones. It reads as a broken control rather than as a confident answer.
+ *
+ * So it is drawn where it says something and replaced by the word where it does
+ * not, which is what this file already does with FELL and what the value panel
+ * does when every position holds up. Certainty needs no bar: "gone" is the
+ * whole reading, and "he will be there" is not worth a row of height paid six
+ * hundred times.
+ */
+const CERTAINLY_GONE = 0.03;
+const CERTAINLY_THERE = 0.97;
+
 interface Props {
   players: Player[];
   myRank: Map<string, number> | null;
@@ -267,16 +290,19 @@ export default function PlayerPool(props: Props) {
               before it and you are reaching; find him well after it and the room has
               let a bargain slide.
             </dd>
-            <dt>CONS</dt>
+            <dt>ALL 3</dt>
             <dd>
-              The mean of Sleeper, Fantasy Football Calculator and ESPN, whatever you
-              chose to price the board with. It is a second opinion on ADP rather than a
-              restatement of it: where the two are far apart, the feeds you switched off
-              disagree with the ones you left on. Hover it to see what each said.
+              The mean of all three feeds — Sleeper, Fantasy Football Calculator and
+              ESPN — whichever of them you chose to price the board with. It is a second
+              opinion on ADP rather than a restatement of it: where the two are far
+              apart, the feeds you switched off disagree with the ones you left on.
+              Choose Averaged with all three feeds and it is the same arithmetic as ADP,
+              so the two columns read the same number and only one of them is telling
+              you anything. Hover it to see what each feed said.
             </dd>
             <dt>SPLIT</dt>
             <dd>
-              Replaces CONS when those three are more than about a round apart about him.
+              Replaces ALL 3 when those three are more than about a round apart about him.
               A warning rather than a verdict: one of them is wrong, and it is worth
               knowing which before you spend a pick finding out.
             </dd>
@@ -298,6 +324,17 @@ export default function PlayerPool(props: Props) {
               this actual room once enough of it has been drafted, and off ADP before
               that. A low bar only matters if WORTH is high — the panel beside the pool
               is what tells you whether waiting actually costs anything.
+            </dd>
+            <dd>
+              It appears only where the answer is in doubt, which is about twenty five
+              players at any moment. Everyone above that band is certain to be there and
+              says nothing; everyone below reads "gone by" your pick instead, because a
+              bar pinned empty is not a reading, it is a bar that looks broken.
+            </dd>
+            <dt>R</dt>
+            <dd>
+              A rookie: no NFL season behind the projection. Read it as a wider spread
+              than the number suggests, in both directions.
             </dd>
           </dl>
         </details>
@@ -360,12 +397,32 @@ export default function PlayerPool(props: Props) {
                       {' · FELL ' + Math.round(fell)}
                     </span>
                   )}
+                  {player.yearsExp === 0 && (
+                    <span title="A rookie. No NFL season behind the projection.">
+                      {' · R'}
+                    </span>
+                  )}
                   {player.injuryStatus ? ' · ' : ''}
                   {player.injuryStatus && <span className="injury">{player.injuryStatus}</span>}
                 </span>
               </button>
 
-              <span className="player-num is-quiet">
+              {/*
+                * The spread and the sample belong on ADP rather than anywhere
+                * else, because they are what the bar under this row is worked
+                * out from. A number with no sense of its own width reads as
+                * more certain than it is: 1,806 drafts agreeing to within half
+                * a pick is a fact, and 40 agreeing to within twelve is not the
+                * same kind of claim.
+                */}
+              <span
+                className="player-num is-quiet"
+                title={'Spread ' + (player.stdevMeasured ? '±' : 'about ±')
+                  + player.adpStdev.toFixed(1) + ' picks'
+                  + (player.stdevMeasured
+                    ? ', measured across ' + player.timesDrafted.toLocaleString() + ' drafts.'
+                    : '. No feed measures him, so this is estimated from his ADP.')}
+              >
                 <b>{player.adp.toFixed(1)}</b>
                 <small>ADP</small>
               </span>
@@ -375,7 +432,7 @@ export default function PlayerPool(props: Props) {
                 title={sourceTitle(player)}
               >
                 <b>{player.consensus != null ? player.consensus.toFixed(1) : '—'}</b>
-                <small>{split ? 'SPLIT ' + Math.round(player.consensusSpread!) : 'CONS'}</small>
+                <small>{split ? 'SPLIT ' + Math.round(player.consensusSpread!) : 'ALL 3'}</small>
               </span>
 
               {/*
@@ -422,16 +479,27 @@ export default function PlayerPool(props: Props) {
 
               {note && <PlayerNote text={note} />}
 
-              {myNextPick && (
+              {myNextPick && odds > CERTAINLY_GONE && odds < CERTAINLY_THERE && (
                 <span className="survival">
                   <span className="survival-track">
                     <span
                       className={'survival-fill' + (pct < 25 ? ' is-thin' : '')}
-                      style={{ width: Math.max(2, pct) + '%' }}
+                      style={{ width: pct + '%' }}
                     />
                   </span>
                   <span className="survival-odds">
                     {pct + '% to ' + pickLabelWithOverall(myNextPick, teams)}
+                    {roomOdds?.has(player.id) ? ' · room' : ''}
+                  </span>
+                </span>
+              )}
+
+              {/* No bar, because there is no doubt to draw. The one worth
+                  saying is this one: he is not reaching your turn. */}
+              {myNextPick && odds <= CERTAINLY_GONE && (
+                <span className="survival is-gone">
+                  <span className="survival-odds">
+                    {'gone by ' + pickLabelWithOverall(myNextPick, teams)}
                     {roomOdds?.has(player.id) ? ' · room' : ''}
                   </span>
                 </span>

@@ -139,6 +139,14 @@ export interface Player {
   ffcAdp: number | null;
   sleeperAdp: number | null;
   injuryStatus: string | null;
+  /**
+   * NFL seasons behind him. Zero is a rookie, and null is a player Sleeper
+   * holds no history for at all.
+   *
+   * Not carried as a projection input — it is context for one. A first-year
+   * player's points have nothing under them to have been measured against.
+   */
+  yearsExp?: number | null;
   timesDrafted: number;
   sources: string[];
   /** ESPN's published draft rank, over every player ESPN ranks. */
