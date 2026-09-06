@@ -1,6 +1,6 @@
 import type {
   Board, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState, NoteSet,
-  Overrides, Platform, RankingSet, RoomAdvice, RoomState,
+  Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState,
 } from './engine/types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -198,4 +198,35 @@ export async function postRoomAdvice(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(advice),
   });
+}
+
+/**
+ * Ask for a queue to be set in the draft room, or for none to be.
+ *
+ * The only thing this app asks a league platform to change, and it goes the
+ * same way the advice does: posted here, held by the service, collected by the
+ * bridge in the tab that can actually reach Yahoo. Players are named rather
+ * than numbered because the service holds the pool that turns a name into
+ * Yahoo's own id, and it is the one place allowed to decide that two records
+ * mean the same person.
+ *
+ * `null` says the app no longer wants a queue written. It does not empty the
+ * one in the room: what is in there is the user's, and stopping is not deleting.
+ */
+export async function postRoomQueue(
+  platform: Platform,
+  leagueId: string,
+  queue: { name: string; position: string; team: string }[] | null,
+  priority: QueuePriority,
+): Promise<void> {
+  const res = await fetch(on(platform, '/room/' + encodeURIComponent(leagueId) + '/queue'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ queue, priority }),
+  });
+  // Unlike the advice above, a refusal here has to be raised. The caller only
+  // posts when the queue has changed, so a refusal it never hears about is a
+  // queue that stays unwritten until the next change — and the ordinary refusal
+  // is "no room has been posted yet", which is a state that ends on its own.
+  if (!res.ok) return fail(res);
 }

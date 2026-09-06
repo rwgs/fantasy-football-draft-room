@@ -31,6 +31,16 @@ const MAX_ADVICE_ROWS = 5;
 const MAX_ADVICE_ALTS = 5;
 /** Characters kept from one field of it. Everything here is a name or a count. */
 const MAX_ADVICE_TEXT = 120;
+/**
+ * How deep a queue the app will ever write.
+ *
+ * A queue is insurance against a clock running out, and fifteen is more picks
+ * than anyone is away for. It is also a bound on something a request can name,
+ * which is the reason it is a constant rather than a judgement.
+ */
+const MAX_QUEUE = 15;
+/** Players the app may ask for. Larger than the above, which does the merging. */
+const MAX_WANTED = 40;
 
 /** leagueId to room. Insertion order is eviction order; see `touch`. */
 const rooms = new Map();
@@ -73,6 +83,18 @@ function blank(leagueId) {
      * because the draft tab and the app tab are different origins.
      */
     advice: null,
+    /**
+     * The queue Yahoo says it holds, from the last `Q|` frame.
+     *
+     * Null until one has arrived, which is not the same as empty: null is a
+     * room that has never said, and an empty array is one that has said it
+     * holds nothing. Nothing can ask — a `Q|` only ever answers a change — so
+     * null persists until the queue is written or edited. `queuePlan` treats it
+     * as empty and reports that it did.
+     */
+    queue: null,
+    /** What the app wants queued, already resolved to Yahoo ids. */
+    wanted: null,
     updatedAt: 0,
   };
 }
@@ -154,6 +176,9 @@ export function applyPost(leagueId, body) {
     if (decoded.kind === 'settings') room.settings = decoded;
     if (decoded.kind === 'order') room.order = decoded.order;
     if (decoded.kind === 'pick') room.picks.set(decoded.pick.overall, decoded.pick);
+    // The room's own account of the queue, and the only one there is. It
+    // replaces rather than merges, because that is what the frame means.
+    if (decoded.kind === 'queue') room.queue = decoded.queue;
     if (decoded.kind === 'picks') {
       for (const pick of decoded.picks) {
         // A replayed pick carries no roster slot. Keeping the live one where we
@@ -167,6 +192,8 @@ export function applyPost(leagueId, body) {
   room.updatedAt = Date.now();
   touch(id, room);
 
+  const plan = queuePlan(id);
+
   return {
     ok: true,
     // The bridge resends the pool when this is true, which is what makes a
@@ -177,6 +204,16 @@ export function applyPost(leagueId, body) {
     pool: room.pool.size,
     seats: room.seats.size,
     orderKnown: !!room.order,
+    // The queue to write, in the reply to the post that carried the frames. It
+    // rides here rather than on a poll of its own because the bridge is already
+    // talking on this beat, and a second channel to the same tab is a second
+    // thing to go wrong. Null means write nothing, whether that is because the
+    // user has not asked for one or because the room has not said what it holds.
+    queue: plan.write,
+    // A service restarted mid-draft has forgotten the queue, and Yahoo only
+    // reports one when it changes. Saying so lets the bridge send back the last
+    // it saw, exactly as it resends the pool.
+    needQueue: room.queue == null,
   };
 }
 
@@ -243,6 +280,90 @@ export function setAdvice(leagueId, advice) {
 /** What the app last worked out, or null when it has said nothing yet. */
 export function getAdvice(leagueId) {
   return rooms.get(String(leagueId))?.advice || null;
+}
+
+/**
+ * Hold the queue the app wants written, already resolved to Yahoo's own ids.
+ *
+ * The resolution happens in `index.js`, where the pool and `names.js` are, so
+ * nothing here has to know what a player is called. This stores ids and an
+ * order, and `queuePlan` below turns them into the list to send.
+ *
+ * Passing null is how the app says it no longer wants a queue written, which is
+ * what turning the setting off does. It does not clear the queue in Yahoo: what
+ * is already there is the user's, and abandoning it is not the same as deleting
+ * it.
+ */
+export function setWanted(leagueId, wanted) {
+  const room = rooms.get(String(leagueId));
+  if (!room) return false;
+  room.wanted = wanted
+    ? {
+      ids: wanted.ids.slice(0, MAX_WANTED),
+      // Anything but Yahoo's order means the app's, including a malformed one.
+      priority: wanted.priority === 'yahoo' ? 'yahoo' : 'app',
+    }
+    : null;
+  room.updatedAt = Date.now();
+  return true;
+}
+
+/**
+ * The queue to send, or why there is not one.
+ *
+ * Three answers:
+ *
+ *   - `off`, when the app has asked for nothing. The bridge stays a reader.
+ *   - `first`, when the app has asked but the room has never reported a queue.
+ *     What is sent replaces whatever was in it, unseen.
+ *   - `ready`, once a `Q|` has said what the room holds, after which the two
+ *     lists merge and nothing on either side is dropped.
+ *
+ * `first` used to be a refusal, on the reasoning that `S|` replaces the whole
+ * list and a write made in ignorance of it is a deletion. That reasoning was
+ * sound and the conclusion was still wrong. Nothing can read a Yahoo queue —
+ * no frame reports one unprompted, `6|` answers `6|` rather than `Q|`, and no
+ * REST endpoint carries it — so "wait until the room reports" resolves only
+ * when the user goes and queues someone by hand, which is the work they turned
+ * this on to avoid. Worse, an empty queue appears to drop a seat straight into
+ * autodraft, so the refusal held its fire exactly when firing was the point.
+ * See `docs/yahoo-draft-protocol.md` and `DECISIONS.md`.
+ *
+ * What survives of the caution: an empty list is never the answer here, so a
+ * queue is never replaced by nothing. Turning the setting on with nothing
+ * starred writes nothing at all.
+ *
+ * Drafted players are dropped from both sides. Yahoo prunes its own list and
+ * never reports it, so a queue read off `Q|` still names players who are long
+ * gone; sending them back would be asking for a player nobody can have.
+ */
+export function queuePlan(leagueId) {
+  const room = rooms.get(String(leagueId));
+  if (!room || !room.wanted) {
+    return { write: null, queue: room?.queue ?? null, reason: 'off' };
+  }
+
+  const gone = new Set();
+  for (const pick of room.picks.values()) gone.add(pick.playerId);
+
+  const mine = room.wanted.ids;
+  // Null is a room that has never said. Treated as empty to merge against,
+  // which is what makes the write happen; `reason` below keeps the difference
+  // so the app can say which of the two it is doing.
+  const theirs = room.queue || [];
+  const first = room.wanted.priority === 'yahoo' ? theirs : mine;
+  const second = room.wanted.priority === 'yahoo' ? mine : theirs;
+
+  const write = [];
+  const seen = new Set();
+  for (const id of [...first, ...second]) {
+    if (gone.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    write.push(id);
+    if (write.length >= MAX_QUEUE) break;
+  }
+
+  return { write, queue: room.queue, reason: room.queue == null ? 'first' : 'ready' };
 }
 
 /** How many seats the room has, by the most reliable evidence it holds. */

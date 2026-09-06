@@ -527,6 +527,32 @@ app.get('/api/:platform/room/:id/advice', async (req, res) => {
 });
 
 /**
+ * The queue the app wants set in the draft room, which the bridge then sets.
+ *
+ * The only thing this project asks a league platform to change, and it asks
+ * only when the user has turned it on. Nothing is decided here either: the app
+ * says who it wants queued, the platform resolves them to that platform's own
+ * ids, and the bridge in the user's own tab is what actually sends anything.
+ *
+ * Offered on the same terms as the advice above. A platform with nowhere to
+ * write is not asked to pretend it has one.
+ */
+app.post('/api/:platform/room/:id/queue', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.putQueue) {
+    res.status(404).json({ error: 'That platform has no queue this app can write.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.putQueue(target.id, req.body || {}));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
  * Every pick made in a real draft so far, mapped onto this board.
  * Never cached: a draft in progress is stale the moment it is read.
  */

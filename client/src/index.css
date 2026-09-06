@@ -272,6 +272,29 @@ input[type='checkbox'] { accent-color: var(--gold); width: 15px; height: 15px; m
 .adp-picker .chip:disabled:hover { color: var(--chalk-3); border-color: var(--line); }
 .adp-picker .chip[aria-pressed='true']:disabled { opacity: 0.75; }
 
+/* Writing the queue into the real draft room, in the same place and the same
+   shape as the control above it. The only thing on this screen that changes
+   anything outside the browser, so it says what it is doing underneath itself
+   rather than leaving the state to be inferred from the room. */
+.queue-writer {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px var(--pad);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.queue-writer-state { margin: 0; text-transform: none; letter-spacing: 0; }
+
+/* The offer to take the room's queue sits inside the sentence describing it,
+   because it is the answer to that sentence rather than a separate control. */
+.queue-writer-state .btn {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 11px;
+  vertical-align: baseline;
+}
+
 /* Position colour, applied by a data attribute so one rule covers all six. */
 [data-pos='QB'] { --pos: var(--qb); }
 [data-pos='RB'] { --pos: var(--rb); }

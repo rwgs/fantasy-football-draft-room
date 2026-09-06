@@ -61,6 +61,16 @@ Constraints they bring:
   pick that paid for him fills itself when it arrives.
 - The assistant follows a real draft by polling, mirrors every pick, and
   simulates nothing of its own.
+- A Yahoo draft queue is written from the app, when the user turns it on and
+  only then. Off, nothing is sent to Yahoo and the bridge stays the reader it
+  was. On, the queue holds the players the user starred, in their order, and in
+  autodraft it is topped up from the board's own chain so an expired clock takes
+  a player worth having.
+- A queue is never replaced by an empty one. Nothing can read a Yahoo queue
+  before writing it — no frame reports one unprompted and no endpoint carries
+  one — so the first write replaces whatever was there, and the app says so
+  rather than waiting for a report that only a change produces. Every write
+  after it merges, because Yahoo answers the first one by naming the queue.
 
 ### Error, empty and recovery cases
 
@@ -119,6 +129,9 @@ browser cannot call directly, cache them, and join them.
 - No credential, token or secret is committed. Files naming real leagues or
   real people are ignored by git.
 - Nothing the user sets leaves their browser.
+- The only thing ever sent to a league platform is a queue of player IDs, from
+  the user's own tab, on their own session, and only while they have the setting
+  on. The service holds no session and can reach Yahoo with or without one.
 
 ## Performance and compatibility
 
@@ -135,8 +148,11 @@ browser cannot call directly, cache them, and join them.
 ## Non-goals
 
 - No hosted service, no accounts, no database.
-- No write access to any league platform. The tool never makes a pick; it is not
-  an autodrafter.
+- No write access to any league platform beyond a Yahoo draft queue, and none at
+  all unless the user turns it on. The tool does not make a pick: it writes the
+  queue Yahoo itself picks from when a clock expires, which is the user's own
+  feature used on their behalf rather than a pick made for them. Sending Yahoo's
+  pick frame is a separate setting and is not built.
 - No auction drafts. An auction league is read, and warned that a snake is run
   instead.
 - No individual defensive players. The ADP feeds do not rank them.
@@ -167,3 +183,7 @@ browser cannot call directly, cache them, and join them.
 - Whether the upstream project wants Yahoo support at all, now that it needs a
   userscript rather than an API key. Answered by the upstream maintainer. See
   `DECISIONS.md`.
+- Whether Yahoo hands back an existing queue when a tab reconnects. It decides
+  whether the app can ever write a queue it did not build itself, and no capture
+  settles it. Answered in two minutes inside a mock: queue a player, leave, come
+  back in from the lobby, and read the `Q` that arrives on connect.

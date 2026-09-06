@@ -9,6 +9,128 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-06 The first queue write happens without reading the queue
+
+Status: Accepted. Reverses "a queue the app has not read is never overwritten"
+in the entry below, which is thereby superseded on that one point. Everything
+else in it stands, the ban on the pick frame above all.
+
+### Decision
+
+When the app has been asked to write a queue and the room has never reported
+one, it writes anyway, and says that it did. A queue is still never replaced by
+an empty list, so turning the setting on with nothing starred does nothing.
+
+### Why
+
+The rule it replaces was built on a true premise — `S|` carries the whole list,
+so a write made in ignorance of the list deletes the rest of it — and reached a
+conclusion that could not work, because nothing can end the ignorance:
+
+- No frame reports a queue unprompted. `Q|` only ever answers a change.
+- `6|<league>|<team>`, the one candidate for a request, is answered by `6|<team>`
+  and not by a queue.
+- No REST endpoint carries one. The captures hold `draftstatus`, `players`,
+  `settings` and `teams`, and nothing else.
+
+So "wait until the room reports" resolved only when the user went and queued
+somebody by hand — which is the work the setting exists to remove. Watched
+live on 2026-09-06 in league `10888301`: order read, seat read, 75 picks
+mirrored perfectly, and the queue never written once, because the room never
+had cause to mention it.
+
+What turned a wrong default into a harmful one is that an empty Yahoo queue
+appears to put a seat straight into autodraft. If that holds, the queue is not
+insurance against wandering off; it is what stands between the user and Yahoo's
+algorithm from the first pick. A rule that withholds the write until the user
+acts withholds it for the whole draft, and does so most firmly in the rooms
+where it was most wanted.
+
+### What it costs, and what still holds
+
+A queue built before the bridge attached is replaced, once. That is a real cost
+and it is why the app now states it rather than discovering it: the control says
+the write replaces whatever is there, and the panel over the room says the same
+after the fact.
+
+Everything after that first write is unchanged. Yahoo answers `S|` with `Q|`, so
+from then on the room's queue is known, the two lists merge, and neither side
+loses a player.
+
+### Rejected
+
+**Provoking a `Q|`.** Would have been the clean answer and there is nothing to
+send: see the three findings above.
+
+**Asking the user at the moment of the first write.** A prompt over a live draft
+room, on a pick clock, to approve something they turned on deliberately a minute
+earlier. The setting is the consent; the sentence next to it is the disclosure.
+
+## 2026-09-06 The bridge writes the queue, and nothing else
+
+Status: Accepted. Widens `The bridge also shows` below, which held that nothing
+is ever sent to Yahoo, and narrows the `SPEC.md` non-goal that forbade write
+access outright.
+
+### Decision
+
+The app can write the user's Yahoo draft queue, behind a setting that is off
+until they turn it on. It writes nothing else. The pick frame Yahoo's own client
+sends is decoded, documented and deliberately not sent.
+
+The split of work is the one already in place. The client decides who should be
+queued, because that is where the engine is. The service resolves those players
+to Yahoo's own IDs, because it holds the pool and `names.js` already does that
+join. The bridge sends the frame, because it is the only thing on Yahoo's
+origin. Nothing new was invented to carry it: the advice pigeonhole runs in
+exactly this direction already.
+
+### Why
+
+Every argument that justified reading applies to writing. Yahoo answers only the
+tab the user is sitting in, and that tab is the only place a queue can be set.
+The board already knows who is worth taking; making the user retype that into
+Yahoo's own list, under a pick clock, is the friction the tool exists to remove.
+
+The queue rather than the pick frame, because they differ in what a bug costs. A
+wrong queue is a wrong player taken when a clock expires, which is the same
+thing Yahoo's own autopick does badly and the user has already accepted by
+leaving the room. A wrong pick frame is a pick taken instantly, out of turn,
+that nothing can undo. The first is worth the reach; the second needs a reason
+better than convenience, and does not have one yet.
+
+### What it must never cost
+
+The rule the bridge already held for drawing now holds for writing:
+
+- **A queue the app has not read is never overwritten.** `S|` carries the whole
+  list, so there is no additive write and a stale idea of the queue deletes
+  whatever it has not seen. The bridge writes only after a `Q|` has told it what
+  Yahoo holds, and says so on the panel until then.
+- **No pick frame, ever.** Not behind a flag, not in a branch. The one place
+  that formats an outbound frame formats `S|` and nothing else.
+- **Off by default,** and off is the state where the bridge is exactly the
+  reader it was before this.
+- **Every write is checked.** `Q|` echoes what Yahoo now holds, so a write that
+  did not land is visible rather than assumed.
+
+### Rejected
+
+**Sending the pick frame now**, behind its own setting. Not rejected on the
+merits — it is wanted, and `docs/yahoo-draft-protocol.md` now records the frame
+that would do it. Rejected as one change: it turns the tool into something that
+acts in a live draft without a human, and that deserves its own pass with its
+own testing rather than riding in on the queue's.
+
+**Merging against an unread queue.** The obvious reading of "never delete what
+Yahoo holds" is to union the app's list with Yahoo's. That only works if Yahoo
+tells us what it holds, and no capture shows it doing so on connect. Unioning
+against an assumed-empty list is a silent delete wearing a merge's clothes.
+
+**Resolving names in the bridge.** Rejected for the reason it was rejected for
+picks: it puts fragile code where no test can reach it. The service already
+holds the pool and the join.
+
 ## 2026-09-05 The lean is measured per round, not per draft
 
 Status: Accepted. Reverses the depth paragraph of the entry below, which left

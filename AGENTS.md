@@ -48,7 +48,9 @@ same player.
 - `userscript/` — the Yahoo draft bridge, which runs in the user's own browser
   because Yahoo answers a session cookie the service must never hold. It is
   installed by hand into a userscript manager, not built or served from here.
-  Sleeper needs nothing like it.
+  Sleeper needs nothing like it. The one thing this project sends to a league
+  platform leaves from here: a draft queue, behind a setting that is off, and
+  never a pick. See `DECISIONS.md` before widening that.
 
 Nothing is generated or built into the tree. `client/dist` is a build output
 and `server/data/cache` is a cache; neither is edited by hand.
@@ -110,6 +112,7 @@ npm run typecheck        # tsc against both the app and the test config
 npm --prefix client run lint    # oxlint
 npm run engine:test      # the engine self-test. See below: needs the service up.
 npm run server:test      # node --test, for service code no endpoint can show
+npm run bridge:test      # runs the userscript against a fake room. Needs nothing
 npm run shots            # photograph the app in a real browser. Needs the client up
 npm run build            # tsc -b, then the Vite production build
 ```
@@ -119,6 +122,18 @@ half on purpose: anything reachable through an endpoint belongs in the engine
 self-test with the rest, because that is where a check meets the code the way a
 caller does. What lands here is what a caller cannot see, such as two requests
 racing for one cold cache key. It talks to nothing and needs no service running.
+
+`npm run bridge:test` loads `userscript/yahoo-draft-bridge.user.js` for real and
+runs it against a fake `WebSocket`, a fake `fetch` and a fake room URL, so the
+frame it puts on the wire is the frame the assertions read. It exists because
+the userscript was the one part of this project that no check touched and a live
+draft was the only thing that had ever exercised it. It is slow for its size —
+each case waits out the bridge's own idle beat — and it forces its own exit,
+because a bridge that stopped rescheduling itself would be the bug.
+
+What it cannot see is the browser: the userscript manager, whether the installed
+copy is the current one, and Chrome's loopback permission. Those still need a
+mock draft, and the version the bridge logs on load is how to tell.
 
 `npm run engine:test` fetches a real board from `http://localhost:5178`, so the
 data service has to be running or every check fails at the first fetch. Bring

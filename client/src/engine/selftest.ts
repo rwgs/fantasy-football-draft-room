@@ -1933,6 +1933,7 @@ async function main() {
   }
 
   await yahooRoom();
+  await yahooQueue();
 
   console.log('');
   if (failures) {
@@ -2322,6 +2323,177 @@ async function yahooRoom() {
       sent.picks === new Set(picks.map((f) => f.split('|')[1])).size,
       sent.picks + ' of ' + picks.length);
   }
+}
+
+/**
+ * Writing a queue back into the draft room.
+ *
+ * The only thing this project asks a league platform to change, so much of what
+ * is checked here is what it will not do. The line that matters is between the
+ * first write and the rest: nothing can read a Yahoo queue, so the first one
+ * replaces a list nobody has seen, and every one after it merges. What is never
+ * written is an empty queue, which is the one way this could still delete
+ * something the user wanted.
+ *
+ * Its own league, because the room above has drafted every player in its pool
+ * and a queue of players who are all gone would test the pruning and nothing
+ * else.
+ */
+async function yahooQueue() {
+  console.log('\nWriting a Yahoo draft queue');
+
+  const LEAGUE = String(Date.now() + 1).slice(-9);
+  const boardQuery = 'scoring=half-ppr&teams=12';
+  const board = await (await fetch(API + '/api/board?' + boardQuery)).json();
+
+  // Six players the room knows about, and one pick, so most of them are still
+  // there to be queued. Ids are Yahoo's own numbering, invented here.
+  const squad = board.players.slice(0, 6) as {
+    name: string; position: string; team: string;
+  }[];
+  const pool = squad.map((p, i) => {
+    const [fname, ...rest] = p.name.split(' ');
+    return {
+      id: String(8001 + i),
+      fname,
+      lname: rest.join(' '),
+      display_pos: p.position,
+      team_abbr: p.team,
+      adp: 10 + i,
+      rank: i + 1,
+    };
+  });
+  const named = (p: { name: string; position: string; team: string }) => ({
+    name: p.name, position: p.position, team: p.team,
+  });
+
+  const post = (body: unknown) => fetch(API + '/api/yahoo/room/' + LEAGUE, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+  const want = (body: unknown) => fetch(API + '/api/yahoo/room/' + LEAGUE + '/queue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  // No `Q` among these. The room has not said what its queue holds, which is
+  // the state every check below the first one leaves behind.
+  const opened = await post({
+    team: 2,
+    pool,
+    seats: [1, 2, 3].map((id) => ({ id, teamname: 'Team ' + id, manager: 'm' + id })),
+    frames: ['H|S|30|0|0|1', 'R|1|2|3|3|2|1', '0|1|8001|1|RB|0'],
+  });
+  check('a room that has not reported its queue says so', opened.needQueue === true);
+
+  const asked = await want({ queue: [named(squad[1]), named(squad[2])], priority: 'app' });
+  check('the board can ask for a queue', asked.status === 200, String(asked.status));
+  check('and it resolves the players to the room’s own ids',
+    (await asked.json()).wanted === 2);
+
+  /*
+   * The first write, made without ever reading the queue it replaces.
+   *
+   * This was a refusal until 2026-09-06, on the reasoning that `S|` carries the
+   * whole list. The reasoning held and the conclusion did not: nothing can read
+   * a Yahoo queue, so the refusal resolved only when the user queued somebody by
+   * hand, which is the work the setting removes. Watched failing in a live draft
+   * — 210 picks mirrored, not one queue written. See `DECISIONS.md`.
+   */
+  const held = await post({ team: 2, frames: [] });
+  check('a queue is written even though the room has never reported one',
+    JSON.stringify(held.queue) === JSON.stringify(['8002', '8003']),
+    JSON.stringify(held.queue));
+
+  const firstly = await (await fetch(API + '/api/yahoo/room/' + LEAGUE + '/advice')).json();
+  check('and the app is told that is what it did',
+    firstly.queue.state === 'first', JSON.stringify(firstly.queue));
+
+  /*
+   * What survives of the caution: a queue is never replaced by nothing. Asking
+   * for an empty one is how the app says "I have nothing to add", and replacing
+   * a list the user built with that would be the deletion the old rule feared,
+   * arrived at from the other direction.
+   */
+  await want({ queue: [], priority: 'app' });
+  const nothing = await post({ team: 2, frames: [] });
+  check('but never an empty one, which would clear what the room holds',
+    JSON.stringify(nothing.queue) === JSON.stringify([]),
+    JSON.stringify(nothing.queue));
+  await want({ queue: [named(squad[1]), named(squad[2])], priority: 'app' });
+
+  // A bare `Q` is Yahoo saying the queue is empty, which is a reading and not
+  // an absence: from here the two lists merge instead of one replacing the other.
+  const opened2 = await post({ team: 2, frames: ['Q'] });
+  check('an empty queue reported is still a queue read', opened2.needQueue === false);
+  check('and the write is now a merge rather than a replacement',
+    JSON.stringify(opened2.queue) === JSON.stringify(['8002', '8003']),
+    JSON.stringify(opened2.queue));
+  const readNow = await (await fetch(API + '/api/yahoo/room/' + LEAGUE + '/advice')).json();
+  check('which the app is told in turn', readNow.queue.state === 'ready',
+    JSON.stringify(readNow.queue));
+
+  /*
+   * Merging, which never drops what the room already had.
+   *
+   * The room is told it holds two players the app did not ask for. Both survive
+   * the merge; the setting only says which block leads.
+   */
+  const merged = await post({ team: 2, frames: ['Q|8005|8006'] });
+  check('the room’s own queue is kept underneath the app’s',
+    JSON.stringify(merged.queue) === JSON.stringify(['8002', '8003', '8005', '8006']),
+    JSON.stringify(merged.queue));
+
+  await want({ queue: [named(squad[1]), named(squad[2])], priority: 'yahoo' });
+  const theirs = await post({ team: 2, frames: [] });
+  check('and goes first when that is what was asked for',
+    JSON.stringify(theirs.queue) === JSON.stringify(['8005', '8006', '8002', '8003']),
+    JSON.stringify(theirs.queue));
+
+  /*
+   * A drafted player leaves the queue.
+   *
+   * Yahoo prunes its own list and never says so, so a queue read off `Q|` names
+   * players who are long gone. Queueing one back would be asking for somebody
+   * nobody can have.
+   */
+  const drafted = await post({ team: 2, frames: ['0|2|8005|3|WR|0'] });
+  check('a player the room has drafted is dropped from the queue',
+    !JSON.stringify(drafted.queue).includes('8005'), JSON.stringify(drafted.queue));
+
+  /*
+   * A player the pool cannot place is reported rather than guessed at. Queueing
+   * the wrong person is worse than queueing one fewer, because the wrong person
+   * is who gets taken when a clock runs out.
+   */
+  const missing = await want({
+    queue: [named(squad[1]), { name: 'Nobody At All', position: 'RB', team: 'FA' }],
+    priority: 'app',
+  });
+  const reported = await missing.json();
+  check('a player the room has never heard of is dropped and named',
+    reported.wanted === 1 && reported.unresolved.length === 1,
+    JSON.stringify(reported));
+
+  /*
+   * Turning it off stops the writing without emptying anything. What is in the
+   * room's queue is the user's, and abandoning it is not the same as deleting
+   * it — which is also why the bridge is never handed an empty list to send.
+   */
+  await want({ queue: null, priority: 'app' });
+  const off = await post({ team: 2, frames: [] });
+  check('turning it off writes nothing further', off.queue === null,
+    JSON.stringify(off.queue));
+
+  const strayQueue = await fetch(API + '/api/sleeper/room/1234567890123456789/queue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  check('a platform with no room to write to is refused the queue',
+    strayQueue.status === 404, String(strayQueue.status));
 }
 
 /** The average distance between where a player went and their ADP. */

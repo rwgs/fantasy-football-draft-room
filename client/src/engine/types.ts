@@ -600,7 +600,38 @@ export interface LivePicks {
    * empty list as "no reading" rather than as "no lean".
    */
   roomAdp?: { id: string; adp: number }[];
+  /**
+   * The queue the room itself holds, in its own order.
+   *
+   * Yahoo only, and null until the room has said. That is not the same as an
+   * empty queue, and the difference decides whether the app may write one at
+   * all: the frame that sets a queue replaces it, so writing without knowing
+   * what is there deletes the rest. See `DECISIONS.md`.
+   *
+   * `id` is null for a queued player this board does not hold. He keeps his
+   * place rather than being dropped, because he is holding one in the room.
+   */
+  queue?: { id: string | null; name: string }[] | null;
 }
+
+/**
+ * Whether the app writes your queue into the draft room, and what fills it.
+ *
+ * Off is the default and the state everything behaved as before the app could
+ * write anything at all. `mirror` sends the players you starred. `autodraft`
+ * sends those and tops them up from the board's own chain, so a clock that runs
+ * out takes a player worth having rather than whatever Yahoo would have picked.
+ */
+export type QueueWrite = 'off' | 'mirror' | 'autodraft';
+
+/**
+ * Whose entries lead when the app's queue and the room's are merged.
+ *
+ * Neither setting ever drops the other side's players. The app's list and the
+ * room's are concatenated and de-duplicated, and this only says which block
+ * goes first — which is to say, which gets drafted first if a clock expires.
+ */
+export type QueuePriority = 'app' | 'yahoo';
 
 /**
  * How much of a Yahoo draft room has been posted, while the app waits for one.

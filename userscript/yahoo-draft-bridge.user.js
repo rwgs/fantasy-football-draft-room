@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Yahoo draft bridge
 // @namespace    fantasy-football-draft-room
-// @version      1.2.0
-// @description  Copy your own Yahoo draft room onto the draft board running on your machine. Reads only; never picks.
+// @version      1.3.0
+// @description  Copy your own Yahoo draft room onto the draft board running on your machine, and set your queue from it when you ask. Never picks.
 // @match        https://football.fantasysports.yahoo.com/draftclient/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js
 // @updateURL    http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js
@@ -21,12 +21,23 @@
  *
  * What it does: wraps `WebSocket` so it can read the frames Yahoo is already
  * sending itself, fetches the league's player pool and seats once, and posts
- * both to `http://127.0.0.1:5178`. That is the whole job.
+ * both to `http://127.0.0.1:5178`. That is the whole of the reading.
+ *
+ * What it sends to Yahoo: your draft queue, and only when you have turned that
+ * on in the app. Yahoo's own client sets a queue by sending the whole list on
+ * one frame, and this sends the same frame with the same list. Two rules hold
+ * it in place, and both are in `DECISIONS.md`:
+ *
+ *   - It never sends a pick. The frame that would is known, documented and
+ *     deliberately absent from this file. A wrong queue costs you a player when
+ *     a clock expires; a wrong pick costs you one immediately, and no part of
+ *     the reasoning that justified the queue reaches that far.
+ *   - It never writes a queue it has not read. The frame replaces the whole
+ *     list, so writing one while ignorant of what is in it is a deletion. The
+ *     service withholds the instruction until Yahoo has said what it holds.
  *
  * What it never does:
  *
- *   - Make a pick, or send anything at all to Yahoo. Every frame passes through
- *     untouched; this only listens. The tool is not an autodrafter.
  *   - Read `document.cookie`, or any storage. Your Yahoo session stays in the
  *     browser, and the local service is deliberately never given it.
  *   - Send anything anywhere except the loopback address below.
@@ -76,20 +87,33 @@
   const SERVICE = 'http://127.0.0.1:5178';
 
   /**
-   * Frames worth forwarding: a pick, the settings, the draft order, and the
-   * replay of everything missed. `docs/yahoo-draft-protocol.md` lists the rest
-   * — clock ticks, grades, managers coming and going — and none of them changes
-   * who holds which player, so none of them is sent.
+   * Frames worth forwarding: a pick, the settings, the draft order, the replay
+   * of everything missed, and your own queue. `docs/yahoo-draft-protocol.md`
+   * lists the rest — clock ticks, grades, managers coming and going — and none
+   * of them changes who holds which player, so none of them is sent.
+   *
+   * `Q` is the odd one out: it changes nothing on the board, and is forwarded
+   * because it is the only thing that says what your queue holds. Writing one
+   * without knowing that would delete whatever was already in it.
    */
-  const WANTED = /^(?:0|H|R|P)(?:\||$)/;
+  const WANTED = /^(?:0|H|R|P|Q)(?:\||$)/;
 
   /** Frames are batched, so a burst of picks costs one request rather than six. */
   const FLUSH_MS = 400;
-  /** A queue that only ever grows means the service is down. Cap it and say so. */
-  const MAX_QUEUED = 2000;
+  /**
+   * And a beat for when nothing is happening.
+   *
+   * Picks arrive when they arrive, but the queue the app wants set changes on
+   * its own schedule — you star someone between picks — and the reply to this
+   * post is how that reaches the room. Slow, because it is a loopback request
+   * about a draft where nothing has moved.
+   */
+  const IDLE_MS = 3000;
+  /** A backlog that only ever grows means the service is down. Cap it. */
+  const MAX_PENDING = 2000;
 
   /** Bumped with `@version` above. Logged so the running copy is never in doubt. */
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
 
   const log = (...args) => console.log('[yahoo-bridge]', ...args);
 
@@ -111,11 +135,26 @@
   const LEAGUE = route[1];
   const TEAM = Number(route[2]);
 
-  let queue = [];
+  // Frames waiting to be posted. Named for the buffer it is, because `queue` in
+  // this file now means the draft queue Yahoo holds.
+  let pending = [];
   let sending = false;
   let poolSent = false;
   let seatsSent = false;
   let timer = null;
+
+  /**
+   * The socket the draft is on, and what has been asked of it.
+   *
+   * The page opens sockets this has no interest in, so the draft is identified
+   * as whichever one says something only the draft server says. `lastSent` is
+   * cleared with it: a reconnect is a new queue, and what was asked of a
+   * connection that has gone is not an answer about this one.
+   */
+  let draftSocket = null;
+  let lastSent = null;
+  /** The last queue Yahoo reported, to hand back to a service that restarted. */
+  let lastQueueFrame = null;
 
   // ---- Read the socket ----------------------------------------------------
   //
@@ -134,6 +173,13 @@
         try {
           if (typeof event.data !== 'string') return;
           if (!WANTED.test(event.data)) return;
+          // Only the draft server sends any of these, so the first one to
+          // arrive is what identifies the socket worth answering on.
+          if (draftSocket !== socket) {
+            draftSocket = socket;
+            lastSent = null;
+          }
+          if (event.data[0] === 'Q') lastQueueFrame = event.data;
           push(event.data);
         } catch (err) {
           log('dropped a frame:', err && err.message);
@@ -153,14 +199,53 @@
   window.WebSocket = Bridged;
 
   function push(frame) {
-    if (queue.length >= MAX_QUEUED) {
+    if (pending.length >= MAX_PENDING) {
       // Drop the oldest rather than the newest: the recent picks are the ones
       // still worth having, and Yahoo replays the whole draft on a reconnect
       // anyway, so nothing here is the only copy.
-      queue.shift();
+      pending.shift();
     }
-    queue.push(frame);
+    pending.push(frame);
     if (!timer) timer = setTimeout(flush, FLUSH_MS);
+  }
+
+  // ---- The one thing sent to Yahoo ----------------------------------------
+
+  /**
+   * Set the draft queue, as Yahoo's own client sets it.
+   *
+   * The frame carries the whole ordered list and replaces what is there, which
+   * is why the service withholds it until the room has said what it holds. By
+   * the time a list arrives here it is already the merge of both.
+   *
+   * Three refusals, all deliberate:
+   *
+   *   - An empty list is never sent. It is indistinguishable from asking Yahoo
+   *     to clear the queue, and nothing in the app ever wants that.
+   *   - The same list is never sent twice. Yahoo answers every write with a
+   *     `Q|`, and rewriting on a difference the room chose would be arguing
+   *     with the user's own draft room rather than following it.
+   *   - Nothing is sent before a frame has identified the draft socket.
+   */
+  function writeQueue(ids) {
+    if (!Array.isArray(ids) || !ids.length) return;
+    if (!draftSocket || draftSocket.readyState !== Native.OPEN) return;
+
+    const line = ids.join('|');
+    if (line === lastSent) return;
+
+    try {
+      draftSocket.send('S|' + LEAGUE + '|' + TEAM + '|' + line);
+      lastSent = line;
+      // Says whether the room had ever reported a queue of its own, because a
+      // write made without one replaced whatever was in it unseen. This was
+      // found the hard way: a dropped `Q` looks exactly like a queue nobody
+      // asked for, and only the service could tell the two apart.
+      log('set the draft room queue, ' + ids.length + ' deep'
+        + (lastQueueFrame ? '' : ' (this room has never reported a queue)'));
+    } catch (err) {
+      log('could not set the queue:', err && err.message);
+    }
   }
 
   // ---- What only this tab can fetch ---------------------------------------
@@ -227,13 +312,15 @@
   async function flush() {
     timer = null;
     if (sending) return;
-    if (!queue.length && poolSent && seatsSent) return;
     sending = true;
+    // A post with nothing in it is still worth making: its reply is how the
+    // queue the app wants set reaches this tab. `IDLE_MS` keeps that cheap.
+    let again = IDLE_MS;
 
     // Taken before the request and put back if it fails, so a service that is
     // not running yet costs nothing: the frames wait rather than vanish.
-    const sendingFrames = queue;
-    queue = [];
+    const sendingFrames = pending;
+    pending = [];
 
     const body = { team: TEAM, frames: sendingFrames };
     try {
@@ -261,19 +348,33 @@
       // flush sends it again rather than leaving every later pick unresolved.
       if (reply.needPool) poolSent = false;
       if (reply.needSeats) seatsSent = false;
+      // And has forgotten the queue, which Yahoo reports only when it changes.
+      // Handing back the last one seen is what stops a restart from leaving the
+      // queue unwritable for the rest of the draft.
+      if (reply.needQueue && lastQueueFrame) push(lastQueueFrame);
+
+      // The whole write path, in one line at the end of a read. Null is the
+      // ordinary answer: the setting is off, or the room has not said what its
+      // queue holds, and both mean send nothing.
+      if (reply.queue) writeQueue(reply.queue);
 
       if (sendingFrames.length || body.pool) {
         log('sent ' + sendingFrames.length + ' frames; the board has '
           + reply.picks + ' picks of ' + reply.pool + ' players');
       }
+      // Picks come in bursts, so stay on the fast beat while any are waiting.
+      if (pending.length) again = FLUSH_MS;
     } catch (err) {
-      queue = sendingFrames.concat(queue);
+      pending = sendingFrames.concat(pending);
       log('could not reach the draft board on ' + SERVICE + ':', err && err.message);
       // Try again on a slower beat. The draft is not waiting for us, and a
       // request per frame at a dead port helps nobody.
-      if (!timer) timer = setTimeout(flush, 3000);
+      again = 3000;
     } finally {
       sending = false;
+      // Always come back. Picks arrive when they arrive, but the queue the app
+      // wants set changes between them, and nothing else would fetch it.
+      if (!timer) timer = setTimeout(flush, again);
     }
   }
 

@@ -3,17 +3,24 @@
 // Every other platform here is pulled: the service asks an open feed. Yahoo is
 // pushed, because the endpoints its draft room uses authenticate on a session
 // cookie and refuse anything without one. A userscript in the user's tab reads
-// the room and posts to `/api/yahoo/room/:id`; these five methods answer from
+// the room and posts to `/api/yahoo/room/:id`; the methods below answer from
 // what it posted. See `DECISIONS.md` for why that is the shape, and
 // `docs/yahoo-draft-protocol.md` for what the room actually sends.
 //
 // The consequence worth stating plainly: nothing here works until the bridge is
 // running. A Yahoo league is not readable by this service on its own, and every
 // method below says so rather than answering with an empty league.
+//
+// One thing here travels the other way. `putQueue` takes the queue the app
+// wants set and resolves it to Yahoo's own player ids, for the bridge to send.
+// It is the only write to a league platform in this project, it happens only
+// when the user turns it on, and it never sends a pick.
 
 import { buildBoard } from '../../board.js';
 import { joinKey, normPos, normTeam } from '../../names.js';
-import { applyPost, getAdvice, getRoom, roundCount, setAdvice, teamCount } from './room.js';
+import {
+  applyPost, getAdvice, getRoom, queuePlan, roundCount, setAdvice, setWanted, teamCount,
+} from './room.js';
 
 /**
  * A Yahoo league ID as the draft room writes it: bare digits.
@@ -251,7 +258,35 @@ export async function draftPicks(leagueId, boardQuery) {
     unknown,
     poolSize: board.players.length,
     roomAdp: roomAdp(room, byKey),
+    // What Yahoo says is queued, on the same beat as the picks because it
+    // changes on the same events and asking twice would be two answers to one
+    // question. Null until the room has said, which is not the same as empty.
+    queue: roomQueue(room, byKey),
   };
+}
+
+/**
+ * Yahoo's own queue, as players this board holds.
+ *
+ * The same two joins the picks take. A queued player the board cannot place
+ * keeps his place in the list with no id: he is still occupying a slot in the
+ * real queue, and dropping him here would make the count on screen disagree
+ * with the count in the room.
+ */
+function roomQueue(room, byKey) {
+  if (room.queue == null) return null;
+  return room.queue.map((yahooId) => {
+    const person = room.pool.get(yahooId) || null;
+    const name = person?.name || '';
+    const position = normPos(person?.position);
+    const player = name || position === 'DEF'
+      ? byKey.get(joinKey(name, position, normTeam(person?.team))) || null
+      : null;
+    return {
+      id: player ? player.id : null,
+      name: player ? player.name : (name || 'Yahoo #' + yahooId),
+    };
+  });
 }
 
 /**
@@ -283,6 +318,29 @@ function adpFromPool(room) {
     out.set(joinKey(person.name || '', position, normTeam(person.team)), person.adp);
   }
   return out.size ? out : null;
+}
+
+/**
+ * The pool the other way round: how this app keys a player, to Yahoo's own id.
+ *
+ * The join every other read here runs, reversed, because writing a queue needs
+ * to go from a player the board named to the number Yahoo will accept. Built
+ * from the same `joinKey` for the same reason: one place decides when two
+ * records name the same person, and this is not a second one.
+ *
+ * Where two Yahoo entries key the same, the first wins. That is a pool with a
+ * duplicate in it rather than a real choice, and picking either is better than
+ * queueing both.
+ */
+function idsByKey(room) {
+  const out = new Map();
+  for (const [id, person] of room.pool) {
+    const position = normPos(person.position);
+    if (!person.name && position !== 'DEF') continue;
+    const key = joinKey(person.name || '', position, normTeam(person.team));
+    if (!out.has(key)) out.set(key, id);
+  }
+  return out;
 }
 
 /** The same reading for a league nobody has necessarily posted. */
@@ -364,9 +422,68 @@ export async function putAdvice(leagueId, advice) {
   return { ok: true };
 }
 
-/** What the app last said about this room, or nothing when it has not spoken. */
+/**
+ * What the app last said about this room, or nothing when it has not spoken.
+ *
+ * The queue rides alongside it because the panel that reads this is the one
+ * thing standing over the draft where a write would land, and a write nobody
+ * can see is the kind worth being able to see. It carries the state and the
+ * counts rather than the players: the list is the user's own queue and the room
+ * they are looking at is already showing it.
+ */
 export async function readAdvice(leagueId) {
-  return { advice: getAdvice(leagueId) };
+  const plan = queuePlan(leagueId);
+  return {
+    advice: getAdvice(leagueId),
+    queue: {
+      // `off`, `first` or `ready`. The panel says which, because `first` is the
+      // write that replaced a queue nobody had read, and saying so afterwards is
+      // the only place that can be said over the room it happened in.
+      state: plan.reason,
+      held: plan.queue ? plan.queue.length : 0,
+      writing: plan.write ? plan.write.length : 0,
+    },
+  };
+}
+
+/**
+ * Take the queue the app wants written, and resolve it to Yahoo's own ids.
+ *
+ * The one thing this project sends to a league platform, and the reason the
+ * resolution happens here rather than in the bridge is the reason the decode
+ * does: the pool and `names.js` are both on this side, and a bridge that
+ * matched players would put the fragile half of the job where no test can reach
+ * it. See `DECISIONS.md`.
+ *
+ * A player the pool cannot place is dropped and counted rather than guessed at.
+ * Queueing the wrong person is worse than queueing one fewer, because the
+ * wrong person is who gets drafted when the clock runs out.
+ */
+export async function putQueue(leagueId, body) {
+  const room = roomFor(leagueId);
+
+  if (!body || body.queue == null) {
+    setWanted(leagueId, null);
+    return { ok: true, wanted: 0, unresolved: [] };
+  }
+
+  const byKey = idsByKey(room);
+  const ids = [];
+  const unresolved = [];
+  for (const player of Array.isArray(body.queue) ? body.queue : []) {
+    const name = String(player?.name || '');
+    const position = normPos(player?.position);
+    const team = normTeam(player?.team);
+    const id = byKey.get(joinKey(name, position, team));
+    if (id) ids.push(id);
+    else unresolved.push(name || 'a player with no name');
+  }
+
+  setWanted(leagueId, { ids, priority: body.priority });
+  // Reported rather than swallowed. A queue quietly one player shorter than the
+  // one on screen is the kind of difference nobody notices until a clock runs
+  // out on the player who was dropped.
+  return { ok: true, wanted: ids.length, unresolved };
 }
 
 export default {
@@ -376,6 +493,7 @@ export default {
   roomState,
   putAdvice,
   readAdvice,
+  putQueue,
   roomAdpByKey,
   isValidId: (id) => IS_ID.test(id),
   idHint: 'A Yahoo league ID is the number in your draft room address.',

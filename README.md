@@ -191,11 +191,42 @@ both cases.
 
 ### What it does and does not do
 
-- It **reads**. It never sends anything to Yahoo, and it never makes a pick.
+- It **reads**, and it writes one thing: your draft queue, if you turn that on.
+  See [Writing your queue](#writing-your-queue) below. **It never makes a pick.**
 - It never touches `document.cookie` or any storage. Your Yahoo session stays in
   the browser; the local service is never given it and could not use it.
 - It posts to `http://127.0.0.1:5178` and nowhere else. What it sends is the
   league's player list, the seats, and the draft's own messages.
+
+### Writing your queue
+
+Off by default. Turn it on over a Yahoo draft with the **Yahoo queue** control
+above the player list, and the players you star in the app are set as your queue
+in the draft room — the list Yahoo drafts from when your clock runs out.
+
+Three settings, and the first is the one you have already:
+
+| | |
+|---|---|
+| **Off** | Nothing reaches Yahoo. The bridge is the reader it has always been. |
+| **Mirror** | The players you star here become your queue in the room. |
+| **Autodraft** | Your stars, then the board's own picks after them, so an expired clock takes a player worth having rather than whatever Yahoo would have chosen. |
+
+**This is not an autodrafter, and the difference matters.** A queue is Yahoo's
+own feature and it fires when your clock expires, not when your turn starts. So
+this is insurance for a pick you might miss; it does not draft for you, and your
+turns still run their full clock. The frame that would take a pick outright is
+known and documented, and is deliberately not in the bridge.
+
+**It never deletes what you queued in Yahoo.** Setting a queue means replacing
+the whole list, so the app merges rather than overwrites: your stars and
+whatever the room already held both survive, and **First** says which goes on
+top. For the same reason it will not write a queue it has not read — Yahoo
+reports your queue only when it changes, so until you touch it once the panel
+says the queue was left alone. Star anyone in the room and it starts.
+
+Anything you queued in Yahoo can be pulled the other way too, with the
+**Star _n_ of them here** button in the same control.
 
 ### What it costs you
 

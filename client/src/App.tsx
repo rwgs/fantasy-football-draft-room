@@ -70,6 +70,16 @@ export default function App() {
    */
   const [resumeLive, setResumeLive] = useState(saved.resumeLive);
   const [yahooMock, setYahooMock] = useState(saved.yahooMock);
+  /*
+   * WRITING THE QUEUE BACK INTO THE DRAFT ROOM
+   *
+   * The one thing this app changes outside the browser, and so the one thing it
+   * waits to be asked for. Off, the bridge reads a Yahoo room and writes
+   * nothing to it; on, the players starred here are set as the queue Yahoo
+   * picks from when a clock expires. See `DECISIONS.md`.
+   */
+  const [queueWrite, setQueueWrite] = useState(saved.queueWrite);
+  const [queuePriority, setQueuePriority] = useState(saved.queuePriority);
   /**
    * A Yahoo mock named from the lobby, before its draft room exists.
    *
@@ -132,10 +142,11 @@ export default function App() {
     save({
       league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
       cpuPreset: preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock,
-      poolSort,
+      poolSort, queueWrite, queuePriority,
     });
   }, [league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
-    preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock, poolSort]);
+    preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock, poolSort,
+    queueWrite, queuePriority]);
 
   /*
    * The resolved theme goes on <html> rather than into the tree, because what
@@ -1055,6 +1066,10 @@ export default function App() {
           adpSource={league.adpSource}
           onAdpSource={(adpSource) => setLeague({ ...league, adpSource })}
           poolSort={poolSort}
+          queueWrite={queueWrite}
+          onQueueWrite={setQueueWrite}
+          queuePriority={queuePriority}
+          onQueuePriority={setQueuePriority}
           onEngine={setEngine}
           onFinish={() => setScreen('results')}
           onLeave={() => setScreen('setup')}

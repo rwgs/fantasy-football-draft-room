@@ -2,7 +2,8 @@ import { DEFAULT_MANAGER, SEED_LEAGUES as CONFIGURED_LEAGUES } from './config';
 import { DEFAULT_CPU } from './engine/cpu';
 import { DEFAULT_ROSTER, rosterSize } from './engine/roster';
 import type {
-  AppMode, CpuConfig, LeagueConfig, Overrides, RankingSet, SavedLeague, SortKey,
+  AppMode, CpuConfig, LeagueConfig, Overrides, QueuePriority, QueueWrite, RankingSet,
+  SavedLeague, SortKey,
 } from './engine/types';
 
 /**
@@ -78,6 +79,17 @@ export interface Saved {
   /** Whether a Yahoo league being added is one of Yahoo's own mock drafts. */
   yahooMock: boolean;
   /**
+   * Whether the app writes your queue into the Yahoo draft room.
+   *
+   * Off, and the bridge is the reader it has always been: nothing this app does
+   * reaches Yahoo. It is a setting rather than a default because it is the only
+   * thing here that changes something outside the browser, and that is worth
+   * asking for rather than discovering.
+   */
+  queueWrite: QueueWrite;
+  /** Whose entries go first when the app's queue meets the room's own. */
+  queuePriority: QueuePriority;
+  /**
    * The order the player pool opens on.
    *
    * Kept because the useful order is a settled preference rather than a
@@ -145,6 +157,9 @@ export function defaults(): Saved {
     myManager: DEFAULT_MANAGER,
     resumeLive: false,
     yahooMock: false,
+    // Off, because this is the one setting that reaches outside the browser.
+    queueWrite: 'off',
+    queuePriority: 'app',
     // What the pool opened on before this was settable: your own ranking where
     // you have one, and ADP where you do not.
     poolSort: 'mine',
@@ -184,6 +199,10 @@ export function load(): Saved {
       theme: saved.theme ?? 'system',
       resumeLive: saved.resumeLive ?? false,
       yahooMock: saved.yahooMock ?? false,
+      // A save from before this existed must read as off rather than as absent,
+      // or an upgrade would start writing to a draft room nobody asked it to.
+      queueWrite: saved.queueWrite ?? 'off',
+      queuePriority: saved.queuePriority ?? 'app',
       poolSort: saved.poolSort ?? base.poolSort,
       // Older saves predate the per league fields. Fill them rather than let a
       // missing array reach a component that maps over it.

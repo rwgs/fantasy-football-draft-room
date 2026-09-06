@@ -3,7 +3,7 @@
 // The draft room talks to its draft server in pipe-delimited text, one record
 // per frame. `docs/yahoo-draft-protocol.md` catalogues every frame seen and
 // says which parts were observed and which were inferred; this file reads the
-// four that carry state a board needs and ignores the rest.
+// five that carry state the app needs and ignores the rest.
 //
 // Nothing here is promised by Yahoo. It is a private protocol between their own
 // client and their own server, and it can change in any deploy without notice.
@@ -18,11 +18,15 @@
  * The frames worth decoding, and the six that are not.
  *
  * `C` clock ticks, `D` the clock changing hands, `J` and `L` managers coming
- * and going, `G` and `g` Yahoo's own grades, `O` its value labels, and `Q`,
- * `w`, `5`, `X` and `6` whose meanings are still unknown. None of them changes
- * who holds which player, so none of them reaches the board. Ignoring them by
- * default rather than by name is what stops a frame Yahoo adds tomorrow from
- * breaking a draft tonight.
+ * and going, `G` and `g` Yahoo's own grades, `O` its value labels, and `w`, `5`
+ * and `X` whose meanings are still unknown. None of them changes who holds
+ * which player, so none of them reaches the board. Ignoring them by default
+ * rather than by name is what stops a frame Yahoo adds tomorrow from breaking a
+ * draft tonight.
+ *
+ * `Q` is the exception that is read without changing the board: it carries the
+ * user's own queue, which nothing else reports, and the app may not write one
+ * it has not been told the contents of.
  */
 
 /** A draft type letter to the order this app runs. `S` is the only one seen. */
@@ -49,8 +53,28 @@ export function decodeFrame(text) {
     case 'R': return order(parts);
     case 'P': return replay(parts);
     case '0': return live(parts);
+    case 'Q': return queued(parts);
     default: return null;
   }
+}
+
+/**
+ * `Q|<player>|<player>|…` — your own queue, as Yahoo now holds it.
+ *
+ * Only ever an answer to an `S|` that set it. Yahoo never sends one to report a
+ * queued player being drafted, so a reader has to prune its own list; see
+ * `docs/yahoo-draft-protocol.md`.
+ *
+ * A bare `Q` is an empty queue rather than an absent one, which is why this
+ * returns a list and never null. The distinction is the whole safety of writing
+ * a queue: knowing it is empty permits a write, and not knowing forbids one.
+ */
+function queued(parts) {
+  return {
+    kind: 'queue',
+    // Text, like every other player id here. It is a key into Yahoo's pool.
+    queue: parts.slice(1).map((v) => String(v).trim()).filter(Boolean),
+  };
 }
 
 /**

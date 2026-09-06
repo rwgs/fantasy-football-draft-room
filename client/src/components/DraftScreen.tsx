@@ -12,14 +12,17 @@ import {
   undoPick, undoToMyLastPick,
 } from '../engine/draft';
 import type { DraftEngine } from '../engine/draft';
-import { fetchDraftPicks, postRoomAdvice } from '../api';
+import { fetchDraftPicks, postRoomAdvice, postRoomQueue } from '../api';
 import { maskTeam } from '../anon';
 import { pickLabel, pickLabelWithOverall } from '../picks';
 import { livePresets, offBoardPlayer } from '../engine/live';
 import { replacementPoints } from '../engine/value';
 import { emptyCounts, handcuffsFor } from '../engine/roster';
 import AdpSourcePicker from './AdpSourcePicker';
-import type { AppMode, Board, Platform, Player, SortKey } from '../engine/types';
+import QueueWriter from './QueueWriter';
+import type {
+  AppMode, Board, Platform, Player, QueuePriority, QueueWrite, SortKey,
+} from '../engine/types';
 
 /** How often the assistant asks a pulled platform for new picks. */
 const POLL_MS = 8000;
@@ -74,6 +77,12 @@ interface Props {
   onAdpSource: (next: string) => void;
   /** The order the pool opens on, from settings. Carried, not read here. */
   poolSort: SortKey;
+  /** Whether the players below are written into the real draft room's queue. */
+  queueWrite: QueueWrite;
+  onQueueWrite: (next: QueueWrite) => void;
+  /** Whose entries lead when this queue is merged with the room's own. */
+  queuePriority: QueuePriority;
+  onQueuePriority: (next: QueuePriority) => void;
   onEngine: (next: DraftEngine) => void;
   onFinish: () => void;
   onLeave: () => void;
@@ -84,10 +93,20 @@ type Pane = 'pool' | 'board' | 'roster';
 export default function DraftScreen(props: Props) {
   const {
     engine, board, pace, mode, anonymous, draftId, platform, rankingEntries, notes,
-    adpSource, onAdpSource, poolSort, onEngine, onFinish, onLeave,
+    adpSource, onAdpSource, poolSort, queueWrite, onQueueWrite, queuePriority,
+    onQueuePriority, onEngine, onFinish, onLeave,
   } = props;
 
   const [queue, setQueue] = useState<string[]>([]);
+  /**
+   * The queue the draft room itself holds, as it last reported it.
+   *
+   * Null is not an empty queue: it means the room has not said, which is the
+   * state in which nothing may be written. Undefined-versus-empty matters
+   * nowhere else in this file and matters absolutely here, because the frame
+   * that sets a queue replaces it. See `DECISIONS.md`.
+   */
+  const [roomQueue, setRoomQueue] = useState<{ id: string | null; name: string }[] | null>(null);
   const [pane, setPane] = useState<Pane>('pool');
   const [paused, setPaused] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -200,6 +219,7 @@ export default function DraftScreen(props: Props) {
         setRoomAdp(live.roomAdp?.length
           ? new Map(live.roomAdp.map((r) => [r.id, r.adp]))
           : null);
+        setRoomQueue(live.queue ?? null);
         setLiveError(null);
         setLiveAt(Date.now());
 
@@ -425,6 +445,51 @@ export default function DraftScreen(props: Props) {
     });
   }, [assistant, platform, draftId, oddsTarget, yourTurn, teams, room, priced, chain]);
 
+  /*
+   * The same list, written into the draft room's own queue.
+   *
+   * The one thing this app changes outside the browser, and it goes nowhere
+   * unless the setting says so. What is sent is who to queue, by name; the
+   * service turns that into Yahoo's own ids because it holds the pool, and the
+   * bridge sends the frame because it is the only thing on Yahoo's origin.
+   *
+   * Nothing here decides whether the write is safe. The service refuses to hand
+   * the bridge a queue until the room has said what its own holds, because the
+   * frame that sets one replaces it.
+   */
+  const lastQueueSent = useRef<string | null>(null);
+  useEffect(() => {
+    if (!assistant || platform !== 'yahoo' || !draftId) return;
+
+    const wanted: Player[] = [];
+    if (queueWrite !== 'off') {
+      const add = (player: Player | undefined) => {
+        if (player && !wanted.some((had) => had.id === player.id)) wanted.push(player);
+      };
+      // Starred first and in the order they were starred, because that order is
+      // a decision the user made and the chain below is only an opinion.
+      for (const id of queue) add(available.find((p) => p.id === id));
+      if (queueWrite === 'autodraft') for (const link of chain) add(link.player);
+    }
+
+    const payload = queueWrite === 'off'
+      ? null
+      : wanted.map((p) => ({ name: p.name, position: p.position, team: p.team }));
+
+    // Posted only when it has changed. The chain is rebuilt on every pick and
+    // most rebuilds say the same thing, and a queue is not worth a request that
+    // asks the room to set what it is already set to.
+    const said = draftId + '|' + queuePriority + '|' + JSON.stringify(payload);
+    if (said === lastQueueSent.current) return;
+    lastQueueSent.current = said;
+
+    void postRoomQueue(platform, draftId, payload, queuePriority).catch(() => {
+      // Nothing on this screen depends on it. The next change tries again, and
+      // the room keeps whatever queue it already had.
+      lastQueueSent.current = null;
+    });
+  }, [assistant, platform, draftId, queueWrite, queuePriority, queue, available, chain]);
+
   const draft = (id: string) => {
     setQueue((q) => q.filter((x) => x !== id));
     onEngine(draftPlayer(engine, id));
@@ -438,6 +503,26 @@ export default function DraftScreen(props: Props) {
 
   const toggleQueue = (id: string) => {
     setQueue((q) => (q.includes(id) ? q.filter((x) => x !== id) : [...q, id]));
+  };
+
+  /*
+   * Take the room's own queue into this one.
+   *
+   * The other half of "neither list deletes the other". Merging on the way out
+   * keeps the room's players queued; this is what makes them visible here, so
+   * the list on screen is the list being drafted from rather than half of it.
+   *
+   * Players this board does not hold are skipped. They keep their place in the
+   * room's queue either way, because the merge that writes it never drops what
+   * it did not put there.
+   */
+  const roomQueueIds = useMemo(
+    () => (roomQueue || []).map((entry) => entry.id).filter((id): id is string => !!id),
+    [roomQueue],
+  );
+  const adoptedFromRoom = roomQueueIds.filter((id) => queue.includes(id)).length;
+  const adoptRoomQueue = () => {
+    setQueue((q) => [...q, ...roomQueueIds.filter((id) => !q.includes(id))]);
   };
 
   return (
@@ -626,6 +711,21 @@ export default function DraftScreen(props: Props) {
               value={adpSource}
               offered={board.meta.adpOffered}
               onChange={onAdpSource}
+            />
+          )}
+
+          {/* Only where there is a room to write to. Yahoo is the one platform
+              with a tab of ours inside it, and a queue cannot be set from
+              anywhere else. */}
+          {assistant && platform === 'yahoo' && draftId && (
+            <QueueWriter
+              value={queueWrite}
+              onChange={onQueueWrite}
+              priority={queuePriority}
+              onPriority={onQueuePriority}
+              roomQueue={roomQueue}
+              adopted={adoptedFromRoom}
+              onAdoptRoom={adoptRoomQueue}
             />
           )}
 

@@ -343,6 +343,20 @@ async function main() {
     await shoot(page, '.clock', 'yahoo-mock-clock');
     await page.screenshot({ path: join(OUT, 'yahoo-mock-full.png') });
     console.log('  yahoo-mock-full.png');
+
+    /*
+     * The queue control, switched on.
+     *
+     * Off it is three chips saying nothing, and off is what the shot above
+     * already holds. On is where it posts to the service, reports what the room
+     * holds, and grows a second row — so it is the state worth a photograph and
+     * the one where a fault would show as a console error rather than a
+     * difference in the picture.
+     */
+    await page.getByRole('button', { name: 'Autodraft', exact: true }).click();
+    await page.locator('.queue-writer-state').waitFor({ state: 'visible' });
+    await shoot(page, '.queue-writer', 'yahoo-queue');
+
     if (errors.length) failures.push('yahoo-mock: ' + errors.join(' | '));
     await page.close();
   } catch (err) {

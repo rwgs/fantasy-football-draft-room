@@ -241,7 +241,26 @@
     return line;
   }
 
-  function render(advice) {
+  /**
+   * What the queue is doing, when the app is writing one.
+   *
+   * Silent unless it is. The line worth the space on a panel this small is the
+   * first write: a Yahoo room never reports a queue until one changes, so the
+   * app cannot know what it replaced, and the one place that is worth saying is
+   * the one standing over the room it just replaced it in.
+   */
+  function queueLine(queue) {
+    if (!queue || queue.state === 'off') return null;
+    if (queue.state === 'first') {
+      return el('p', 'foot', 'Queue: ' + queue.writing + ' set from the board. '
+        + 'This room never reports a queue until one changes, so that replaced '
+        + 'anything already in it.');
+    }
+    return el('p', 'foot', 'Queue: ' + queue.writing + ' set from the board, '
+      + queue.held + ' in the room.');
+  }
+
+  function render(advice, queue) {
     if (!shadow || closed) return;
     for (const old of shadow.querySelectorAll('.wrap')) old.remove();
 
@@ -315,6 +334,11 @@
         : 'Read off ADP, not this room, so a run already under way will not show.'));
     }
 
+    // Last, and outside the branch above, because it is true whether or not the
+    // board has anything to say about the pick.
+    const said = queueLine(queue);
+    if (said) wrap.append(said);
+
     shadow.append(wrap);
   }
 
@@ -357,7 +381,8 @@
           cache: 'no-store',
         });
         if (!res.ok) throw new Error('the service answered ' + res.status);
-        render((await res.json()).advice);
+        const body = await res.json();
+        render(body.advice, body.queue);
       }
     } catch (err) {
       // Said once, and never thrown. A fault nobody can see is a fault nobody
@@ -371,7 +396,7 @@
   }
 
   mount();
-  render(null);
+  render(null, null);
   void checkBuild();
   beat();
   log('panel up, bottom left. Close it with the x in its corner.');

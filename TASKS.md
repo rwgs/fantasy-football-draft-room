@@ -68,6 +68,79 @@ Phase 4: prove the platform seam against real leagues.
     watching the check fail. Defences were never affected: Yahoo writes `DEF` and
     a team abbreviation, which is what `joinKey` already wanted.
 
+- [ ] Write the Yahoo draft queue from the board.
+  - Scope: the app can set your queue in a Yahoo draft room, behind a setting
+    that is off. `Mirror` sends the players you starred; `Autodraft` tops those
+    up from the board's own chain. The client decides who, the service resolves
+    them to Yahoo's player ids, and the bridge sends the `S|` frame. No pick
+    frame is sent, and none is written. `SPEC.md`'s blanket non-goal narrowed to
+    match; `DECISIONS.md` carries why the queue was reached for and the pick
+    frame was not.
+  - Found first, and what made it cheap: `tools/yahoo/` already held every
+    outbound frame needed. `S|<league>|<team>|<ids…>` sets the whole queue and
+    `Q|` echoes it back, across 32 writes in three sessions, and neither was in
+    `docs/yahoo-draft-protocol.md` — which listed `Q` as unknown and the client
+    as sending one frame. Also observed there: Yahoo prunes a drafted player
+    from a queue and never says so, so the pruning is ours to do.
+  - **Built once, watched failing, and rebuilt.** The first version declined to
+    write a queue it had not read, on the reasoning that `S|` replaces the whole
+    list. Live in league `10888301` on 2026-09-06 that produced a perfect draft
+    and no queue at all: 210 picks mirrored, 210 matched, nothing unknown, and
+    `Q` never sent once, because Yahoo only sends one when a queue changes. Two
+    findings from that run killed the rule — nothing can read a Yahoo queue
+    (`6|` answers `6|`, no REST endpoint carries one), and an empty queue
+    appears to put a seat straight into autodraft, so the refusal held its fire
+    exactly where firing was the point. The first write now happens and says so.
+    See `DECISIONS.md`, both entries dated 2026-09-06.
+  - Acceptance criteria: a queue set from the app appears in the room; the
+    user's own Yahoo entries survive every write after the first; an empty queue
+    is never written; no pick is ever sent. The last three are met and checked.
+    **The first is still not met** — see manual validation.
+  - Automated validation: run and passing. Fifteen checks in `engine:test` under
+    "Writing a Yahoo draft queue" covering the first write and what it reports,
+    the refusal to write an empty one, both merge orders, the pruning of a
+    drafted player, an unresolvable player being named rather than guessed, and
+    a platform with no room being refused the route. Seven more in the new
+    `npm run bridge:test`, which runs the userscript itself against a fake room
+    and asserts the exact frame it puts on the wire, including that it never
+    formats anything but `S|` however the reply is shaped. Typecheck, build,
+    `server:test` and `shots` clean, no console errors; lint up two warnings on
+    the two new `useState(saved.…)` lines, the pattern every other setting in
+    `App.tsx` already uses.
+  - Manual validation: **still not done — no real queue has ever been written.**
+    The live run above proved the reading half and disproved the writing rule;
+    it never got as far as an `S|` leaving the browser. Also unconfirmed
+    throughout: which bridge version was actually installed in that tab, which
+    matters because 1.2.0 has no write path and drops `Q` exactly as observed.
+    Next mock: check the version the bridge logs on load, turn the setting on,
+    star a player, and confirm the room's own queue changes.
+  - Dependencies or blockers: none.
+  - Still unverified, and cheap to settle in the same mock:
+    - Whether Yahoo's own draft room redraws its queue from a `Q|` it did not
+      provoke. If not, a queue set from the app is live but invisible in Yahoo's
+      list until a reload, which would look exactly like a failure.
+    - Whether Yahoo hands back an existing queue on connect. No longer blocking,
+      since the first write no longer waits for one, but it decides whether the
+      first write can stop replacing anything.
+
+- [ ] Keep a seat off Yahoo's autodraft, if the frames mean what they look like.
+  - Scope: not started, and deliberately not started. Reading the captures for
+    the queue turned up `5|<seat>` and `6|<seat>`, which appear to be autopick
+    going on and coming off, and one outbound `6|<league>|<team>` sent by
+    Yahoo's own client. If that reading is right, a seat can take itself off
+    autodraft, and `docs/yahoo-draft-protocol.md` now carries the evidence.
+  - Blocked on one experiment, and it must come first: the direction is
+    inferred, not observed. If `6|` is autopick *on*, anything sending it to
+    escape autodraft would be switching it on. Run `capture.ps1` against a mock,
+    toggle Yahoo's own autopick control, and read which frame leaves.
+  - Then a product question worth its own decision rather than an
+    implementation: autopick does not stay off. The same seat is named by `5|`
+    sixty lines later and picked for again, so this is not a setting to flip but
+    a counter-action to repeat for the whole draft — the app persistently
+    fighting Yahoo's inactivity rule on the user's behalf. That is a larger
+    claim on a live draft than writing a queue, and it should be decided rather
+    than assumed.
+
 - [x] Choose which sources price the board, and say what the numbers imply.
   - Scope: `adpSource` became `<rule>:<feed>,<feed>` — a tick per feed plus
     averaged or in-order — with the four older namings normalised on the way in

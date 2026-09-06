@@ -126,6 +126,27 @@ somebody else's; it reads "On the clock" there now.
 
 ### Added
 
+**The board can set your Yahoo draft queue.** Off unless you turn it on, over a
+Yahoo draft, with the Yahoo queue control above the player list. `Mirror` sends
+the players you star; `Autodraft` sends those and then the board's own picks
+after them, so a clock that runs out takes a player worth having. It is not an
+autodrafter and does not make a pick: a Yahoo queue fires when your clock
+expires, which is insurance for a pick you might miss rather than a pick made
+for you. The frame that would take one outright is now documented and is
+deliberately absent from the bridge.
+
+Your own Yahoo entries are never dropped, and **First** says whether yours or
+theirs go on top. The one exception is the first write of a draft, which
+replaces whatever was in the queue, because nothing can read a Yahoo queue
+before writing one — no frame reports one unprompted and no endpoint carries
+one. The control says so, and every write after the first merges.
+
+All of this came out of `tools/yahoo/`, which had been holding the answer since
+September: `S|<league>|<team>|<ids…>` sets the whole queue and `Q|` echoes it
+back, across 32 writes nobody had read. `docs/yahoo-draft-protocol.md` had
+listed the client as sending one frame and `Q` as unknown; it now carries the
+queue, the pick frame, and what `5|` and `6|` appear to be.
+
 **A rookie is marked, and ADP says how firm it is.** A player with no NFL season
 behind his projection carries an R next to his team and bye. Hovering ADP now
 says the spread in picks and how many real drafts measured it, or that no feed
