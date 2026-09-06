@@ -54,15 +54,15 @@ $clientPort = if ($env:CLIENT_PORT) { [int]$env:CLIENT_PORT } else { 5177 }
 # Asked of the port rather than of the process list, so this says the same thing
 # whoever is holding it and needs no elevation to find out.
 #
-# By name rather than by address, and that is not a detail. Vite binds whatever
-# `localhost` resolves to, which on this machine is `::1` alone, so a probe of
-# `127.0.0.1` reports a running interface as down and this would cheerfully
-# start a second one. Connecting by name tries every address the name has.
+# By address rather than by name, and that is not a detail. `localhost` resolves
+# to `::1` ahead of `127.0.0.1` here, and a connect to it is refused rather than
+# falling back, so a probe by name reports a running interface as down and this
+# would cheerfully start a second one. Both halves bind 127.0.0.1; ask that.
 function Test-Port {
     param([int]$Port)
     $client = [System.Net.Sockets.TcpClient]::new()
     try {
-        return $client.ConnectAsync('localhost', $Port).Wait(1500)
+        return $client.ConnectAsync('127.0.0.1', $Port).Wait(1500)
     } catch {
         return $false
     } finally {
