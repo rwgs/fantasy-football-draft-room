@@ -74,6 +74,22 @@ interface Props {
    * you already chose is the better guide.
    */
   recommended: Recommendation | null;
+  /**
+   * Who the pick is instead, once the one above has gone, deepest first out.
+   *
+   * The same board priced again with him removed rather than the leaders at
+   * the other positions, which is what the cost of waiting panel already
+   * lists. Empty whenever `recommended` is null: there is no second choice to
+   * a choice nobody made.
+   */
+  alternates: Recommendation[];
+  /**
+   * The back you hold that an available back is the backup to, by his id.
+   *
+   * Only ever filled once your starting backs are, because that is the only
+   * time a handcuff is the right use of a pick. See `handcuffsFor`.
+   */
+  handcuffs: Map<string, Player>;
   /** Whether the pick being made is your own. Decides how the flag is worded. */
   yourTurn: boolean;
   /**
@@ -139,10 +155,18 @@ function sourceTitle(p: Player): string {
     : head + '  (one source only)';
 }
 
+/**
+ * What to call an alternative, counting the named pick as the first.
+ *
+ * As long as the chain the screen asks for, which is `PICKS_DEEP` there and
+ * three names in the key below. A deeper chain needs all three moved together.
+ */
+const ORDINALS = ['2nd', '3rd', '4th'];
+
 export default function PlayerPool(props: Props) {
   const {
     players, myRank, notes, currentPick, myNextPick, teams, onDraft, canDraft, queue, onQueue,
-    replacement, roomOdds, recommended, yourTurn, openSort,
+    replacement, roomOdds, recommended, alternates, handcuffs, yourTurn, openSort,
   } = props;
 
   const [search, setSearch] = useState('');
@@ -336,6 +360,28 @@ export default function PlayerPool(props: Props) {
               A rookie: no NFL season behind the projection. Read it as a wider spread
               than the number suggests, in both directions.
             </dd>
+            <dt>2nd, 3rd, 4th choice</dt>
+            <dd>
+              Who this pick is for once the name above him has gone. Each one is the
+              whole board priced again with everyone ahead of him removed, so it is an
+              answer and not a runner-up: when one position is running, the next player
+              at it comes second, ahead of every other position's best.
+            </dd>
+            <dt>HANDCUFF</dt>
+            <dd>
+              He is the backup to a running back you already hold. Worth almost nothing
+              while the man in front of him plays and most of him when he does not,
+              which is the one thing WORTH cannot tell you, because WORTH prices him as
+              himself. It appears only once your starting backs are filled, since before
+              then you need a back who plays. Inferred from the team sheet — no feed
+              here publishes a depth chart — so it reads a committee as a starter and a
+              backup.
+            </dd>
+            <dt>COVERS</dt>
+            <dd>
+              The same thing, where the back you hold is carrying an injury status. The
+              insurance has stopped being hypothetical.
+            </dd>
           </dl>
         </details>
       </div>
@@ -350,6 +396,8 @@ export default function PlayerPool(props: Props) {
         {rows.map(({ player, odds, mine, worth }) => {
           const queued = queue.includes(player.id);
           const pick = recommended?.player.id === player.id ? recommended : null;
+          const altAt = alternates.findIndex((a) => a.player.id === player.id);
+          const cuff = handcuffs.get(player.id) ?? null;
           const pct = Math.round(odds * 100);
           const note = notes?.get(player.id) ?? null;
           const split = (player.consensusSpread ?? 0) >= SPLIT_WORTH_MARKING;
@@ -360,7 +408,9 @@ export default function PlayerPool(props: Props) {
           return (
             <div
               key={player.id}
-              className={'player' + (pick ? ' is-pick' : '')}
+              className={'player' + (pick ? ' is-pick' : '')
+                + (altAt >= 0 ? ' is-alt' : '')
+                + (cuff?.injuryStatus ? ' is-cover' : '')}
               data-pos={player.position}
               role="listitem"
             >
@@ -389,6 +439,15 @@ export default function PlayerPool(props: Props) {
                 <span className="player-name">{player.name}</span>
                 <span className="player-sub">
                   {player.team}
+                  {altAt >= 0 && (
+                    <span
+                      className="player-alt"
+                      title={'The ' + ORDINALS[altAt] + ' choice this pick, once everyone '
+                        + 'named above him has gone.'}
+                    >
+                      {' · ' + ORDINALS[altAt] + ' choice'}
+                    </span>
+                  )}
                   {player.bye ? ' · BYE ' + player.bye : ''}
                   {mine !== Number.MAX_SAFE_INTEGER ? ' · MINE ' + mine : ''}
                   {fell >= teams && (
@@ -474,6 +533,50 @@ export default function PlayerPool(props: Props) {
                   {pick.fillsStarter
                     ? '. You still have to start one.'
                     : '. Your lineup is full, so this is on worth alone.'}
+                </p>
+              )}
+
+              {/*
+                * What to do when the name above is taken before you can take
+                * him, which out of turn is the likeliest thing to happen next.
+                * Each is the board priced again with everyone above him gone,
+                * so reading down the line is reading a real sequence rather
+                * than a top four.
+                */}
+              {pick && alternates.length > 0 && (
+                <p className="pick-flag pick-alts">
+                  <span className="pick-flag-tag">{yourTurn ? 'Or' : 'If he goes'}</span>
+                  {alternates.map((alt) => (
+                    <span className="pick-alt" key={alt.player.id}>
+                      <b>{alt.player.name}</b>
+                      {' ' + alt.player.position + ' '}
+                      <span className="pick-alt-worth">
+                        {(alt.worth > 0 ? '+' : '') + Math.round(alt.worth)}
+                      </span>
+                    </span>
+                  ))}
+                </p>
+              )}
+
+              {/*
+                * A back is worth what he scores; a back behind one of yours is
+                * worth what the man in front of him scores, on the week that
+                * man is out. Nothing else on this row can say that, because
+                * every other number here prices him as himself.
+                */}
+              {cuff && (
+                <p className={'pick-flag pick-cuff' + (cuff.injuryStatus ? ' is-cover' : '')}>
+                  <span className="pick-flag-tag">
+                    {cuff.injuryStatus ? 'Covers' : 'Handcuff'}
+                  </span>
+                  {'Behind ' + cuff.name + ', who you hold.'}
+                  {cuff.injuryStatus
+                    // Whose status it is has to be said. The row itself carries
+                    // this player's, and the one that makes him worth a pick
+                    // belongs to somebody who is not on this row at all.
+                    ? ' ' + cuff.name.split(' ').slice(-1)[0] + ' is ' + cuff.injuryStatus
+                      + ', so this is the pick that covers him.'
+                    : ' Worth little until he is out, and most of him when he is.'}
                 </p>
               )}
 

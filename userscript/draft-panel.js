@@ -86,6 +86,15 @@
     '  text-overflow: ellipsis; white-space: nowrap; }',
     '.take-pos { margin-left: auto; font-size: 11px; font-weight: 700; color: #a9b2ad; flex: none; }',
     '.take-why { margin: 3px 0 0; font-size: 11px; color: #b9c2bd; }',
+    '.alts { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: baseline;',
+    '  gap: 3px 8px; font-size: 11px; color: #8f9a96; }',
+    '.alts-tag { font-size: 9px; font-weight: 700; letter-spacing: 0.1em;',
+    '  text-transform: uppercase; border: 1px solid #35403d; border-radius: 3px;',
+    '  padding: 0 3px; flex: none; }',
+    '.alt { white-space: nowrap; }',
+    '.alt > b { color: #b9c2bd; font-weight: 600; }',
+    '.alt-pos { margin-left: 3px; color: #7c8783; }',
+    '.alt-worth { margin-left: 4px; font-variant-numeric: tabular-nums; color: #d9a83c; }',
     '.rows { padding: 5px 10px 8px; }',
     '.row { display: grid; grid-template-columns: 30px minmax(0,1fr) auto auto; gap: 4px 7px;',
     '  align-items: baseline; padding: 4px 0; border-top: 1px solid #1e2523; }',
@@ -166,6 +175,29 @@
         : '. Your lineup is full, so this is on worth alone.');
 
     box.append(head, el('p', 'take-why', why));
+
+    /*
+     * Who to take instead when he goes first, which in a room you are watching
+     * rather than picking in is the reading likeliest to have expired by the
+     * time you look up. Names and worth only: the reasoning belongs to the one
+     * pick being argued for, and four arguments is a panel nobody reads.
+     */
+    const alts = (p.alternates || []).filter((a) => a && a.name);
+    if (alts.length) {
+      const line = el('div', 'alts');
+      line.append(el('span', 'alts-tag', onClock ? 'Or' : 'If he goes'));
+      for (const a of alts) {
+        const one = el('span', 'alt');
+        one.append(
+          el('b', '', a.name),
+          el('span', 'alt-pos', a.position || ''),
+          el('span', 'alt-worth', (a.worth > 0 ? '+' : '') + Math.round(a.worth || 0)),
+        );
+        line.append(one);
+      }
+      box.append(line);
+    }
+
     return box;
   }
 
@@ -219,7 +251,12 @@
     wrap.append(head);
 
     if (advice && advice.lean) wrap.append(el('p', 'lean', advice.lean));
-    if (advice && advice.pick) wrap.append(take(advice.pick, !!advice.onClock));
+    if (advice && advice.pick) {
+      wrap.append(take(
+        { ...advice.pick, alternates: advice.alternates || [] },
+        !!advice.onClock,
+      ));
+    }
 
     const rows = (advice && advice.rows) || [];
     if (!rows.length) {

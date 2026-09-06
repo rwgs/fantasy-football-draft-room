@@ -1,9 +1,9 @@
 import { biasLever, chooseCpuPick } from './cpu';
 import { availablePlayers, currentPick, currentTeam, nextUserPick, presetFor } from './draft';
 import { mulberry32 } from './random';
-import { positionValues, replacementPoints } from './value';
+import { positionValues, rankCandidates, recommendPick, replacementPoints } from './value';
 import type { DraftEngine } from './draft';
-import type { PositionValue } from './value';
+import type { PositionValue, Recommendation } from './value';
 import type { CpuConfig, Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
@@ -405,4 +405,66 @@ export function pricedPositions(
       return { ...row, later, odds, cost: Math.max(0, row.now - later) };
     })
     .sort((a, b) => b.cost - a.cost);
+}
+
+/**
+ * The pick this turn is for, and who to take instead when he goes first.
+ *
+ * A single name is the right answer while he is on the board and no answer at
+ * all the moment somebody else takes him, which off the clock is most of the
+ * time you spend looking at it. So the same question is asked again with him
+ * removed: the board re-prices, and whoever comes out on top is the honest
+ * second choice. Repeat, and the list runs as deep as asked.
+ *
+ * Removing him is what makes the list worth having. It is not the leaders at
+ * the other positions, which is what the cost of waiting panel already lists
+ * beside this. Take the best back off the board and the next back inherits
+ * both the position's urgency and the leader's slot, so he can come second
+ * ahead of every other position — which is the answer a run at one position
+ * actually has.
+ *
+ * Your roster does not move as it walks. He is being taken by somebody else,
+ * not by you, so what you still have to start is the same at every step.
+ *
+ * Only the first name is gated on being a clear enough decision to make. Once
+ * there is a pick to name, a tie among the alternatives to it is not a reason
+ * to withhold them: they are alternatives, and near-equal ones are the most
+ * useful kind.
+ */
+export function recommendChain(
+  available: Player[],
+  all: Player[],
+  teams: number,
+  roster: RosterSlots,
+  currentPick: number,
+  targetPick: number | null,
+  room: Forecast | null,
+  mine: Record<Position, number>,
+  depth: number,
+): Recommendation[] {
+  const priced = pricedPositions(available, all, teams, roster, currentPick, targetPick, room);
+  const first = recommendPick(priced, mine, roster);
+  if (!first) return [];
+
+  const out = [first];
+  let left = available;
+  while (out.length < depth) {
+    const gone = out[out.length - 1].player.id;
+    left = left.filter((p) => p.id !== gone);
+    /*
+     * The room's own reading is reused rather than re-simulated. Its survival
+     * odds are per player and stay true, and its expected best still counts
+     * the man just removed, which can only understate what the next one costs
+     * to wait for. A cautious alternative is the safe direction to be wrong
+     * in, and a simulation per name is not worth paying for on every render.
+     */
+    const next = rankCandidates(
+      pricedPositions(left, all, teams, roster, currentPick, targetPick, room),
+      mine,
+      roster,
+    )[0];
+    if (!next) break;
+    out.push(next);
+  }
+  return out;
 }

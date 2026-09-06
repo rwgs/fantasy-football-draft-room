@@ -23,13 +23,18 @@ import { mergePresets } from './live';
 import {
   keeperPicksIn, pickOrder, picksForTeam, picksInRound, roundOrder, seatOf,
 } from './order';
-import { DEFAULT_ROSTER, bestLineup, emptyCounts, rosterSize, startersFilled } from './roster';
-import { positionValues, recommendPick, replacementPoints } from './value';
-import { forecast, observedLean, priorLean } from './forecast';
-import type { Board, CpuConfig, LeagueConfig, Position, RosterSlots } from './types';
+import {
+  DEFAULT_ROSTER, bestLineup, emptyCounts, handcuffsFor, rosterSize, startersFilled,
+} from './roster';
+import { positionValues, rankCandidates, recommendPick, replacementPoints } from './value';
+import { forecast, observedLean, priorLean, recommendChain } from './forecast';
+import type { Board, CpuConfig, LeagueConfig, Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
 const API = process.env.API || 'http://localhost:5178';
+
+/** What to call each fallback when the chain is printed. */
+const ORDINAL_LOG = ['', '2nd', '3rd', '4th'];
 
 /**
  * The real leagues to check against, or null when nobody named any.
@@ -488,6 +493,105 @@ async function main() {
     const tied = priced.slice(0, 2).map((v, i) => ({ ...v, now: 50, cost: i === 0 ? 1 : 0.5 }));
     check('a tie close enough to be noise is left unnamed',
       recommendPick(tied, counts({}), r) === null);
+
+    /*
+     * A tie is no reason to withhold the alternatives. It is a reason to name
+     * a pick carefully, and the gate on the first name is where that is done.
+     */
+    check('but a tie among the alternatives keeps them both',
+      rankCandidates(tied, counts({}), r).length === 2);
+  }
+
+  console.log('\nAnd who to take instead');
+  {
+    const r = DEFAULT_ROSTER;
+    const all = board.players;
+    const byAdp = [...all].sort((a, b) => a.adp - b.adp);
+    const after = (n: number) => byAdp.slice(n);
+    const counts = (held: Partial<Record<Position, number>>) => ({ ...emptyCounts(), ...held });
+    const chainAt = (mine: Record<Position, number>, depth = 4) =>
+      recommendChain(after(19), all, 12, r, 20, 29, null, mine, depth);
+
+    const chain = chainAt(counts({}));
+    console.log('        ' + chain.map((c, i) =>
+      (i ? ORDINAL_LOG[i] + ' ' : 'take ') + c.player.name + ' ' + c.player.position).join(', '));
+
+    check('the pick is named with three to fall back on', chain.length === 4,
+      String(chain.length));
+    check('and the first of them is the pick on its own',
+      chain[0]?.player.id === recommendPick(
+        positionValues(after(19), all, 12, r, 20, 29), counts({}), r,
+      )?.player.id);
+    check('every fallback is a different player',
+      new Set(chain.map((c) => c.player.id)).size === chain.length);
+    check('and every one of them is still available',
+      chain.every((c) => after(19).some((p) => p.id === c.player.id)));
+    check('and worth more than a replacement', chain.every((c) => c.worth > 0));
+
+    /*
+     * The whole reason the board is priced again rather than read off the
+     * leaders at the other positions. Take the best back away and the next
+     * back inherits both the slot and the position's urgency, so a chain from
+     * an empty roster reaches the same position twice before it reaches six.
+     */
+    const positions = chain.map((c) => c.player.position);
+    check('a fallback can be the next man at the same position',
+      new Set(positions).size < positions.length,
+      positions.join(' '));
+
+    check('a position filled to its cap is in none of them',
+      chainAt(counts({ QB: 9, TE: 9, K: 9, DEF: 9 }))
+        .every((c) => !['QB', 'TE', 'K', 'DEF'].includes(c.player.position)));
+
+    check('asking for one gets the pick and nothing else',
+      chainAt(counts({}), 1).length === 1);
+
+    check('nothing to fall back on when there was no pick to make',
+      recommendChain([], all, 12, r, 20, 29, null, counts({}), 4).length === 0);
+  }
+
+  console.log('\nThe backup to a back you hold');
+  {
+    const r = DEFAULT_ROSTER;
+    // Three backs, not two: the flex takes one, so two leaves a starting slot
+    // a back can still fill and the tag is rightly held back.
+    const full = { ...emptyCounts(), RB: 3, WR: 2, TE: 1, QB: 1, K: 1, DEF: 1 };
+    const open = { ...emptyCounts(), RB: 2, WR: 2, TE: 1, QB: 1, K: 1, DEF: 1 };
+
+    // Two backs on one team, so the pool holds a real backup to hold.
+    const backs = board.players
+      .filter((p) => p.position === 'RB' && p.team && p.points != null)
+      .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+    const byTeam = new Map<string, Player[]>();
+    for (const p of backs) byTeam.set(p.team, [...(byTeam.get(p.team) ?? []), p]);
+    const pair = [...byTeam.values()].find((list) => list.length >= 2)!;
+    const [lead, backup] = pair;
+    const others = board.players.filter((p) => p.id !== lead.id);
+
+    check('no handcuff while the flex could still take a back',
+      handcuffsFor(others, [lead], open, r).size === 0);
+
+    const cuffs = handcuffsFor(others, [lead], full, r);
+    check('the back behind the one you hold is his handcuff',
+      cuffs.get(backup.id)?.id === lead.id,
+      lead.name + ' <- ' + backup.name);
+    check('and everyone tagged is a back on a team you hold one from',
+      [...cuffs.entries()].every(([id, held]) => {
+        const p = others.find((x) => x.id === id)!;
+        return p.position === 'RB' && p.team === held.team && (p.points ?? 0) < (held.points ?? 0);
+      }));
+    check('and he is not the only one, so the guards below have something to guard',
+      cuffs.size > 0, String(cuffs.size));
+    check('a receiver on that team is not a handcuff',
+      ![...cuffs.keys()].some((id) => others.find((p) => p.id === id)?.position !== 'RB'));
+    check('and nor is a back projected above the one you hold',
+      !cuffs.has(lead.id) && [...cuffs.keys()].every((id) => {
+        const p = others.find((x) => x.id === id)!;
+        return (p.points ?? 0) < (lead.points ?? 0);
+      }));
+
+    check('holding no back means nothing to handcuff',
+      handcuffsFor(others, [], full, r).size === 0);
   }
 
   console.log('\nReading the room');
@@ -2048,6 +2152,10 @@ async function yahooRoom() {
     rows: [{
       position: 'RB', name: 'A Back', worth: 117.2, cost: 18.4, odds: 0.22, beforeCliff: 2,
     }],
+    alternates: [
+      { name: 'Another Back', position: 'RB', worth: 99.5 },
+      { name: 'A Receiver', position: 'WR', worth: 88.1 },
+    ],
     // Anything reachable can post here, so the store keeps what it recognises
     // and drops the rest rather than handing a page it does not own whatever
     // arrived.
@@ -2077,6 +2185,13 @@ async function yahooRoom() {
       && Math.round(read.advice.pick.urgency) === 18
       && read.advice.pick.fillsStarter === true,
     JSON.stringify(read.advice.pick));
+  check('and so do the names to fall back on when he goes first',
+    read.advice.alternates?.length === 2
+      && read.advice.alternates[0].name === 'Another Back'
+      && read.advice.alternates[0].position === 'RB'
+      && Math.round(read.advice.alternates[0].worth) === 100
+      && read.advice.alternates[1].name === 'A Receiver',
+    JSON.stringify(read.advice.alternates));
   check('and so does what a row is worth, and its cliff',
     Math.round(read.advice.rows[0].worth) === 117 && read.advice.rows[0].beforeCliff === 2,
     JSON.stringify(read.advice.rows[0]));

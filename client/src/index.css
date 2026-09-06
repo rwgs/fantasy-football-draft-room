@@ -783,6 +783,58 @@ input[type='range']::-moz-range-thumb {
 }
 
 /*
+ * THE PICK AFTER THE PICK
+ *
+ * One name is the right answer while he is on the board and no answer at all
+ * the moment somebody else takes him, which out of turn is most of the time
+ * you spend reading it. These are the same question asked again with him gone.
+ *
+ * Weaker than the pick in exactly the way they are weaker than it: the same
+ * wash and the same edge at a third the strength, so the ranking is legible
+ * without reading a word. A second full-strength highlight would put four
+ * verdicts on a screen that has one pick to make.
+ */
+.player.is-alt {
+  background: color-mix(in srgb, var(--pos) 3%, transparent);
+  border-left-color: color-mix(in srgb, var(--pos) 40%, transparent);
+}
+.player-alt { color: var(--pos); font-weight: 600; }
+
+.pick-alts {
+  flex-wrap: wrap;
+  color: var(--chalk-3);
+}
+.pick-alt { white-space: nowrap; }
+.pick-alt > b { color: var(--chalk-2); font-weight: 600; }
+.pick-alt-worth { color: var(--pos); font-weight: 600; }
+
+/*
+ * THE BACK BEHIND YOUR BACK
+ *
+ * Not the position colour. Every other flag on a row is keyed to what the
+ * player is, and this one is about somebody else's health, so it takes the
+ * quiet chalk and earns colour only when the man it insures is listed. That is
+ * the whole point of the marker: before the injury it is a note, after it it
+ * is the pick.
+ */
+.pick-cuff { color: var(--chalk-3); }
+.pick-cuff > .pick-flag-tag { color: var(--chalk-3); border-color: var(--line); }
+.pick-cuff.is-cover { color: var(--chalk-2); }
+.pick-cuff.is-cover > .pick-flag-tag {
+  color: var(--qb);
+  border-color: var(--qb);
+}
+/* The same red the injury on the row above it is already in, because it is
+ * that injury being reported a second time and not a second thing.
+ *
+ * Never over the pick itself. A back can be both the best one left and the
+ * cover for one you hold, and on that row the verdict outranks the note, so
+ * the wash that says "take him" is the one that stays. */
+.player.is-cover:not(.is-pick) {
+  background: color-mix(in srgb, var(--qb) 7%, transparent);
+}
+
+/*
  * YOUR NOTE
  *
  * Everything else on this row is measured: ADP, projected points, the odds he

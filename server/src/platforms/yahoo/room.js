@@ -27,6 +27,8 @@ const MAX_POOL = 5000;
 const MAX_FRAMES = 1000;
 /** Lines of advice held for the bridge to show. A panel nobody reads past. */
 const MAX_ADVICE_ROWS = 5;
+/** Names to fall back on when the pick goes first. The app sends three. */
+const MAX_ADVICE_ALTS = 5;
 /** Characters kept from one field of it. Everything here is a name or a count. */
 const MAX_ADVICE_TEXT = 120;
 
@@ -195,6 +197,9 @@ export function setAdvice(leagueId, advice) {
   if (!room) return false;
 
   const rows = Array.isArray(advice?.rows) ? advice.rows.slice(0, MAX_ADVICE_ROWS) : [];
+  const alts = Array.isArray(advice?.alternates)
+    ? advice.alternates.slice(0, MAX_ADVICE_ALTS)
+    : [];
   const pick = advice?.pick;
   const source = advice?.source;
   room.advice = {
@@ -210,6 +215,14 @@ export function setAdvice(leagueId, advice) {
       urgency: Number(pick.urgency) || 0,
       fillsStarter: !!pick.fillsStarter,
     } : null,
+    // Who the pick is instead, once the name above has gone. Kept beside it
+    // rather than inside it because the pick is null far more often than these
+    // are interesting, and a panel that has one has both.
+    alternates: alts.map((alt) => ({
+      name: text(alt?.name),
+      position: text(alt?.position),
+      worth: Number(alt?.worth) || 0,
+    })),
     // Anything but a room reading is read off ADP, including a malformed one.
     source: source?.kind === 'room'
       ? { kind: 'room', sims: Number(source.sims) || 0 }

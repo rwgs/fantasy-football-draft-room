@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DraftBoard from './DraftBoard';
 import PlayerPool from './PlayerPool';
 import ValuePanel from './ValuePanel';
-import { describeLean, forecast, pricedPositions, priorLean } from '../engine/forecast';
+import {
+  describeLean, forecast, pricedPositions, priorLean, recommendChain,
+} from '../engine/forecast';
 import RosterPanel from './RosterPanel';
 import {
   autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
@@ -14,8 +16,8 @@ import { fetchDraftPicks, postRoomAdvice } from '../api';
 import { maskTeam } from '../anon';
 import { pickLabel, pickLabelWithOverall } from '../picks';
 import { livePresets, offBoardPlayer } from '../engine/live';
-import { recommendPick, replacementPoints } from '../engine/value';
-import { emptyCounts } from '../engine/roster';
+import { replacementPoints } from '../engine/value';
+import { emptyCounts, handcuffsFor } from '../engine/roster';
 import AdpSourcePicker from './AdpSourcePicker';
 import type { AppMode, Board, Platform, Player, SortKey } from '../engine/types';
 
@@ -41,6 +43,16 @@ const PUSHED_POLL_MS = 2000;
  * the mean picks per position agree to a tenth.
  */
 const FORECAST_RUNS = 150;
+
+/**
+ * How far down the pick to name alternatives.
+ *
+ * Four is a pick and three fallbacks, which is about as far as a chain of "and
+ * if he goes too" stays true: by the fourth removal enough of the board has
+ * moved that the room would be picking differently from the one this was read
+ * off. It is also what fits on a row without pushing the list under it away.
+ */
+const PICKS_DEEP = 4;
 
 interface Props {
   engine: DraftEngine;
@@ -329,10 +341,27 @@ export default function DraftScreen(props: Props) {
    * It used to be held back to `canPick`, which named a pick for every seat
    * while you entered a room's picks by hand and named none at all while a feed
    * ran the room. Both were the wrong way round.
+   *
+   * Three names follow it, each the answer once the one above has gone. Out of
+   * turn the one name on its own was the reading that expired soonest: the
+   * player it points at is exactly the one the room is most likely to take
+   * before your pick comes round.
    */
-  const recommended = useMemo(
-    () => (state.done ? null : recommendPick(priced, myCounts, state.league.roster)),
-    [state.done, priced, myCounts, state.league.roster],
+  const chain = useMemo(
+    () => (state.done ? [] : recommendChain(
+      available, board.players, teams, state.league.roster,
+      pick, oddsTarget, room, myCounts, PICKS_DEEP,
+    )),
+    [state.done, available, board.players, teams, state.league.roster,
+      pick, oddsTarget, room, myCounts],
+  );
+  const recommended = chain[0] ?? null;
+  const alternates = chain.slice(1);
+
+  /** Backups to the backs you hold, once a back would be a bench pick. */
+  const handcuffs = useMemo(
+    () => handcuffsFor(available, myPlayers, myCounts, state.league.roster),
+    [available, myPlayers, myCounts, state.league.roster],
   );
 
   /*
@@ -350,17 +379,28 @@ export default function DraftScreen(props: Props) {
     if (!assistant || platform !== 'yahoo' || !draftId) return;
     if (oddsTarget == null) return;
 
+    // Read off `chain` rather than the two names derived from it above, which
+    // are rebuilt every render and would post this on every one of them.
+    const [take, ...instead] = chain;
+
     void postRoomAdvice(platform, draftId, {
       onClock: yourTurn,
       pickLabel: pickLabelWithOverall(oddsTarget, teams),
       lean: room ? describeLean(room.lean) : null,
-      pick: recommended && {
-        name: recommended.player.name,
-        position: recommended.player.position,
-        worth: recommended.worth,
-        urgency: recommended.urgency,
-        fillsStarter: recommended.fillsStarter,
-      },
+      pick: take ? {
+        name: take.player.name,
+        position: take.player.position,
+        worth: take.worth,
+        urgency: take.urgency,
+        fillsStarter: take.fillsStarter,
+      } : null,
+      // Who to take instead when he goes first, which out of turn is the part
+      // of this panel most likely to be the part still true when you look up.
+      alternates: instead.map((alt) => ({
+        name: alt.player.name,
+        position: alt.player.position,
+        worth: alt.worth,
+      })),
       source: room ? { kind: 'room', sims: room.sims } : { kind: 'adp' },
       // Three is what fits over a draft room without covering it. They are
       // already sorted by what waiting costs, so these are the three worth
@@ -377,7 +417,7 @@ export default function DraftScreen(props: Props) {
       // The board on this screen is unaffected, and the panel in the other tab
       // simply keeps the last thing it was given.
     });
-  }, [assistant, platform, draftId, oddsTarget, yourTurn, teams, room, priced, recommended]);
+  }, [assistant, platform, draftId, oddsTarget, yourTurn, teams, room, priced, chain]);
 
   const draft = (id: string) => {
     setQueue((q) => q.filter((x) => x !== id));
@@ -604,6 +644,8 @@ export default function DraftScreen(props: Props) {
             replacement={replacement}
             roomOdds={room?.survival ?? null}
             recommended={recommended}
+            alternates={alternates}
+            handcuffs={handcuffs}
             yourTurn={yourTurn}
             openSort={poolSort}
           />

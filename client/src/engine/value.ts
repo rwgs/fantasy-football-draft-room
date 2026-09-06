@@ -201,17 +201,22 @@ export interface Recommendation {
 const WORTH_NAMING = 3;
 
 /**
- * Urgency only counts where it is yours.
+ * Every position's leader, in the order this pick is worth spending on them.
  *
- * A position you can no longer start contributes none of it, because waiting a
- * turn for a bench player costs you nothing this turn. That leaves worth alone
- * to decide, which is the right answer once the lineup is full.
+ * Urgency only counts where it is yours. A position you can no longer start
+ * contributes none of it, because waiting a turn for a bench player costs you
+ * nothing this turn. That leaves worth alone to decide, which is the right
+ * answer once the lineup is full.
+ *
+ * No margin gate here. That gate belongs to naming a single pick, where a tie
+ * means there is no decision to report; a ranked list of options is exactly
+ * what you want a tie to produce, both of them, in either order.
  */
-export function recommendPick(
+export function rankCandidates(
   priced: PositionValue[],
   mine: Record<Position, number>,
   roster: RosterSlots,
-): Recommendation | null {
+): Recommendation[] {
   const scored = priced
     .filter((row) => row.best != null && row.now > 0)
     // Whatever it is worth, a position nobody can still play is not a pick.
@@ -223,15 +228,21 @@ export function recommendPick(
     })
     .sort((a, b) => b.score - a.score);
 
-  if (!scored.length) return null;
-  const margin = scored.length > 1 ? scored[0].score - scored[1].score : scored[0].score;
-  if (margin < WORTH_NAMING) return null;
+  return scored.map((entry, i) => ({
+    player: entry.row.best!,
+    worth: entry.row.now,
+    urgency: entry.urgency,
+    fillsStarter: entry.starter,
+    margin: i + 1 < scored.length ? entry.score - scored[i + 1].score : entry.score,
+  }));
+}
 
-  return {
-    player: scored[0].row.best!,
-    worth: scored[0].row.now,
-    urgency: scored[0].urgency,
-    fillsStarter: scored[0].starter,
-    margin,
-  };
+/** The leader, once he is far enough clear of the next one to be a decision. */
+export function recommendPick(
+  priced: PositionValue[],
+  mine: Record<Position, number>,
+  roster: RosterSlots,
+): Recommendation | null {
+  const [top] = rankCandidates(priced, mine, roster);
+  return top && top.margin >= WORTH_NAMING ? top : null;
 }

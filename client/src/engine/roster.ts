@@ -1,4 +1,4 @@
-import type { Position, RosterSlots } from './types';
+import type { Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
 export const FLEX_POSITIONS: Position[] = ['RB', 'WR', 'TE'];
@@ -145,4 +145,50 @@ export function bestLineup(players: (import('./types').Player)[], roster: Roster
   const points = starters.reduce((n, p) => n + (p.points ?? 0), 0);
   const bench = players.filter((p) => !taken.has(p.id));
   return { starters, bench, points };
+}
+
+/**
+ * The backup behind a back you already hold, once you are drafting a bench.
+ *
+ * Backs are the one position where the man behind inherits the job. A second
+ * receiver on a team splits targets with the first and is worth what he is
+ * worth; a second back is worth almost nothing until the first is hurt, and
+ * then he is worth nearly all of him. That is a different reason to spend a
+ * pick from anything else on the row, so it is marked rather than left to be
+ * remembered off a team abbreviation.
+ *
+ * Nothing here knows a depth chart. No feed this board reads publishes one, so
+ * the backup is inferred: same team, same position, projected below the back
+ * you hold. That is right for the case it is drawn for and wrong the week a
+ * committee splits evenly, which the projections would already be saying.
+ *
+ * Held back until your starting backs are filled, flex included. Before that
+ * every back is a starter you still need and the tag would be arguing for the
+ * wrong pick; after it, a bench spot is exactly what a handcuff is for.
+ */
+export function handcuffsFor(
+  available: Player[],
+  myPlayers: Player[],
+  counts: Record<Position, number>,
+  roster: RosterSlots,
+): Map<string, Player> {
+  const out = new Map<string, Player>();
+  if (fillsStarter(counts, roster, 'RB')) return out;
+
+  const held = myPlayers.filter((p) => p.position === 'RB' && p.team);
+  if (!held.length) return out;
+
+  for (const p of available) {
+    if (p.position !== 'RB' || !p.team) continue;
+    // The best back you hold on his team, so a row never names your third
+    // string as the man it is insurance for.
+    let starter: Player | null = null;
+    for (const mineOne of held) {
+      if (mineOne.team !== p.team) continue;
+      if ((mineOne.points ?? 0) <= (p.points ?? 0)) continue;
+      if (!starter || (mineOne.points ?? 0) > (starter.points ?? 0)) starter = mineOne;
+    }
+    if (starter) out.set(p.id, starter);
+  }
+  return out;
 }

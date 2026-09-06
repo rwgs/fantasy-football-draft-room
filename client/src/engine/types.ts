@@ -654,6 +654,19 @@ export interface RoomAdvice {
     fillsStarter: boolean;
   } | null;
   /**
+   * Who the pick is instead, once the name above has gone.
+   *
+   * Read off the same board with him removed, so they are answers rather than
+   * runners-up: a run at one position puts the next man at it second, ahead of
+   * every other position's leader. Empty whenever `pick` is null.
+   */
+  alternates: {
+    name: string;
+    position: string;
+    /** Points over a replacement starter at his own position. */
+    worth: number;
+  }[];
+  /**
    * Where the numbers came from, which changes what they mean.
    *
    * ADP is what an average room does. Once enough real picks exist the room is
