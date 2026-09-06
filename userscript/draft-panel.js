@@ -28,7 +28,27 @@
   const EVERY_MS = 2500;
   const ID = 'draft-room-panel';
 
+  /*
+   * Which copy of this file is running.
+   *
+   * A bookmarklet carries its whole source in its own address, so the one on
+   * the bookmarks bar is a photograph taken when it was dragged and cannot
+   * update itself. `/panel` stamps the build into the copy it hands out; run
+   * any other way this stays the mark below, which means the source is being
+   * read live and cannot be behind anything.
+   */
+  const BUILD = '__PANEL_BUILD__';
+  const STAMPED = BUILD !== '__PANEL' + '_BUILD__';
+
+  /** Set once the service says it would hand out a different panel. */
+  let stale = null;
+
   const log = (...a) => console.log('[draft-panel]', ...a);
+
+  // Said before anything that can go wrong, so the running copy is known even
+  // when everything after this line fails. The bridge learned this the hard
+  // way and logs its version for the same reason.
+  log('loading, build ' + (STAMPED ? BUILD : 'unstamped (running from source)'));
 
   /*
    * Which league, from whichever frame is showing the draft.
@@ -108,6 +128,9 @@
     '.foot { margin: 0; padding: 6px 10px 8px; border-top: 1px solid #2b3330;',
     '  font-size: 10px; color: #7f8884; }',
     '.empty { padding: 10px; color: #a9b2ad; font-size: 12px; }',
+    '.stale { margin: 7px 10px 0; padding: 5px 7px; font-size: 11px; color: #e9c46a;',
+    '  background: rgba(183,138,46,0.12); border: 1px solid rgba(183,138,46,0.45);',
+    '  border-radius: 4px; }',
   ].join(String.fromCharCode(10));
 
   let host = null;
@@ -250,6 +273,17 @@
     head.append(title, pick, hide);
     wrap.append(head);
 
+    /*
+     * The one thing a stale panel could never say for itself. Drawn above the
+     * reading rather than below it, because everything below is what is being
+     * doubted: an older panel renders an older answer perfectly happily.
+     */
+    if (stale) {
+      wrap.append(el('p', 'stale',
+        'This panel is build ' + BUILD + '; the app now has ' + stale
+        + '. Drag it again from ' + SERVICE + '/panel to update it.'));
+    }
+
     if (advice && advice.lean) wrap.append(el('p', 'lean', advice.lean));
     if (advice && advice.pick) {
       wrap.append(take(
@@ -284,6 +318,34 @@
     shadow.append(wrap);
   }
 
+  /*
+   * Asked once, not on every beat. The answer cannot change while this copy is
+   * running: the source in the address bar is fixed, and a service that starts
+   * serving a newer panel is answering the next page load, not this one.
+   *
+   * Its own failure is silence. A panel that cannot reach the service has a
+   * louder problem than being out of date, and the beat below reports it.
+   */
+  async function checkBuild() {
+    if (!STAMPED) return;
+    try {
+      const res = await fetch(SERVICE + '/api/panel/build', {
+        credentials: 'omit',
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const { build } = await res.json();
+      if (build && build !== BUILD) {
+        stale = build;
+        log('this panel is build ' + BUILD + ' and the app now has ' + build
+          + '. Drag it again from ' + SERVICE + '/panel.');
+      }
+    } catch {
+      // Nothing to say. The beat is about to report the same unreachable
+      // service in the panel itself, and twice is not clearer than once.
+    }
+  }
+
   let moaned = false;
   async function beat() {
     if (closed) return;
@@ -310,6 +372,7 @@
 
   mount();
   render(null);
+  void checkBuild();
   beat();
   log('panel up, bottom left. Close it with the x in its corner.');
 })();

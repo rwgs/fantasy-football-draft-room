@@ -10,6 +10,7 @@
 import express from 'express';
 import cors from 'cors';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ADP_FEEDS, ADP_RULES, FORMATS, buildBoard, nearestSize } from './board.js';
@@ -187,6 +188,39 @@ app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
  * inherited every way one can fail to update. A bookmarklet is one click, from
  * the browser itself, with nothing in between.
  */
+/**
+ * The panel's source, and the build stamp that says which copy you are running.
+ *
+ * A bookmarklet carries the whole script in its own address, so the copy on the
+ * bookmarks bar is a photograph of this file taken whenever it was dragged. It
+ * cannot update itself, and a stale one fails the way the userscript did before
+ * it: silently, drawing an older panel while the file on disk says otherwise.
+ *
+ * So the build is stamped into the copy handed out, and the panel asks what the
+ * current one is. Derived from the source rather than a number somebody has to
+ * remember to raise, because the version that goes wrong is the one that was
+ * forgotten. Hashed before the stamp is applied, so both ends compute the same
+ * thing from the same bytes.
+ *
+ * Read per request rather than at boot, so editing the panel in a dev session
+ * is picked up without restarting a service that may be holding a live draft.
+ */
+const PANEL_MARK = '__PANEL_BUILD__';
+
+function panelSource() {
+  return readFileSync(join(HERE, '..', '..', 'userscript', 'draft-panel.js'), 'utf8');
+}
+
+function panelBuild(source) {
+  return createHash('sha256').update(source).digest('hex').slice(0, 8);
+}
+
+/** Which panel this service would hand out, for a running one to compare against. */
+app.get('/api/panel/build', (_req, res) => {
+  res.set('cache-control', 'no-store');
+  res.json({ build: panelBuild(panelSource()) });
+});
+
 app.get('/panel.js', (_req, res) => {
   res.type('text/javascript; charset=utf-8');
   res.set('cache-control', 'no-store');
@@ -198,8 +232,10 @@ app.get('/panel', (_req, res) => {
   // it. A loader would be shorter and would also be a script tag on an https
   // page pointing at plain http, which is the sort of thing a browser is right
   // to be suspicious of.
-  const source = readFileSync(join(HERE, '..', '..', 'userscript', 'draft-panel.js'), 'utf8');
-  const href = 'javascript:' + encodeURIComponent(source);
+  const source = panelSource();
+  const href = 'javascript:' + encodeURIComponent(
+    source.replace(PANEL_MARK, panelBuild(source)),
+  );
   res.type('html').set('cache-control', 'no-store').send(`<!doctype html>
 <html><head><meta charset="utf-8"><title>Draft panel</title><style>
  body { font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1211;

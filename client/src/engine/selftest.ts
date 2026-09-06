@@ -2232,6 +2232,30 @@ async function yahooRoom() {
   check('and where the numbers were read off',
     read.advice.source?.kind === 'room' && read.advice.source.sims === 400,
     JSON.stringify(read.advice.source));
+  /*
+   * A BOOKMARKLET CANNOT UPDATE ITSELF, SO IT HAS TO KNOW IT IS OLD
+   *
+   * The copy on the bookmarks bar carries its whole source in its own address:
+   * a photograph of the file taken when it was dragged. The build is stamped
+   * into the copy handed out and left as the mark in the source itself, so a
+   * running panel can ask what the current one is and say when it is behind.
+   * Both ends have to derive it from the same bytes or every panel reads stale.
+   */
+  const build = (await (await fetch(API + '/api/panel/build')).json()).build;
+  check('the service says which panel it would hand out',
+    typeof build === 'string' && build.length === 8, String(build));
+
+  const bookmarklet = await (await fetch(API + '/panel')).text();
+  check('and the one it hands out carries that build',
+    bookmarklet.includes(build), build);
+  check('with the mark spent rather than shipped',
+    !bookmarklet.includes('__PANEL' + '_BUILD__'));
+
+  // Served raw it is the live source, which cannot be behind anything, so the
+  // mark stays and the panel knows not to compare itself against anyone.
+  const rawPanel = await (await fetch(API + '/panel.js')).text();
+  check('while the source itself keeps the mark, and so claims no build',
+    rawPanel.includes('__PANEL' + '_BUILD__'));
 
 
   /*
