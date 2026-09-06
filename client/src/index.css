@@ -865,7 +865,20 @@ input[type='range']::-moz-range-thumb {
   overflow: hidden;
 }
 
+/*
+ * Blockified, or it paints nothing at all.
+ *
+ * This is a span inside a plain span, so it stayed `display: inline` and an
+ * inline box takes neither a width nor a height: the element measured 0 by 0
+ * and the fill has never once been drawn. What was on screen was the track
+ * under it, which is a grid item and so was blockified for free, and a bare
+ * grey rule under every row is exactly what "the bar doesn't fill" looks like.
+ *
+ * The value panel's equivalent is a div and has always painted, which is why
+ * one of the two bars in this app worked and the other did not.
+ */
 .survival-fill {
+  display: block;
   height: 100%;
   background: var(--pos);
   transition: width 220ms ease;

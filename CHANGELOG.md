@@ -12,6 +12,15 @@ fixed.
 
 ### Fixed
 
+**The survival bar had never been drawn at all.** Its fill is a `span` inside a
+plain `span`, so it stayed `display: inline`, and an inline box takes neither a
+width nor a height: the element measured 0 by 0 and painted nothing, in every
+theme, since it was written. What was on screen under each player was the track
+alone — a bare grey rule, which is exactly what "the bar doesn't fill" and "the
+bars are colourless" look like. The track survived only because it is a grid
+item and so was blockified for free, and the cost-of-waiting panel's equivalent
+has always worked because that one is a `div`.
+
 **The survival bar is drawn where it says something, and says the word where it
 does not.** It was on every row and moved on almost none of them. Measured on a
 real board: of 620 players 593 read exactly 100 per cent and 7 read 0, leaving
@@ -25,10 +34,9 @@ Scrolling past your own next pick only reached hundreds of identical full ones.
 
 The bar now appears only where the answer is in doubt. A player who will not
 reach your turn says "gone by 5.06 #54" instead, and one who certainly will says
-nothing and gives the row back its height. As a side effect the bars that remain
-carry their position's colour again: the rule that paints a bar under 25 per
-cent as a warning used to catch every row at the top of the list at once, so
-they were all the same red.
+nothing and gives the row back its height. The bars that remain carry their
+position's colour, and where one is under 25 per cent it is painted as a warning
+instead, which is a signal now rather than the whole screen at once.
 
 **The consensus column says which feeds it means.** It was labelled CONS, which
 named neither the sources nor the arithmetic. It is now ALL 3, because that is
