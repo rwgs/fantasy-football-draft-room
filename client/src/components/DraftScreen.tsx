@@ -17,10 +17,22 @@ import { livePresets, offBoardPlayer } from '../engine/live';
 import { recommendPick, replacementPoints } from '../engine/value';
 import { emptyCounts } from '../engine/roster';
 import AdpSourcePicker from './AdpSourcePicker';
-import type { AppMode, Board, Platform, Player } from '../engine/types';
+import type { AppMode, Board, Platform, Player, SortKey } from '../engine/types';
 
-/** How often the assistant asks Sleeper for new picks. */
+/** How often the assistant asks a pulled platform for new picks. */
 const POLL_MS = 8000;
+
+/**
+ * And a pushed one, which is faster because it costs nothing off this machine.
+ *
+ * A Sleeper poll is a request at somebody else's public feed, and eight seconds
+ * is a rate worth keeping to for a service nobody is paying for. Yahoo has
+ * already been read: the bridge in the user's own tab posted the picks within
+ * half a second of the room sending them, and this service answers from memory
+ * in about ten milliseconds. Waiting eight seconds to ask a question that is
+ * already answered is the whole of the lag on a Yahoo draft.
+ */
+const PUSHED_POLL_MS = 2000;
 
 /**
  * How many times the room is played out to read the odds off it.
@@ -48,6 +60,8 @@ interface Props {
    */
   adpSource: string;
   onAdpSource: (next: string) => void;
+  /** The order the pool opens on, from settings. Carried, not read here. */
+  poolSort: SortKey;
   onEngine: (next: DraftEngine) => void;
   onFinish: () => void;
   onLeave: () => void;
@@ -58,7 +72,7 @@ type Pane = 'pool' | 'board' | 'roster';
 export default function DraftScreen(props: Props) {
   const {
     engine, board, pace, mode, anonymous, draftId, platform, rankingEntries, notes,
-    adpSource, onAdpSource, onEngine, onFinish, onLeave,
+    adpSource, onAdpSource, poolSort, onEngine, onFinish, onLeave,
   } = props;
 
   const [queue, setQueue] = useState<string[]>([]);
@@ -193,7 +207,7 @@ export default function DraftScreen(props: Props) {
     };
 
     void poll();
-    const timer = setInterval(poll, POLL_MS);
+    const timer = setInterval(poll, platform === 'yahoo' ? PUSHED_POLL_MS : POLL_MS);
     return () => { alive = false; clearInterval(timer); };
   }, [assistant, draftId, platform, paused, manual, board, rankingEntries,
     state.league.scoring, state.league.teams, state.league.year]);
@@ -591,6 +605,7 @@ export default function DraftScreen(props: Props) {
             roomOdds={room?.survival ?? null}
             recommended={recommended}
             yourTurn={yourTurn}
+            openSort={poolSort}
           />
         </div>
 

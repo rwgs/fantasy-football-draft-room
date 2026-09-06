@@ -3,14 +3,8 @@ import { survivalOdds } from '../engine/survival';
 import useNarrow from '../useNarrow';
 import { pickLabelWithOverall } from '../picks';
 import type { Recommendation } from '../engine/value';
-import type { Player, Position } from '../engine/types';
-import { POSITIONS } from '../engine/types';
-
-const SORT_WORDS: Record<SortKey, string> = {
-  adp: 'ADP', mine: 'My rank', worth: 'Worth', odds: 'Going soon', split: 'Sources split',
-};
-
-export type SortKey = 'adp' | 'mine' | 'worth' | 'odds' | 'split';
+import type { Player, Position, SortKey } from '../engine/types';
+import { POOL_SORTS, POSITIONS } from '../engine/types';
 
 /**
  * How far apart the sources have to be before it is worth marking, in picks.
@@ -59,6 +53,14 @@ interface Props {
   recommended: Recommendation | null;
   /** Whether the pick being made is your own. Decides how the flag is worded. */
   yourTurn: boolean;
+  /**
+   * The order the pool opens on, from settings.
+   *
+   * Only the opening one. Sorting is a thing you do to the list in front of
+   * you, so the control stays where it is and this says nothing about it after
+   * the first render.
+   */
+  openSort: SortKey;
 }
 
 /**
@@ -117,12 +119,16 @@ function sourceTitle(p: Player): string {
 export default function PlayerPool(props: Props) {
   const {
     players, myRank, notes, currentPick, myNextPick, teams, onDraft, canDraft, queue, onQueue,
-    replacement, roomOdds, recommended, yourTurn,
+    replacement, roomOdds, recommended, yourTurn, openSort,
   } = props;
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Position | 'ALL' | 'QUEUE'>('ALL');
-  const [sort, setSort] = useState<SortKey>(myRank ? 'mine' : 'adp');
+  // Your own ranking only orders a list while you have one loaded. Asked for
+  // without one, it falls to ADP rather than to a column of nothing.
+  const [sort, setSort] = useState<SortKey>(
+    openSort === 'mine' && !myRank ? 'adp' : openSort,
+  );
   const narrow = useNarrow();
 
   const rows = useMemo(() => {
@@ -199,9 +205,9 @@ export default function PlayerPool(props: Props) {
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
             >
-              {(['adp', 'mine', 'worth', 'odds'] as SortKey[])
-                .filter((k) => k !== 'mine' || myRank)
-                .map((k) => <option key={k} value={k}>{SORT_WORDS[k]}</option>)}
+              {POOL_SORTS
+                .filter((k) => k.id !== 'mine' || myRank)
+                .map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
             </select>
           )}
         </div>

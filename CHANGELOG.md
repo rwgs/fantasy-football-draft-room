@@ -12,6 +12,32 @@ fixed.
 
 ### Fixed
 
+**Yahoo's own ADP is offered whenever the room can supply it, not only when it
+happened to be there first.** A board reports the feeds it could have been
+priced on as of the moment it was built, and the app asked for one board and
+kept the answer. A room arrives on its own schedule and mostly after that
+moment: the bridge is installed once the app is already open, a service
+restarted mid-draft is sent the pool again, a page is reloaded between rounds.
+None of those moved anything the board was keyed on, so "Your draft room" stayed
+greyed out for the rest of the session, saying it needed a live draft to follow
+while a live draft ran behind it. The only way back was to toggle another feed
+off and on, which nobody would think to do.
+
+A room now reports whether it holds an ADP at all, separately from the seat and
+the order it already reported, and the app watches that and asks for the board
+again when it changes. Both directions: a room that goes away takes the feed
+with it rather than leaving a choice that can no longer be honoured.
+
+**A Yahoo pick reaches the board in about two seconds instead of eight.** The
+assistant polled every eight seconds whatever it was following. That is a fair
+rate for Sleeper, which is a request at somebody else's public feed, and much
+too slow for Yahoo, where the picks have already been read: the bridge in your
+own tab posts them within half a second and the service answers from its own
+memory in about ten milliseconds. Waiting eight seconds to ask a question that
+was already answered was the whole of the lag. Yahoo now has its own beat and
+Sleeper keeps the old one. The panel over the draft room, which reads the app's
+answer every two and a half seconds, is unchanged.
+
 **The draft assistant says what to pick, and both modes say it the same way.**
 The recommendation was held back to picks you could make, which in the assistant
 meant naming one for every seat while you entered a room's picks by hand and
@@ -58,6 +84,14 @@ clock strip on your own turn in both modes. The assistant's clock also read
 somebody else's; it reads "On the clock" there now.
 
 ### Added
+
+**The order the player pool opens on is a setting.** It opened on your own
+ranking where you had a file loaded and on ADP where you did not, and "Worth"
+was only ever reached by clicking for it, every draft, in both modes. "Open the
+pool on" in The league now says which, and is kept with the rest of your
+settings. It only decides where the list starts; the sort over the list is
+unchanged. Asking for your own ranking without a file loaded still opens on ADP,
+because an order over a ranking nobody uploaded is no order at all.
 
 **The panel over the Yahoo room says what to pick.** It showed three positions,
 who was left at each, and what waiting cost. It did not show the pick, which is

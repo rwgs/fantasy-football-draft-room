@@ -1882,10 +1882,25 @@ async function yahooRoom() {
   const roomState = (id: string) => fetch(API + '/api/yahoo/room/' + id).then((r) => r.json());
   const before = await roomState(LEAGUE);
   check('a room nobody has posted says so rather than refusing',
-    before.orderIsSet === false && before.mySeat === null, JSON.stringify(before));
+    before.orderIsSet === false && before.mySeat === null
+      && before.pricesBoard === false, JSON.stringify(before));
 
   const first = await post({ team: 3, frames });
   check('a room with no pool yet asks for one', first.needPool === true);
+
+  /*
+   * A room can be watched and still price nothing.
+   *
+   * The seat and the order are here — the bridge is posting and the handshake
+   * landed — and the pool that carries Yahoo's ADP is not. The app watches this
+   * third answer rather than either of those two, because a board reports the
+   * feeds it could have used as of when it was built and this is the only thing
+   * that says that answer has since changed.
+   */
+  const seated = await roomState(LEAGUE);
+  check('a room posted without its pool prices no board',
+    seated.mySeat === 3 && seated.orderIsSet === true && seated.pricesBoard === false,
+    JSON.stringify(seated));
 
   const reply = await post({ team: 3, pool, seats, frames });
   check('the pool and the seats are taken', reply.needPool === false && reply.pool === 4);
@@ -1900,6 +1915,8 @@ async function yahooRoom() {
   const after = await roomState(LEAGUE);
   check('a posted room reports the seat and the order the app waits on',
     after.orderIsSet === true && after.mySeat === 3, JSON.stringify(after));
+  check('and says it can price a board once the pool has landed',
+    after.pricesBoard === true, JSON.stringify(after));
 
   /*
    * Yahoo's own ADP is the one thing here no feed this service can reach will

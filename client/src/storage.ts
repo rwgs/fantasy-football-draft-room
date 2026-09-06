@@ -2,7 +2,7 @@ import { DEFAULT_MANAGER, SEED_LEAGUES as CONFIGURED_LEAGUES } from './config';
 import { DEFAULT_CPU } from './engine/cpu';
 import { DEFAULT_ROSTER, rosterSize } from './engine/roster';
 import type {
-  AppMode, CpuConfig, LeagueConfig, Overrides, RankingSet, SavedLeague,
+  AppMode, CpuConfig, LeagueConfig, Overrides, RankingSet, SavedLeague, SortKey,
 } from './engine/types';
 
 /**
@@ -77,6 +77,15 @@ export interface Saved {
   resumeLive: boolean;
   /** Whether a Yahoo league being added is one of Yahoo's own mock drafts. */
   yahooMock: boolean;
+  /**
+   * The order the player pool opens on.
+   *
+   * Kept because the useful order is a settled preference rather than a
+   * per-draft decision: someone who drafts off value wants Worth in front of
+   * them from the first pick, and reaching for it every time is the friction.
+   * The control over the list is unaffected; this only says where it starts.
+   */
+  poolSort: SortKey;
 }
 
 /** The leagues this copy ships knowing about, blank until one is loaded. */
@@ -136,6 +145,9 @@ export function defaults(): Saved {
     myManager: DEFAULT_MANAGER,
     resumeLive: false,
     yahooMock: false,
+    // What the pool opened on before this was settable: your own ranking where
+    // you have one, and ADP where you do not.
+    poolSort: 'mine',
   };
 }
 
@@ -172,6 +184,7 @@ export function load(): Saved {
       theme: saved.theme ?? 'system',
       resumeLive: saved.resumeLive ?? false,
       yahooMock: saved.yahooMock ?? false,
+      poolSort: saved.poolSort ?? base.poolSort,
       // Older saves predate the per league fields. Fill them rather than let a
       // missing array reach a component that maps over it.
       savedLeagues: leagues.map((l) => ({

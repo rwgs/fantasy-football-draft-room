@@ -135,6 +135,46 @@ Phase 4: prove the platform seam against real leagues.
     serves, and `@downloadURL` in the script hard-codes `127.0.0.1:5178`, which
     is wrong for anyone who moves the port.
 
+- [x] Offer Yahoo's ADP whenever the room has one, follow a Yahoo room at its
+      own pace, and settle where the player pool opens.
+  - Scope: three faults reported from a live Yahoo mock run through the
+    assistant. `roomState` gained `pricesBoard` and the client watches it, so a
+    room arriving after the board was built still lights the "Your draft room"
+    feed. The picks poll split into `PUSHED_POLL_MS` and `POLL_MS`, two seconds
+    for Yahoo and eight for Sleeper. The pool's opening order became a saved
+    setting, "Open the pool on", with the shipped default matching what it
+    always did. `SortKey` and the four offered orders moved to
+    `engine/types.ts`, so the setting and the pool's own narrow select read one
+    list. See the 2026-09-06 decision "A pushed platform is watched, not asked
+    once".
+  - Acceptance criteria: the room feed goes from dead to live without a reload
+    when a pool lands; it goes dead again if the room does; a Yahoo pick reaches
+    the board in about two seconds and a Sleeper poll is unchanged; the pool
+    opens on the saved order, falling back to ADP where "My rank" is asked for
+    with no file loaded. All met and all checked.
+  - Automated validation: two new checks in the Yahoo suite of `engine:test` —
+    a room posted without its pool prices no board, and says it can once the
+    pool lands. `npm run engine:test` all pass with the service restarted first;
+    `server:test` 4/4; typecheck and build clean; lint 38 warnings against a
+    baseline of 37, the one addition being the same `react(refs)` pattern the
+    file already carries fifteen of.
+  - Manual validation: `npm run shots` clean, no console error. Its Yahoo mock
+    scenario was extended to post the room and the pool separately and assert
+    the control comes alive between them — **checked by removing the trigger and
+    watching it time out**, then restored. The setting was driven in a real
+    browser: default reads "My rank", choosing "Worth" opens the pool with the
+    Worth chip pressed, and the field was photographed in place.
+  - Validation not run: the two fixtures-dependent suites, plus a third, all
+    skipped for want of `client/fixtures.local.json`. They are the only checks
+    over league and draft code in `server/src/platforms/`, so the Yahoo change
+    here rests on the synthetic-frame suite alone. The first task in this phase
+    is what closes that.
+  - Raised, not acted on: `refreshToken > 0` in `App.tsx` latches, so once
+    "Refresh ADP" is pressed every later board fetch that session forces the
+    upstream feeds. Pre-existing, and this change makes board refetches somewhat
+    more frequent. The `split` sort key is unreachable — no control sets it —
+    and was left in place.
+
 ## Blocked
 
 - [ ] Yahoo's own Fantasy Sports API, if the application is ever approved.

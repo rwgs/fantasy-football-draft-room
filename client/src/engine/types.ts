@@ -49,6 +49,34 @@ export const ADP_RULES = [
   { id: 'order', label: 'In order', what: 'The first feed that has heard of him. The rest only fill its gaps.' },
 ];
 
+/**
+ * How the player pool is ordered.
+ *
+ * `split` sorts by how far the feeds disagree and has no control that reaches
+ * it. It is left alone here rather than removed: the comparator that reads it
+ * is not this change's to delete.
+ */
+export type SortKey = 'adp' | 'mine' | 'worth' | 'odds' | 'split';
+
+/**
+ * The orders the pool offers, in the order it offers them.
+ *
+ * Here rather than in the pool because the setup screen now names one as the
+ * order a draft opens on, and a second list of the same four would be a second
+ * place for them to disagree. The pool's own chips keep their own wording:
+ * they say "Least likely to last" on a wide screen and "Going soon" on a
+ * narrow one, which a single label cannot carry.
+ *
+ * `mine` needs a ranking file. Where there is none it is not offered and not
+ * honoured, because an order over a ranking nobody uploaded is no order at all.
+ */
+export const POOL_SORTS: { id: SortKey; label: string }[] = [
+  { id: 'adp', label: 'ADP' },
+  { id: 'mine', label: 'My rank' },
+  { id: 'worth', label: 'Worth' },
+  { id: 'odds', label: 'Going soon' },
+];
+
 export interface AdpChoice {
   rule: string;
   feeds: string[];
@@ -575,6 +603,14 @@ export interface LivePicks {
 export interface RoomState {
   orderIsSet: boolean;
   mySeat: number | null;
+  /**
+   * Whether the room holds an ADP the board could be priced on.
+   *
+   * Asked after the draft has opened as well as before it. A board says which
+   * feeds it could have used as of when it was built, and a room arrives on its
+   * own schedule, so this is the only thing that says the answer has changed.
+   */
+  pricesBoard: boolean;
 }
 
 /**

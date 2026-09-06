@@ -14,7 +14,7 @@ import type { DraftEngine } from './engine/draft';
 import { YAHOO_MOCK_ROSTER, rosterSize } from './engine/roster';
 import type {
   AppMode, Board, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
-  NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague,
+  NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague, SortKey,
 } from './engine/types';
 import type { RankingSource, Theme } from './storage';
 import { load, save } from './storage';
@@ -42,6 +42,8 @@ export default function App() {
   const [cpu, setCpu] = useState<CpuConfig>(saved.cpu);
   const [preset, setPreset] = useState(saved.cpuPreset);
   const [pace, setPace] = useState(saved.pace);
+
+  const [poolSort, setPoolSort] = useState<SortKey>(saved.poolSort);
 
   const [mode, setMode] = useState<AppMode>(saved.mode);
   const [anonymous, setAnonymous] = useState(saved.anonymous);
@@ -120,9 +122,10 @@ export default function App() {
     save({
       league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
       cpuPreset: preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock,
+      poolSort,
     });
   }, [league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
-    preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock]);
+    preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock, poolSort]);
 
   /*
    * The resolved theme goes on <html> rather than into the tree, because what
@@ -176,6 +179,44 @@ export default function App() {
   // is how the board comes back saying whether `room` was on offer at all.
   const boardRoom = liveDraftId ? activePlatform + ':' + liveDraftId : undefined;
 
+  /**
+   * Whether the room being followed can price a board yet.
+   *
+   * A board answers with the feeds it *could* have used, and that answer is
+   * true of the moment it was built and of no other. A room arrives on its own
+   * schedule and on both sides of that moment: the bridge is installed after
+   * the app is open, a service restarted mid-draft is sent the pool again, a
+   * page is reloaded between rounds. None of those move anything the board is
+   * keyed on, so without this the room feed is offered once or never, and a
+   * live Yahoo draft runs behind a control greyed out for saying there is none.
+   *
+   * Asked on a beat rather than once, because it goes both ways, and dropped at
+   * the first refusal: a platform read from its own feed keeps no room and says
+   * so with a refusal rather than a false, and there is nothing to ask it again.
+   */
+  const [roomPrices, setRoomPrices] = useState(false);
+
+  useEffect(() => {
+    // Left as it was where there is no room to ask about. What it is worth is
+    // decided by the next room's own answer, and a board is re-asked for on the
+    // change of name anyway, so clearing it here would buy a render and nothing.
+    if (!boardRoom || !liveDraftId) return undefined;
+    let alive = true;
+    let timer = 0;
+
+    const ask = async () => {
+      const room = await fetchRoomState(activePlatform, liveDraftId).catch(() => null);
+      // A refusal ends it. A platform read from its own feed keeps no room to
+      // report and says so by refusing, which is not an answer that changes.
+      if (!alive || !room) return;
+      setRoomPrices(room.pricesBoard);
+      timer = window.setTimeout(() => { void ask(); }, ROOM_WAIT_MS);
+    };
+
+    void ask();
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [boardRoom, activePlatform, liveDraftId]);
+
   useEffect(() => {
     const control = new AbortController();
     setLoading(true);
@@ -198,7 +239,12 @@ export default function App() {
         setLoading(false);
       });
     return () => control.abort();
-  }, [league.scoring, league.teams, league.adpSource, league.year, boardRoom, refreshToken]);
+    // `roomPrices` is not sent and does not change the request. It is here
+    // because it is the one thing that changes the *answer* to the same
+    // request, and a board fetched before a room turned up is a board that
+    // will not offer it.
+  }, [league.scoring, league.teams, league.adpSource, league.year, boardRoom, roomPrices,
+    refreshToken]);
 
   /**
    * Run a ranking file against the board with the current overrides applied.
@@ -905,6 +951,8 @@ export default function App() {
           }}
           onCpu={(next, id) => { setCpu(next); setPreset(id); }}
           onPace={setPace}
+          poolSort={poolSort}
+          onPoolSort={setPoolSort}
           onRankings={loadRankings}
           onOverride={setOverride}
           onForgetOverride={forgetOverride}
@@ -994,6 +1042,7 @@ export default function App() {
           notes={notes}
           adpSource={league.adpSource}
           onAdpSource={(adpSource) => setLeague({ ...league, adpSource })}
+          poolSort={poolSort}
           onEngine={setEngine}
           onFinish={() => setScreen('results')}
           onLeave={() => setScreen('setup')}

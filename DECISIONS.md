@@ -801,3 +801,79 @@ does belong in the mock draft.
   Sleeper sets it" is not made true by swapping the noun: Yahoo puts the draft
   order in the room, where only the bridge can read it.
 
+
+## 2026-09-06 A pushed platform is watched, not asked once
+
+### Decision
+
+Two rules follow from a platform being pushed rather than pulled, and both are
+about time rather than about data.
+
+**A board's `adpOffered` is a snapshot, so anything that can change it is
+watched separately.** The board reports which feeds it could have been priced
+on, and that report is true of the moment it was built and of no other. Where a
+feed's availability can change under a board that is already on screen, the
+client polls the thing that decides it and asks for the board again when the
+answer moves. Today that is `roomState.pricesBoard` on the Yahoo platform, asked
+on the same five-second beat the app already uses while waiting for a room.
+
+**A pushed platform is polled faster than a pulled one.** `PUSHED_POLL_MS` is
+two seconds and `POLL_MS` is eight. A platform that is pushed keeps its picks in
+this service's own memory, so a poll costs a local request and nothing else; a
+pulled one spends somebody else's bandwidth on every beat.
+
+### Why
+
+The room feed could be offered once or never. A room arrives on its own
+schedule and mostly *after* the board that would report it: the bridge is
+installed while the app is already open, a restarted service is sent the pool
+again mid-draft, a page is reloaded between rounds. None of those move anything
+the board fetch is keyed on — not the format, the league size, the year, the
+chosen feeds, or even the room's name, which was already set. So "Your draft
+room" stayed greyed out for the rest of the session, and its tooltip said it
+needed a live draft to follow while a live draft ran behind it. The only way
+back was to toggle an unrelated feed off and on, which changes `adpSource` and
+so re-asks for the board by accident.
+
+The eight-second beat was Sleeper's rate applied to Yahoo because there was one
+constant. It is a fair rate for a public feed nobody is paying for, and an
+absurd one for a question already answered: the bridge posts a pick within half
+a second of the room sending it, and the picks route answers from memory in
+about ten milliseconds. Measured at ten milliseconds a call, a two-second beat
+is a half-percent duty cycle on the user's own machine.
+
+### Rejected alternatives
+
+- **Re-asking for the board on a beat until it offers the room.** Rejected: it
+  polls an expensive endpoint to discover something a cheap one already knows,
+  and it cannot tell "no room" from "a room with no ADP in it", so it would
+  re-ask forever for a room that will never price anything.
+- **Using the seat or the order as the signal.** Rejected: both are already
+  true before the pool lands, and the pool is what carries Yahoo's ADP. A room
+  re-posted to a restarted service has a seat immediately and an ADP later, so
+  neither would fire at the moment that matters.
+- **Reporting it from the picks poll, which already carries `roomAdp`.**
+  Rejected: that poll runs only on the draft screen and not while the draft is
+  paused or being entered by hand, and the same control is on the setup screen,
+  which would go on lying.
+- **A single poll rate, tuned between the two.** Rejected: there is no rate that
+  is both polite to a public feed and quick on a local one. The platforms differ
+  in kind, so the constant does.
+
+### Consequences
+
+- `roomState` is now three answers rather than two, and a platform that keeps a
+  room is expected to answer all three. A platform that keeps none still refuses
+  the route, and the client's poll ends at the first refusal rather than asking
+  again.
+- The feed goes away as well as arriving. A service restarted mid-draft drops
+  the room, the poll reports it, and the board is re-asked for without it.
+  `parseAdpSource` already drops a feed it was not offered, and the saved choice
+  still names the room, so it is honoured again when the room comes back.
+- `npm run shots` covers the arrival end to end: the Yahoo mock scenario posts a
+  room without a pool, checks the control is dead, posts the pool, and waits for
+  the control to come alive without a reload. Removing the trigger makes it fail.
+- The two poll rates are named for what a platform *is* rather than for a
+  platform. A third platform picks its constant by answering whether it is
+  pushed or pulled, which is the same question `platforms/index.js` already asks
+  to decide whether it has `ingest` and `roomState` at all.

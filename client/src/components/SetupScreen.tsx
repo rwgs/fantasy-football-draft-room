@@ -13,8 +13,9 @@ import { maskLeague } from '../anon';
 import type {
   AppMode, Board, CpuConfig, LeagueConfig, LeagueImport, LeagueSetup, NoteSet,
   Overrides, PendingKeeper, Platform, Position, PresetPick, RankingSet, RosterSlots, SavedLeague,
+  SortKey,
 } from '../engine/types';
-import { POSITIONS } from '../engine/types';
+import { POOL_SORTS, POSITIONS } from '../engine/types';
 import AdpSourcePicker from './AdpSourcePicker';
 
 const SCORING = [
@@ -66,6 +67,8 @@ interface Props {
   onLeague: (next: LeagueConfig) => void;
   onCpu: (next: CpuConfig, preset: string) => void;
   onPace: (next: number) => void;
+  poolSort: SortKey;
+  onPoolSort: (next: SortKey) => void;
   onRankings: (csv: string, label: string) => void;
   onOverride: (key: string, playerId: string | null) => void;
   onForgetOverride: (key: string) => void;
@@ -130,7 +133,8 @@ function Stepper(props: {
 
 export default function SetupScreen(props: Props) {
   const {
-    league, cpu, preset, pace, board, loading, error, rankings, overrides, rankingsBusy,
+    league, cpu, preset, pace, poolSort, onPoolSort, board, loading, error, rankings,
+    overrides, rankingsBusy,
     noteSet, notesBusy, onNotes, onClearNotes,
     savedLeagues, activeLeagueId, importedLeague, leagueBusy, leagueError,
     onLeague, onCpu, onPace, onRankings, onOverride, onForgetOverride, onRankColumn,
@@ -474,6 +478,24 @@ export default function SetupScreen(props: Props) {
               >
                 {PACES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="poolSort">Open the pool on</label>
+              <select
+                id="poolSort"
+                className="input"
+                value={poolSort}
+                onChange={(e) => onPoolSort(e.target.value as SortKey)}
+              >
+                {POOL_SORTS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select>
+              <p className="hint">
+                Where the list starts, in both modes. You can still sort it any way you like
+                once a draft is open.
+                {poolSort === 'mine' && !rankings
+                  && ' Your own ranking needs a file loaded, so without one this opens on ADP.'}
+              </p>
             </div>
           </>
         </Section>

@@ -138,6 +138,43 @@ async function postRoom(id, teams, rounds, seat) {
 }
 
 /**
+ * The pool, posted separately because that is how it arrives.
+ *
+ * The bridge sends the seats and the order on connect and the pool whenever it
+ * manages to read it, and a service restarted mid-draft is sent the pool again
+ * on its own, long after the board opened. The pool is the only thing in a room
+ * carrying Yahoo's own ADP, so it alone decides whether the room can price a
+ * board — which is why the app has to keep asking rather than take the answer
+ * it got when the board was built.
+ *
+ * Built off the real board so the ADP lands on real players, the way the
+ * bridge's does.
+ */
+async function postPool(id) {
+  const res = await fetch(APP + '/api/board?scoring=ppr&teams=12&adpSource=sleeper');
+  if (!res.ok) throw new Error('no board to build a pool from: ' + res.status);
+  const board = await res.json();
+  const pool = board.players.slice(0, 8).map((p, i) => {
+    const [fname, ...rest] = p.name.split(' ');
+    return {
+      id: String(9000 + i),
+      fname,
+      lname: rest.join(' '),
+      display_pos: p.position,
+      team_abbr: p.team,
+      adp: 10 + i,
+      rank: i + 1,
+    };
+  });
+  const sent = await fetch(APP + '/api/yahoo/room/' + id, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pool, frames: [] }),
+  });
+  if (!sent.ok) throw new Error('the service refused the pool: ' + sent.status);
+}
+
+/**
  * A Yahoo mock, from a room that does not exist yet to a board that follows it.
  *
  * The only path here that no other check can reach. `engine:test` asks the
@@ -207,6 +244,28 @@ async function yahooMock(browser, viewport) {
     throw new Error('the board opened in seat ' + slot + ', not the ' + MY_SEAT
       + ' the room reported');
   }
+
+  /*
+   * THE ROOM FEED, WHICH ARRIVES AFTER THE BOARD THAT REPORTS IT.
+   *
+   * A board says which feeds it could have used as of the moment it was built,
+   * and this one was built while the room held no ADP at all. So the control is
+   * dead here, correctly. It used to stay dead: nothing the board is keyed on
+   * moves when a pool lands, and a live Yahoo draft would run for an hour
+   * behind a chip saying it needed a live draft to follow.
+   */
+  const roomChip = page.getByRole('button', { name: 'Your draft room', exact: true });
+  if (await roomChip.isEnabled()) {
+    throw new Error('the room was offered as a feed before any pool was posted');
+  }
+
+  await postPool(live);
+  await page.waitForFunction(
+    (label) => [...document.querySelectorAll('button')]
+      .some((b) => b.textContent.trim() === label && !b.disabled),
+    'Your draft room',
+    { timeout: ROOM_WAIT },
+  );
 
   return { page, errors };
 }

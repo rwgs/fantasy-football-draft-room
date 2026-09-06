@@ -309,18 +309,30 @@ function roomAdp(room, byKey) {
  * has posted, because asking what a draft has taken when no draft was ever
  * opened is a mistake worth saying out loud. Waiting is not a mistake: a mock
  * hands out its league number in the lobby minutes before the draft room tab
- * exists, so the app asks this on a beat until both answers turn true.
+ * exists, so the app asks this on a beat until the answers turn true.
  *
- * Both are evidence rather than description. The seat is written only by a post
- * from the bridge, so it means a room is being watched now; the order arrives in
- * the same connect burst as the settings, so it means the handshake landed and
- * the seat and round counts an import reads are Yahoo's own.
+ * All three are evidence rather than description. The seat is written only by a
+ * post from the bridge, so it means a room is being watched now; the order
+ * arrives in the same connect burst as the settings, so it means the handshake
+ * landed and the seat and round counts an import reads are Yahoo's own; and the
+ * pool arrives on its own schedule, so whether this room can price a board is a
+ * third thing again.
+ *
+ * That last one is here because a board reports the feeds it could have used as
+ * of the moment it was built, and a room turns up after that as often as before
+ * it: the bridge starts after the app, or a restarted service is sent the pool
+ * again mid-draft. Without something to watch, the room feed stays greyed out
+ * for the rest of the session while a live draft runs behind it.
  */
 export async function roomState(leagueId) {
   const room = getRoom(leagueId);
   return {
     orderIsSet: !!room?.order,
     mySeat: room?.mySeat ?? null,
+    // The same reading the board is offered, asked the same question: a room
+    // whose pool carries no ADP at all cannot price one, and saying it could
+    // would send the app back for a board that is no different.
+    pricesBoard: !!(room && adpFromPool(room)),
   };
 }
 
