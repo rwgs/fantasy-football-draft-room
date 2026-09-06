@@ -1,6 +1,7 @@
 import { biasLever, chooseCpuPick } from './cpu';
 import { availablePlayers, currentPick, currentTeam, nextUserPick, presetFor } from './draft';
 import { mulberry32 } from './random';
+import { CERTAINLY_GONE, survivalOdds } from './survival';
 import { positionValues, rankCandidates, recommendPick, replacementPoints } from './value';
 import type { DraftEngine } from './draft';
 import type { PositionValue, Recommendation } from './value';
@@ -467,4 +468,35 @@ export function recommendChain(
     out.push(next);
   }
   return out;
+}
+
+
+/**
+ * The players who can still reach your turn, for deciding what to aim at.
+ *
+ * Off the clock the board answers a different question from the one it answers
+ * on it. On the clock every available player is takeable and the best of them
+ * is the pick. Off it the pick is somebody else's, and the only players worth
+ * naming are the ones who might survive to your turn — so the board was naming
+ * a target, and three fallbacks, on rows that said "gone by" in the same
+ * glance. A fallback list of players who cannot reach you is not a fallback
+ * list.
+ *
+ * The room's own survival replaces the ADP reading where there is one, exactly
+ * as the pool's bar does, so this and the row it sits on cannot disagree.
+ *
+ * Only for choosing. The cost of waiting is measured against the whole board
+ * and has to be: the players who will be gone are the entire reason waiting
+ * costs anything, and dropping them there would price every position as flat.
+ */
+export function reachablePlayers(
+  available: Player[],
+  room: Forecast | null,
+  currentPick: number,
+  targetPick: number | null,
+): Player[] {
+  if (targetPick == null) return available;
+  return available.filter((p) => (
+    room?.survival.get(p.id) ?? survivalOdds(p, currentPick, targetPick)
+  ) > CERTAINLY_GONE);
 }

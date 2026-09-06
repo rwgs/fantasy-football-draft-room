@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { survivalOdds } from '../engine/survival';
+import { CERTAINLY_GONE, survivalOdds } from '../engine/survival';
 import useNarrow from '../useNarrow';
 import { pickLabelWithOverall } from '../picks';
 import type { Recommendation } from '../engine/value';
@@ -35,7 +35,6 @@ const SPLIT_WORTH_MARKING = 12;
  * whole reading, and "he will be there" is not worth a row of height paid six
  * hundred times.
  */
-const CERTAINLY_GONE = 0.03;
 const CERTAINLY_THERE = 0.97;
 
 interface Props {

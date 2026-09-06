@@ -3,7 +3,7 @@ import DraftBoard from './DraftBoard';
 import PlayerPool from './PlayerPool';
 import ValuePanel from './ValuePanel';
 import {
-  describeLean, forecast, pricedPositions, priorLean, recommendChain,
+  describeLean, forecast, pricedPositions, priorLean, reachablePlayers, recommendChain,
 } from '../engine/forecast';
 import RosterPanel from './RosterPanel';
 import {
@@ -346,13 +346,19 @@ export default function DraftScreen(props: Props) {
    * turn the one name on its own was the reading that expired soonest: the
    * player it points at is exactly the one the room is most likely to take
    * before your pick comes round.
+   *
+   * Off the clock it chooses from the players who can still reach you. It used
+   * to choose from everybody, so it named a target, and then three fallbacks,
+   * on rows that said "gone by" in the same glance. On the clock nothing is
+   * filtered, because on the clock every one of them is takeable.
    */
   const chain = useMemo(
     () => (state.done ? [] : recommendChain(
-      available, board.players, teams, state.league.roster,
+      yourTurn ? available : reachablePlayers(available, room, pick, oddsTarget),
+      board.players, teams, state.league.roster,
       pick, oddsTarget, room, myCounts, PICKS_DEEP,
     )),
-    [state.done, available, board.players, teams, state.league.roster,
+    [state.done, yourTurn, available, board.players, teams, state.league.roster,
       pick, oddsTarget, room, myCounts],
   );
   const recommended = chain[0] ?? null;

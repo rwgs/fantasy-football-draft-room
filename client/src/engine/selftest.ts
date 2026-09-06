@@ -27,7 +27,10 @@ import {
   DEFAULT_ROSTER, bestLineup, emptyCounts, handcuffsFor, rosterSize, startersFilled,
 } from './roster';
 import { positionValues, rankCandidates, recommendPick, replacementPoints } from './value';
-import { forecast, observedLean, priorLean, recommendChain } from './forecast';
+import {
+  forecast, observedLean, priorLean, reachablePlayers, recommendChain,
+} from './forecast';
+import { CERTAINLY_GONE, survivalOdds } from './survival';
 import type { Board, CpuConfig, LeagueConfig, Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
@@ -548,6 +551,37 @@ async function main() {
 
     check('nothing to fall back on when there was no pick to make',
       recommendChain([], all, 12, r, 20, 29, null, counts({}), 4).length === 0);
+
+    /*
+     * THE ADVICE MUST NOT NAME SOMEBODY THE SAME SCREEN CALLS GONE
+     *
+     * Off the clock the pick is somebody else's, so the only players worth
+     * naming are the ones who might survive to your turn. It used to name the
+     * best man left whatever his odds, which put a target, and then three
+     * fallbacks, on rows reading "gone by" in the same glance.
+     */
+    const canReach = reachablePlayers(after(19), null, 20, 29);
+    check('somebody is filtered out as unreachable, or this proves nothing',
+      canReach.length < after(19).length,
+      canReach.length + ' of ' + after(19).length);
+    check('and everyone kept has a real chance of lasting',
+      canReach.every((p) => survivalOdds(p, 20, 29) > CERTAINLY_GONE));
+
+    const offClock = recommendChain(canReach, all, 12, r, 20, 29, null, counts({}), 4);
+    check('nobody named off the clock is already gone by your turn',
+      offClock.every((c) => survivalOdds(c.player, 20, 29) > CERTAINLY_GONE),
+      offClock.map((c) => c.player.name + ' '
+        + Math.round(survivalOdds(c.player, 20, 29) * 100) + '%').join(', '));
+    check('and it still names a pick and three to fall back on',
+      offClock.length === 4, String(offClock.length));
+
+    /*
+     * On the clock the filter is wrong, and off it is the point. Every player
+     * left is takeable this second whatever his odds of lasting, so the two
+     * readings are allowed to differ and the check is that they can.
+     */
+    check('on the clock nothing is filtered, so the whole board is in play',
+      reachablePlayers(after(19), null, 20, null).length === after(19).length);
   }
 
   console.log('\nThe backup to a back you hold');
@@ -2198,6 +2232,7 @@ async function yahooRoom() {
   check('and where the numbers were read off',
     read.advice.source?.kind === 'room' && read.advice.source.sims === 400,
     JSON.stringify(read.advice.source));
+
 
   /*
    * Saying nothing has to survive too. A pick the app withheld must arrive as

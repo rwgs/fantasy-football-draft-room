@@ -24,3 +24,14 @@ export function survivalOdds(player: Player, currentPick: number, targetPick: nu
   if (now <= 1e-6) return then > 0 ? 1 : 0;
   return Math.max(0, Math.min(1, then / now));
 }
+
+/**
+ * Below this, the board is saying he will not reach your turn.
+ *
+ * Here rather than beside the bar that draws it, because two things now turn on
+ * it and they have to agree. The pool prints "gone by 5.06" instead of a bar
+ * pinned near empty, and the advice refuses to name a target it has just called
+ * gone. One number means the row and the recommendation cannot contradict each
+ * other; two numbers means they can, and eventually will.
+ */
+export const CERTAINLY_GONE = 0.03;
