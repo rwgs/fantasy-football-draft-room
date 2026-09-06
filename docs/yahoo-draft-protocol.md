@@ -90,6 +90,9 @@ Frames are pipe-delimited text, one record per frame.
 | Frame | Meaning |
 |---|---|
 | `8\|<league>\|<team>\|<url-encoded user agent>` | Hello, sent immediately on open. **Observed** |
+| `S\|<league>\|<team>\|<player>\|<player>\|…` | **Set the queue**, as the whole ordered list. **Observed**. See `The queue` below |
+| `0\|<league>\|<team>\|<overall>\|<player>` | **Make a pick.** **Observed** once, in `capture-mock3-handshake.log`, answered by the inbound `0\|3\|40041\|3\|WR\|0` that followed it. Note the fields are not the inbound `0\|`'s |
+| `6\|<league>\|<team>` | Unknown. **Observed** once, immediately before a queue was first built |
 
 ### Sent on connect, in this order
 
@@ -97,7 +100,7 @@ Frames are pipe-delimited text, one record per frame.
 |---|---|
 | `H\|S\|30\|0\|0\|<started>` | Settings. `S` is snake and `30` the seconds per pick — both **inferred**, and both agree with the order and clock actually seen. The last field is **observed** to be `0` before a draft opens and `1` on reconnecting to one in progress. The middle two zeros are unknown |
 | `R\|<team>\|<team>\|…` | **The entire draft order**, one entry per pick, in pick order. **Observed** at exactly 210 entries for a 14-team, 15-round league, running `1..14, 14..1, …` |
-| `Q` | Unknown. No payload |
+| `Q` | **Your queue**, which is empty on every connect watched, and so arrives bare. See `The queue` below |
 | `A\|14=0\|13=2\|12=0\|11=1\|…` | One value per seat. **Observed** taking `0`, `1` and `2`. `1` is **observed once** to mean autopick, and `2` is still unknown. See below |
 | `P\|<overall>=<player>,<team>,<cost>\|…` | **Every pick made so far.** Empty on a draft that has not started, which is why it first appeared as a bare `P`. See below |
 | `w\|3600\|20` | Unknown. `3600` looks like a limit in seconds |
@@ -126,13 +129,16 @@ seat whose state nothing independent established. So this is a three-state field
 with two states identified, and the plain "autopick on or off" reading is still
 wrong.
 
-None of this reaches the board. The bridge forwards `0`, `H`, `R` and `P` only,
-and a frame it drops cannot break it — which is why `A|` had to be read with a
-recorder injected beside the bridge rather than from anything the service holds.
+None of this reaches the board. The bridge forwards `0`, `H`, `R`, `P` and `Q`
+only, and a frame it drops cannot break it — which is why `A|` had to be read
+with a recorder injected beside the bridge rather than from anything the service
+holds.
 
 `A|` is sent **once, in the connect burst, and never again** when the state it
-reports changes. A client cannot watch a seat flip; it can only reconnect and
-read the value afresh, which is how the reading above was taken.
+reports changes, which is how the reading above was taken — by reconnecting and
+reading the value afresh. It does not follow that a seat cannot be watched
+flipping: `5|` and `6|` appear to announce exactly that, one direction each. See
+`Autopick, announced` below.
 
 `R|` gives the order rather than implying it. A league with keepers, traded
 picks or a custom order should be read from here, and deriving the order from a
@@ -155,7 +161,9 @@ it missed, so nothing has to be remembered across a crash.
 | `L\|<team>` | A manager disconnected. **Inferred** from timing |
 | `G\|[…]` | Yahoo's own grade for a pick, as JSON: `letterGrade`, `score`, weighted components with explanations |
 | `g\|[…]` | Yahoo's own grade for each **team**, as JSON: `teamId`, `score`, `letterGrade`, `pickCount`, `basis`. Lowercase, and a different frame from `G\|` |
-| `5\|<n>`, `X\|<n>`, `6\|…` | Unknown, single numeric payload |
+| `5\|<seat>` | **Inferred: that seat has gone onto autopick.** See `Autopick, announced` below |
+| `6\|<seat>` | **Inferred: that seat has come off autopick.** Answers the outbound `6\|` above |
+| `X\|<n>` | Unknown, single numeric payload. `X\|29` five times |
 | `O\|draft-labels\|<overall>\|[…]` | Yahoo's own value labels, as JSON: `BEST_VALUE` and similar, with a `reason` and `signals` |
 
 `playerId` matches `id` in `players/nfl/<league>`, which is how a pick becomes a
@@ -198,9 +206,9 @@ back, both under a second, while 65, 67, 69 and 72 were still on the board and
 went in the next four picks. So a sub-second pick is either a queue firing or an
 autopick weighting positional need, and the timing cannot separate those two.
 
-**A queue is invisible to everyone but its owner.** No frame carries one, and
-the only trace of the feature in any capture is the room preloading
-`add_to_queue.mp3`. Nothing watching the socket from another seat can tell a
+**A queue is invisible to everyone but its owner.** Your own queue is on your
+own socket, in the `S|` you send and the `Q|` that answers it, but no frame
+carries anybody else's. Nothing watching the socket from another seat can tell a
 queued pick from an autopicked one.
 
 **Counting `C|` ticks instead of timestamps does not work.** The clock frames
@@ -215,9 +223,105 @@ reading `0` — mean 1.74 ticks against 0.26 in `capture-mock3-reconnect`, where
 stale within a round or two, or `1` does not mean what one reading of one seat
 suggested.
 
-None of this reaches the board. The bridge forwards `0`, `H`, `R` and `P` only,
-so it drops `D|`, and measuring any of it live would mean the bridge timestamping
-picks itself.
+None of this reaches the board. The bridge forwards `0`, `H`, `R`, `P` and `Q`
+only, so it drops `D|`, and measuring any of it live would mean the bridge
+timestamping picks itself.
+
+## Autopick, announced
+
+`A|` gives every seat's autopick state in the connect burst and is never sent
+again, which left the obvious question of how a client learns that a seat has
+flipped since. **Inferred:** it learns from `5|` and `6|`, which announce the
+two directions.
+
+**Observed**, across `capture-mock1.log` and `capture-mock2.log`, seven `5|`
+frames in total:
+
+| | |
+|---|---|
+| Five of seven | are followed **on the very next line** by a pick from the seat they name |
+| The other two | are followed by `6|` naming the same seat, and by no pick from it |
+
+That is the shape of a state rather than an event about a pick. A seat put onto
+autopick while it is on the clock is picked for immediately, which is the first
+group; a seat put onto autopick while it is waiting sits there until either its
+turn comes or its manager returns, which is the second, and the return is the
+`6|`.
+
+**Observed: a client can send it.** `capture-mock2.log` line 373 carries
+`6|10713141|13` outbound, answered by `6|13` inbound, from a seat that then
+immediately built a queue. **Inferred** from that pairing: outbound `6|` is a
+seat taking itself off autopick, and the queue that followed is what somebody
+does next having just been drafted for.
+
+**Observed: autopick does not stay off.** The same seat is named by `5|13` sixty
+lines later and picked for again. So a seat is returned to autopick on whatever
+Yahoo's inactivity rule is, and one `6|` buys one reprieve rather than a
+setting.
+
+**Observed: a queue fires under autopick.** That later `5|13` is followed
+immediately by pick 44 taking `41824`, which is exactly the top of the queue
+that seat had set eight frames earlier. It is the only direct evidence in any
+capture of a queue actually firing, and it says the queue is what autopick draws
+from rather than something autopick ignores.
+
+**Not confirmed, and it inverts if wrong.** `5|` and `6|` could be the other way
+round, in which case anything sending `6|` to escape autopick would be switching
+it on. One mock settles it: run `capture.ps1`, toggle Yahoo's own autopick
+control, and read which frame leaves. Nothing should send `6|` before that.
+
+## The queue
+
+**Observed**, in `capture-mock2.log` and `capture-mock3-handshake.log`, which
+between them hold 32 queue writes across three sessions.
+
+Starring a player sends the **entire ordered queue**, and the server echoes back
+what it now holds:
+
+```
+[ws-out]  S|10713845|3|32687
+[ws-in]   Q|32687
+[ws-out]  S|10713845|3|32687|40196
+[ws-in]   Q|32687|40196
+```
+
+There is no add frame and no remove frame. A removal is the same `S|` carrying
+a shorter list, which `capture-mock2.log` shows directly at lines 581-584: the
+list goes to `40962|33998`, then back to `40962`. So a write is a replacement,
+and a client that sends a list missing an entry has deleted that entry.
+
+**Observed: `Q|` only ever answers an `S|`.** Every one of the 32 in the
+captures sits on the line after a write. Nothing else provokes one.
+
+**Observed: Yahoo does not tell you it pruned a drafted player.** In
+`capture-mock2.log` a nine-deep queue is set at line 393, and all nine players
+are drafted over picks 43 to 53 — including one by the queue's own seat — with
+no `Q|` sent for any of it. The next write, at line 502, starts from a single
+fresh ID. So the client prunes its own list and the server never volunteers the
+state: anything reading this has to drop drafted players itself.
+
+**Reported: an empty queue puts the seat into autodraft straight away.**
+Watched in a live public mock on 2026-09-06, league `10888301`, and reported
+rather than captured: no frame in any capture carries this, and the bridge does
+not forward the `A|` that would show a seat flipping. It agrees with what `A|`
+already said, though — seven of fourteen seats read autopick at the open of a
+room full of real people, which is a lot of managers to have all gone idle in
+the first minute.
+
+If it holds, it inverts the cost of being careful here. A queue is not
+insurance against wandering off; it is the thing standing between you and
+Yahoo's own algorithm from the first pick. Anything that declines to write one
+declines at exactly the moment the write was worth most, so the caution below
+needs a way out that does not require the user to go and use the feature by hand
+first.
+
+**Unknown: whether a queue survives a reconnect.** Both captures that show a
+connect carry a bare `Q`, but neither proves anything, because in both cases the
+queue was legitimately empty: in `capture-mock3-reconnect.log` all six players
+queued earlier in that league had been drafted by the pick the reconnect landed
+on, which is checkable against the `P|` in the same file. Until this is answered
+nothing can safely write a queue it did not watch being built, because the write
+replaces a list it cannot see.
 
 ## Joining onto this project's board
 
@@ -264,15 +368,26 @@ pool response would close that gap.
 
 ## Still unknown
 
-- **What `Q`, `w|`, `5|`, `X|` and `6|` are.** None is needed to read picks.
+- **What `w|` and `X|` are.** Neither is needed to read picks. `Q`, `5|` and
+  `6|` were on this list until the outbound frames were read: `Q` is the queue,
+  and `5|` and `6|` are autopick going on and coming off, inferred rather than
+  observed and with the direction still to be confirmed. See `Autopick,
+  announced` above.
+- **Whether a queue survives a reconnect**, which decides whether anything can
+  write one it did not build. See `The queue` above.
+- **Whether Yahoo's own room redraws its queue from a `Q|` it did not ask for.**
+  Every `Q|` in the captures answers a write from the room's own client, which
+  had already drawn the change itself, so nothing shows what the client does
+  with one it did not provoke. If it ignores them, a queue set from outside is
+  held by the server and absent from the list on screen until a reload.
 - **What `A|` means**, now that it is known not to be a boolean, and now that
   the seats it marks are also known not to behave like autopickers.
-- **Whether a queue fires for a manager who is present**, or only on expiry and
-  under autopick. It decides whether a consistently instant seat is a robot or a
-  human with a deep queue, and so whether pick timing can be used to keep
-  Yahoo's own algorithm out of a reading of how a room drafts. Not answerable
-  from any capture: a queue is private to its owner. Answerable in two minutes
-  from inside a room, by queueing a player and watching whether your own turn
+- **Whether a queue fires for a manager who is present.** Half answered: it does
+  fire under autopick, observed once and directly — `5|13` then pick 44 taking
+  the top of the queue that seat had just set. What is still open is whether it
+  also fires for a manager the room considers active, which decides whether a
+  consistently instant seat is a robot or a human with a deep queue. Answerable
+  from inside a room by queueing a player and watching whether your own turn
   fills without a click.
 - **What the two middle `H|` zeros mean**, and whether `S` becomes something
   else for an auction or a linear draft.
