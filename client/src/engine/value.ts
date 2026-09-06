@@ -1,5 +1,5 @@
 import { survivalOdds } from './survival';
-import { emptyCounts, starterCount } from './roster';
+import { emptyCounts, fillsStarter, positionCap, starterCount } from './roster';
 import type { Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
@@ -164,4 +164,74 @@ export function positionValues(
   }
 
   return out.sort((a, b) => b.cost - a.cost);
+}
+
+/**
+ * The one player this pick is for, or nothing.
+ *
+ * Three things decide a pick and the app was showing them in three places. The
+ * pool says what a player is worth. The cost of waiting says which position
+ * runs out first, off this room once enough of it has been drafted. Your roster
+ * says which of those you actually have to start. Reading across all three,
+ * every turn, is the work this does.
+ *
+ * Only the leader at each position is weighed. Cost of waiting is measured
+ * against the best man left, so it is his number and nobody else's: the fourth
+ * receiver does not inherit the urgency of the first.
+ */
+export interface Recommendation {
+  player: Player;
+  /** What he is worth over a replacement starter at his position. */
+  worth: number;
+  /** What waiting one turn costs at his position, when that cost is yours. */
+  urgency: number;
+  /** Whether he fills a starting slot you have still to fill. */
+  fillsStarter: boolean;
+  /** How far clear of the next position's leader he came. */
+  margin: number;
+}
+
+/**
+ * How far clear the leader has to be before naming him.
+ *
+ * Under about a field goal there is nothing to choose between the top two, and
+ * naming one anyway invents a decision rather than reporting one. Saying
+ * nothing is the honest answer there, and the pool's own sort is a better one.
+ */
+const WORTH_NAMING = 3;
+
+/**
+ * Urgency only counts where it is yours.
+ *
+ * A position you can no longer start contributes none of it, because waiting a
+ * turn for a bench player costs you nothing this turn. That leaves worth alone
+ * to decide, which is the right answer once the lineup is full.
+ */
+export function recommendPick(
+  priced: PositionValue[],
+  mine: Record<Position, number>,
+  roster: RosterSlots,
+): Recommendation | null {
+  const scored = priced
+    .filter((row) => row.best != null && row.now > 0)
+    // Whatever it is worth, a position nobody can still play is not a pick.
+    .filter((row) => mine[row.position] < positionCap(roster, row.position))
+    .map((row) => {
+      const starter = fillsStarter(mine, roster, row.position);
+      const urgency = starter ? row.cost : 0;
+      return { row, starter, urgency, score: row.now + urgency };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) return null;
+  const margin = scored.length > 1 ? scored[0].score - scored[1].score : scored[0].score;
+  if (margin < WORTH_NAMING) return null;
+
+  return {
+    player: scored[0].row.best!,
+    worth: scored[0].row.now,
+    urgency: scored[0].urgency,
+    fillsStarter: scored[0].starter,
+    margin,
+  };
 }

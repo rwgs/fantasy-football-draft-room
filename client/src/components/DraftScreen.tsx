@@ -14,7 +14,8 @@ import { fetchDraftPicks, postRoomAdvice } from '../api';
 import { maskTeam } from '../anon';
 import { pickLabel, pickLabelWithOverall } from '../picks';
 import { livePresets, offBoardPlayer } from '../engine/live';
-import { replacementPoints } from '../engine/value';
+import { recommendPick, replacementPoints } from '../engine/value';
+import { emptyCounts } from '../engine/roster';
 import AdpSourcePicker from './AdpSourcePicker';
 import type { AppMode, Board, Platform, Player } from '../engine/types';
 
@@ -117,6 +118,13 @@ export default function DraftScreen(props: Props) {
   const available = useMemo(() => availablePlayers(engine), [engine]);
   const myTeam = state.teams.find((t) => t.isUser)!;
   const myPlayers = useMemo(() => playersOf(engine, myTeam), [engine, myTeam]);
+
+  /** What you already hold, by position. The roster half of a recommendation. */
+  const myCounts = useMemo(() => {
+    const counts = emptyCounts();
+    for (const p of myPlayers) counts[p.position] += 1;
+    return counts;
+  }, [myPlayers]);
 
   const myRank = engine.rankOverride;
 
@@ -293,6 +301,17 @@ export default function DraftScreen(props: Props) {
       available, board.players, teams, state.league.roster, pick, oddsTarget, room,
     ),
     [available, board.players, teams, state.league.roster, pick, oddsTarget, room],
+  );
+
+  /*
+   * The pick this turn is for, named only while it is yours to make.
+   *
+   * Out of turn it would be a recommendation about a pick somebody else is
+   * making, which is a different question and not one worth answering.
+   */
+  const recommended = useMemo(
+    () => (canPick ? recommendPick(priced, myCounts, state.league.roster) : null),
+    [canPick, priced, myCounts, state.league.roster],
   );
 
   /*
@@ -533,6 +552,7 @@ export default function DraftScreen(props: Props) {
             formatLabel={board.meta.formatLabel}
             replacement={replacement}
             roomOdds={room?.survival ?? null}
+            recommended={recommended}
           />
         </div>
 

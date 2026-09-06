@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { survivalOdds } from '../engine/survival';
 import useNarrow from '../useNarrow';
 import { pickLabelWithOverall } from '../picks';
+import type { Recommendation } from '../engine/value';
 import type { Player, Position } from '../engine/types';
 import { POSITIONS } from '../engine/types';
 
@@ -48,6 +49,14 @@ interface Props {
    * see moves these numbers where it cannot move the other ones.
    */
   roomOdds: Map<string, number> | null;
+  /**
+   * The pick this turn is for, when there is one and it is yours to make.
+   *
+   * Null is a real answer and the common one late on: with the top two within
+   * a field goal of each other there is no decision to report, and the sort
+   * you already chose is the better guide.
+   */
+  recommended: Recommendation | null;
 }
 
 /**
@@ -106,7 +115,7 @@ function sourceTitle(p: Player): string {
 export default function PlayerPool(props: Props) {
   const {
     players, myRank, notes, currentPick, myNextPick, teams, onDraft, canDraft, queue, onQueue,
-    replacement, roomOdds,
+    replacement, roomOdds, recommended,
   } = props;
 
   const [search, setSearch] = useState('');
@@ -295,6 +304,7 @@ export default function PlayerPool(props: Props) {
 
         {rows.map(({ player, odds, mine, worth }) => {
           const queued = queue.includes(player.id);
+          const pick = recommended?.player.id === player.id ? recommended : null;
           const pct = Math.round(odds * 100);
           const note = notes?.get(player.id) ?? null;
           const split = (player.consensusSpread ?? 0) >= SPLIT_WORTH_MARKING;
@@ -305,7 +315,7 @@ export default function PlayerPool(props: Props) {
           return (
             <div
               key={player.id}
-              className="player"
+              className={'player' + (pick ? ' is-pick' : '')}
               data-pos={player.position}
               role="listitem"
             >
@@ -347,13 +357,13 @@ export default function PlayerPool(props: Props) {
                 </span>
               </button>
 
-              <span className="player-num">
+              <span className="player-num is-quiet">
                 <b>{player.adp.toFixed(1)}</b>
                 <small>ADP</small>
               </span>
 
               <span
-                className={'player-num' + (split ? ' is-split' : '')}
+                className={'player-num is-quiet' + (split ? ' is-split' : '')}
                 title={sourceTitle(player)}
               >
                 <b>{player.consensus != null ? player.consensus.toFixed(1) : '—'}</b>
@@ -371,7 +381,7 @@ export default function PlayerPool(props: Props) {
                 * answers whether he beats what the waiver wire holds.
                 */}
               <span
-                className={'player-num' + (worth != null && worth > 0 ? ' is-worth' : '')}
+                className={'player-num is-lead' + (worth != null && worth > 0 ? ' is-worth' : '')}
                 title={player.points != null
                   ? Math.round(player.points) + ' projected points, against '
                     + Math.round(replacement[player.position]) + ' for a replacement '
@@ -381,6 +391,19 @@ export default function PlayerPool(props: Props) {
                 <b>{worth == null ? '—' : (worth > 0 ? '+' : '') + Math.round(worth)}</b>
                 <small>WORTH</small>
               </span>
+
+              {pick && (
+                <p className="pick-flag">
+                  <span className="pick-flag-tag">Take</span>
+                  {'+' + Math.round(pick.worth) + ' over a replacement ' + player.position}
+                  {pick.urgency >= 1
+                    ? ', and ' + Math.round(pick.urgency) + ' of that goes if you wait'
+                    : ''}
+                  {pick.fillsStarter
+                    ? '. You still have to start one.'
+                    : '. Your lineup is full, so this is on worth alone.'}
+                </p>
+              )}
 
               {note && <PlayerNote text={note} />}
 

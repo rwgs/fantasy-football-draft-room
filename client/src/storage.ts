@@ -16,6 +16,14 @@ import type {
 
 const KEY = 'draftroom.v1';
 
+/**
+ * Follow the machine, or override it. 'system' is the default because a user
+ * who has already told their OS which they want should not have to say it
+ * again, and the override exists because plenty of people want one app to
+ * disagree with that.
+ */
+export type Theme = 'system' | 'light' | 'dark';
+
 export interface RankingSource {
   text: string;
   label: string;
@@ -28,6 +36,8 @@ export interface Saved {
   mode: AppMode;
   /** Replaces league names, IDs and manager names on screen. For sharing. */
   anonymous: boolean;
+  /** Felt or paper, or whatever the machine says. */
+  theme: Theme;
   league: LeagueConfig;
   cpu: CpuConfig;
   rankings: RankingSet | null;
@@ -112,6 +122,7 @@ export function defaults(): Saved {
   return {
     mode: 'mock',
     anonymous: false,
+    theme: 'system',
     league: defaultLeague(),
     cpu: { ...DEFAULT_CPU, positionBias: { ...DEFAULT_CPU.positionBias } },
     rankings: null,
@@ -158,6 +169,7 @@ export function load(): Saved {
       overrides: saved.overrides || {},
       noteSource: saved.noteSource ?? null,
       myManager: saved.myManager ?? DEFAULT_MANAGER,
+      theme: saved.theme ?? 'system',
       resumeLive: saved.resumeLive ?? false,
       yahooMock: saved.yahooMock ?? false,
       // Older saves predate the per league fields. Fill them rather than let a

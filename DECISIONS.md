@@ -547,3 +547,119 @@ needed no edit and the change stayed server-side and reviewable in one sitting.
   an abstraction whose justification is still pending. If Yahoo never lands,
   it should be reconsidered rather than left as scaffolding.
 - `/api/health` now reports which platforms a copy can read.
+
+## 2026-09-05 Light mode turns the metaphor over, and both themes share one contrast floor
+
+### Decision
+
+The app has a light mode. It is not the felt lit brightly: the ground becomes
+the sticker paper, and the type goes dark on it. The six position hues stay the
+same six hues and are taken down in lightness only.
+
+Both palettes are held to one measurable floor. Every colour used as type
+clears 4.5:1 against every surface it can land on, and no two accent hues sit
+closer than dE 12, so no pair is confusable at a glance.
+
+The theme follows `prefers-color-scheme` by default. A header button overrides
+it, cycling auto, light, dark, and the override persists in `storage.ts`.
+
+### Why
+
+The dark palette was never decoration. Position colour is the densest signal on
+a draft board, and the six hues are the palette. Lighting the felt keeps the
+metaphor but destroys that: a green ground washed pale goes grey, and every hue
+sitting on it goes with it. Turning the metaphor over keeps the signal, because
+paper was already what the type was made of.
+
+The floor exists because a colour tuned for green-black does not survive the
+move. Untouched, the six hues arrived on paper at about 2:1 and the board went
+quiet exactly when it gets busy. Measuring rather than eyeballing also caught
+two defects the dark theme had shipped with: muted text at 3.1:1, under the
+readable floor, on the survival lines and run counts you read while deciding;
+and QB red at 4.1:1.
+
+### Rejected alternatives
+
+- **Lighting the felt.** Rejected: a pale green ground greys out the position
+  hues, which are the reason the board is on screen.
+- **Reusing the dark hues unchanged.** Rejected: measured at roughly 2:1 on
+  paper. The densest signal in the app would be the first thing to go.
+- **A media query and no control.** Rejected: it leaves a user who wants one
+  app to disagree with their OS no way to say so.
+- **A plain two-state toggle.** Rejected: once an override exists, there has to
+  be a way back to following the machine, and a two-state button has none.
+- **Matching dark's contrast ratios exactly.** Rejected: a dark ground buys
+  high ratios cheaply, and forcing gold to 8:1 on paper makes it brown-black.
+  WCAG's 4.5:1 is the bar that means something on both grounds.
+
+### Consequences
+
+- `client/src/index.css` carries two palettes and no literal colours outside
+  them. A colour added anywhere else is a bug: it will be wrong in one theme.
+- Six tokens exist only so both themes can move together: `--gold-hi`,
+  `--gold-wash`, `--on-gold`, `--bad-line`, `--shadow-pop`, `--shadow-bar`.
+- The four surfaces are a ramp in both directions. `--felt-3` is the darkest
+  surface type lands on in light mode, so it binds the floor.
+- `npm run shots` photographs light mode through Playwright's `colorScheme`,
+  which drives the real `prefers-color-scheme`, and checks the button cycles
+  auto, light, dark, auto.
+- Changing any palette token means re-checking the floor. Nothing in the repo
+  enforces it yet; it was verified by measurement at the time of the change.
+
+## 2026-09-05 The board names a pick, and says nothing when there is nothing to say
+
+### Decision
+
+The pool marks one player as the pick this turn is for, in `recommendPick`
+(`client/src/engine/value.ts`). It scores the leader at each position by what he
+is worth over a replacement starter plus what waiting one turn would cost at his
+position, and counts that second term only where the position still fills a
+starting slot you have open.
+
+It returns nothing when the top two are within three points of each other, when
+the pick is not yours, or when every position that could be named is filled to
+its cap.
+
+### Why
+
+Three readings decide a pick and the app had them in three places: worth in the
+pool, scarcity in the cost-of-waiting panel, and roster holes in the panel below
+it. Joining them was work the user did every turn, from three panels, on a
+clock. Nothing new is computed here — it is the join that was missing.
+
+Only position leaders are weighed because cost of waiting is measured against
+the best player left. It is his number, and letting the fourth receiver inherit
+the urgency of the first would recommend depth during a run on starters.
+
+Urgency counts only where it is yours because waiting a turn for a bench player
+genuinely costs nothing this turn. Dropping it there leaves worth alone to
+decide, which is the right answer once the lineup is full.
+
+### Rejected alternatives
+
+- **Weighting a bench position's urgency by a fraction.** Rejected: the fraction
+  would be a fudge factor nobody could justify, and the honest coefficient for
+  "how much do I care about waiting on a player I cannot start" is zero.
+- **Scoring every available player rather than position leaders.** Rejected: it
+  needs a per-player scarcity number the engine does not have, and the one it
+  does have belongs to the leader.
+- **Always naming a leader.** Rejected: with the top two a field goal apart
+  there is no decision to report, and naming one invents it. The existing
+  cost-of-waiting panel already refuses to draw bars under a point for the same
+  reason.
+- **Putting it in the cost-of-waiting panel.** Rejected: that panel is
+  deliberately position-level and explains its reasoning; a verdict naming a
+  player belongs next to the player.
+
+### Consequences
+
+- The marker takes the position colour, not gold. Gold means yours or on the
+  clock and means nothing else, and a recommendation is neither.
+- It shows its arithmetic rather than only its verdict, because a
+  recommendation that cannot be checked cannot be overruled.
+- `recommendPick` is pure and covered in the engine self-test: an empty roster,
+  a position at its cap, a full lineup adding no urgency, an empty pool, and a
+  tie close enough to stay unnamed.
+- It inherits the room forecast for free. Once enough real picks exist, the
+  cost it reads is the room's rather than ADP's, because `pricedPositions`
+  already makes that swap upstream.

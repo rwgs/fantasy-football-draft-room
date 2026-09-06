@@ -18,21 +18,40 @@
   --line: #2c403c;
   --line-soft: #223330;
 
-  /* Sticker paper. */
+  /*
+   * Sticker paper, in three weights.
+   *
+   * The muted step used to sit at 3.1:1 on a raised surface, which is under the
+   * readable floor, and it carries the survival lines and the run counts: the
+   * numbers you read while deciding. Both quiet steps now land on the same
+   * ratios light mode uses, so neither theme is the legible one.
+   */
   --chalk: #e9e7df;
-  --chalk-2: #9aaba7;
-  --chalk-3: #6b7c78;
+  --chalk-2: #aebcb8;
+  --chalk-3: #8d9d99;
 
   /* Reserved. Yours, or on the clock. Nothing else. */
   --gold: #f2c14e;
   --gold-dim: #7a6229;
+  /* Gold under a pointer, the type that sits on a gold fill, and the wash
+   * behind your own clock. Tokens because light mode moves all three. */
+  --gold-hi: #ffd469;
+  --on-gold: #17211f;
+  --gold-wash: #2a2717;
 
-  --qb: #e8615a;
+  --qb: #ea726b;
   --rb: #5ec4a0;
   --wr: #5aa9e6;
   --te: #e8a33d;
   --k: #b48ce8;
   --def: #8b9aa8;
+
+  /* The one red that is an edge rather than a position. */
+  --bad-line: #6d3532;
+
+  /* Depth reads as shadow on felt and as barely a shadow on paper. */
+  --shadow-pop: 0 14px 34px rgb(0 0 0 / 55%);
+  --shadow-bar: 0 -10px 24px rgb(0 0 0 / 40%);
 
   --sans: 'Archivo', system-ui, sans-serif;
   --narrow: 'Archivo Narrow', 'Archivo', system-ui, sans-serif;
@@ -42,6 +61,58 @@
   --pad: 12px;
 
   color-scheme: dark;
+}
+
+/*
+ * The same board in daylight.
+ *
+ * Lighting the felt was the obvious move and the wrong one: a green ground
+ * washed pale goes grey, and every position hue sitting on it goes with it. So
+ * the metaphor turns over instead. Sticker paper was always the type here, and
+ * in light mode it becomes the ground the type sits on.
+ *
+ * The six hues stay the same six hues, taken down in lightness only. That part
+ * is not taste: a colour tuned to carry on green-black arrives at about 2:1 on
+ * paper, and the densest signal in fantasy football goes quiet exactly when the
+ * board gets busy. Every token below clears 4.5:1 on all four surfaces, and the
+ * chalk ramp stays three distinct steps rather than collapsing into one.
+ */
+[data-theme='light'] {
+  /* Sticker paper, as the ground. Warm rather than white. */
+  --felt-0: #f3f1e9;
+  --felt-1: #ece9df;
+  --felt-2: #e3dfd2;
+  --felt-3: #d9d4c5;
+  --line: #cdc8b6;
+  --line-soft: #e0dccd;
+
+  /* Ink, in the three weights chalk had, at the same ratios. */
+  --chalk: #1b2322;
+  --chalk-2: #3e4a48;
+  --chalk-3: #54625f;
+
+  /* Still reserved, still one meaning. Dark enough to be type on paper, so
+   * the fill it backs carries pale ink rather than dark. */
+  --gold: #6f5606;
+  --gold-dim: #c9a03c;
+  --gold-hi: #534105;
+  --on-gold: #fdf7e6;
+  --gold-wash: #f7edcd;
+
+  --qb: #a32c26;
+  --rb: #24624c;
+  --wr: #1c5b8c;
+  --te: #8d460b;
+  --k: #6e3dae;
+  --def: #4c5966;
+
+  --bad-line: #c98b85;
+
+  /* Paper does not take a black shadow. Both are the felt colour, thinned. */
+  --shadow-pop: 0 14px 34px rgb(31 41 38 / 18%);
+  --shadow-bar: 0 -10px 24px rgb(31 41 38 / 12%);
+
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -108,9 +179,9 @@ button { cursor: pointer; }
 .btn.is-primary {
   background: var(--gold);
   border-color: var(--gold);
-  color: #17211f;
+  color: var(--on-gold);
 }
-.btn.is-primary:hover:not(:disabled) { background: #ffd469; border-color: #ffd469; }
+.btn.is-primary:hover:not(:disabled) { background: var(--gold-hi); border-color: var(--gold-hi); }
 
 .btn.is-quiet { background: transparent; }
 .btn.is-quiet:hover:not(:disabled) { background: var(--felt-2); }
@@ -477,7 +548,7 @@ input[type='range']::-moz-range-thumb {
   flex: none;
 }
 
-.clock.is-yours { background: linear-gradient(180deg, #2a2717, var(--felt-1)); border-bottom-color: var(--gold-dim); }
+.clock.is-yours { background: linear-gradient(180deg, var(--gold-wash), var(--felt-1)); border-bottom-color: var(--gold-dim); }
 
 /* The pick on the clock and the pick you get back read as the same kind of
    number, so they are sized together. Only the one on the clock goes gold. */
@@ -563,7 +634,7 @@ input[type='range']::-moz-range-thumb {
  */
 .player {
   display: grid;
-  grid-template-columns: 18px 30px minmax(0, 1fr) 44px 44px 40px;
+  grid-template-columns: 18px 30px minmax(0, 1fr) 38px 38px 52px;
   align-items: center;
   /* Columns need the air; the survival bar under the name does not, and the
      row gap is paid six hundred times. */
@@ -627,7 +698,63 @@ input[type='range']::-moz-range-thumb {
 .player-num b { display: block; color: var(--chalk); font-weight: 500; }
 .player-num small { font-size: 10px; color: var(--chalk-3); }
 
+/*
+ * WHICH OF THE THREE TO READ
+ *
+ * A row carries ADP, CONS and WORTH, and they were the same size, so the row
+ * asked you to pick the question as well as answer it. Only one of the three
+ * is points rather than a draft position, and it is the one that says whether
+ * he is worth taking here, so it is the one that gets the size.
+ *
+ * The other two stay on the row rather than moving off it. The gap between
+ * ADP and CONS is itself a reading — it is how you see the sources disagree —
+ * and demoting them out of comparison would take that away.
+ */
+.player-num.is-lead b { font-size: 15px; font-weight: 700; line-height: 1.15; }
+.player-num.is-quiet b { font-size: 11px; font-weight: 400; }
+.player-num.is-quiet small { font-size: 9px; }
+
 .injury { color: var(--qb); font-weight: 600; }
+
+/*
+ * THE PICK THIS TURN IS FOR
+ *
+ * The three readings that decide a pick were in three places: what a player is
+ * worth in the pool, which position runs out first in the panel beside it, and
+ * what you still have to start in the panel below that. This is the one line
+ * that joins them, and it says its reasoning rather than only its verdict,
+ * because a recommendation you cannot check is one you cannot overrule.
+ *
+ * It is not gold. Gold means yours or on the clock and it means nothing else,
+ * and this is neither: it is an opinion about a pick you have not made yet. It
+ * takes the position colour instead, which is already what the row is keyed by.
+ */
+.pick-flag {
+  grid-column: 3 / -1;
+  margin: 1px 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--narrow);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--chalk-2);
+}
+.pick-flag-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pos);
+  border: 1px solid var(--pos);
+  border-radius: var(--r);
+  padding: 0 4px;
+}
+.player.is-pick {
+  background: color-mix(in srgb, var(--pos) 9%, transparent);
+  border-left-color: var(--pos);
+}
 
 /*
  * YOUR NOTE
@@ -789,7 +916,7 @@ input[type='range']::-moz-range-thumb {
 
 .cell {
   background: var(--felt-1);
-  border-left: 2px solid var(--pos, var(--line-soft));
+  border-left: 3px solid var(--pos, var(--line-soft));
   padding: 4px 6px;
   min-height: 42px;
   overflow: hidden;
@@ -806,13 +933,27 @@ input[type='range']::-moz-range-thumb {
 .cell-pick { font-family: var(--mono); font-size: 9px; color: var(--chalk-3); }
 .cell-name {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.25;
 }
-.cell-meta { font-family: var(--narrow); font-size: 10px; color: var(--chalk-3); letter-spacing: 0.05em; }
+/*
+ * The board's own position colour.
+ *
+ * Every hue in this palette exists for the board, and the board was the one
+ * place not using them: a pick said RB in the same grey as its bye week, with
+ * the hue spent on a 2px edge you cannot read a column by. Scanning "who has
+ * taken backs" is the reason the board is on screen at all.
+ */
+.cell-meta {
+  font-family: var(--narrow);
+  font-size: 10px;
+  color: var(--chalk-2);
+  letter-spacing: 0.05em;
+}
+.cell-pos { color: var(--pos); font-weight: 700; }
 
 @keyframes land {
   from { opacity: 0; transform: translateY(-3px); }
@@ -1075,7 +1216,12 @@ input[type='range']::-moz-range-thumb {
   color: var(--qb);
 }
 
-.anon-toggle {
+/*
+ * Two header switches that change how the app looks rather than what it is
+ * doing, so they share a face. Neither spends gold: the theme switch is not
+ * yours and it is not on the clock, and its label already carries its state.
+ */
+.anon-toggle, .theme-toggle {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -1088,7 +1234,7 @@ input[type='range']::-moz-range-thumb {
   color: var(--chalk-3);
   white-space: nowrap;
 }
-.anon-toggle:hover { color: var(--chalk); border-color: var(--chalk-3); }
+.anon-toggle:hover, .theme-toggle:hover { color: var(--chalk); border-color: var(--chalk-3); }
 .anon-toggle[aria-pressed='true'] {
   color: var(--gold);
   border-color: var(--gold-dim);
@@ -1128,7 +1274,7 @@ input[type='range']::-moz-range-thumb {
   background: var(--felt-1);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  box-shadow: 0 14px 34px rgb(0 0 0 / 55%);
+  box-shadow: var(--shadow-pop);
   overflow: hidden;
 }
 
@@ -1438,7 +1584,7 @@ input[type='range']::-moz-range-thumb {
   line-height: 1.45;
 }
 
-.banner.is-bad { border-color: #6d3532; background: color-mix(in srgb, var(--qb) 8%, transparent); }
+.banner.is-bad { border-color: var(--bad-line); background: color-mix(in srgb, var(--qb) 8%, transparent); }
 
 .centred {
   display: grid;
@@ -1551,10 +1697,10 @@ input[type='range']::-moz-range-thumb {
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
     border-bottom: 0;
     border-top: 1px solid var(--line-soft);
-    box-shadow: 0 -10px 24px rgb(0 0 0 / 40%);
+    box-shadow: var(--shadow-bar);
   }
   .clock.is-yours {
-    background: linear-gradient(0deg, #2a2717, var(--felt-1));
+    background: linear-gradient(0deg, var(--gold-wash), var(--felt-1));
     border-top-color: var(--gold);
   }
 
@@ -1664,7 +1810,7 @@ input[type='range']::-moz-range-thumb {
     padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
     background: var(--felt-1);
     border-top: 1px solid var(--gold-dim);
-    box-shadow: 0 -10px 24px rgb(0 0 0 / 40%);
+    box-shadow: var(--shadow-bar);
   }
   .start-rail .btn { min-height: 50px; font-size: 14px; }
   .start-read {

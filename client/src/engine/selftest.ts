@@ -23,8 +23,8 @@ import { mergePresets } from './live';
 import {
   keeperPicksIn, pickOrder, picksForTeam, picksInRound, roundOrder, seatOf,
 } from './order';
-import { DEFAULT_ROSTER, bestLineup, rosterSize, startersFilled } from './roster';
-import { positionValues, replacementPoints } from './value';
+import { DEFAULT_ROSTER, bestLineup, emptyCounts, rosterSize, startersFilled } from './roster';
+import { positionValues, recommendPick, replacementPoints } from './value';
 import { forecast, observedLean, priorLean } from './forecast';
 import type { Board, CpuConfig, LeagueConfig, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
@@ -437,6 +437,57 @@ async function main() {
     const noBacks = after(19).filter((p) => p.position !== 'RB');
     check('a position with nobody left is not priced',
       positionValues(noBacks, all, 12, r, 20, 29).every((v) => v.position !== 'RB'));
+  }
+
+  console.log('\nThe pick it recommends');
+  {
+    const r = DEFAULT_ROSTER;
+    const all = board.players;
+    const byAdp = [...all].sort((a, b) => a.adp - b.adp);
+    const after = (n: number) => byAdp.slice(n);
+    const counts = (held: Partial<Record<Position, number>>) => ({ ...emptyCounts(), ...held });
+    const priced = positionValues(after(19), all, 12, r, 20, 29);
+
+    const empty = recommendPick(priced, counts({}), r);
+    check('an empty roster gets a recommendation', empty != null,
+      empty ? empty.player.name + ' ' + empty.player.position : 'none');
+    check('and it is somebody still available',
+      !empty || after(19).some((p) => p.id === empty.player.id));
+    check('and it is the leader at his own position',
+      !empty || after(19)
+        .filter((p) => p.position === empty.player.position && p.points != null)
+        .every((p) => (p.points ?? 0) <= (empty.player.points ?? 0)));
+    check('and he is worth more than a replacement', !empty || empty.worth > 0,
+      empty ? empty.worth.toFixed(1) : '');
+
+    /*
+     * The whole point of reading the roster. A position filled to its cap
+     * cannot be the recommendation however much the best man left is worth.
+     */
+    const stuffed = recommendPick(priced, counts({ QB: 9, TE: 9, K: 9, DEF: 9 }), r);
+    check('a position filled to its cap is never the pick',
+      !stuffed || !['QB', 'TE', 'K', 'DEF'].includes(stuffed.player.position),
+      stuffed ? stuffed.player.position : 'none');
+
+    /*
+     * Urgency is only yours while you still have to start one. Filling every
+     * starting slot can only take urgency away, so the score cannot rise.
+     */
+    const full = counts({ QB: 3, RB: 6, WR: 6, TE: 3, K: 2, DEF: 2 });
+    const late = recommendPick(priced, full, r);
+    check('a full lineup adds no urgency to anybody',
+      !late || late.urgency === 0, late ? String(late.urgency) : 'none');
+
+    check('nothing is recommended out of an empty pool',
+      recommendPick([], counts({}), r) === null);
+
+    /*
+     * Saying nothing is a real answer. Two positions within a field goal of
+     * each other is not a decision, and naming one would invent it.
+     */
+    const tied = priced.slice(0, 2).map((v, i) => ({ ...v, now: 50, cost: i === 0 ? 1 : 0.5 }));
+    check('a tie close enough to be noise is left unnamed',
+      recommendPick(tied, counts({}), r) === null);
   }
 
   console.log('\nReading the room');

@@ -148,7 +148,7 @@ export default function DraftBoard({ engine, currentPick, anonymous }: Props) {
                   <>
                     <div className="cell-name">{player.name}</div>
                     <div className="cell-meta">
-                      {player.position}
+                      <span className="cell-pos">{player.position}</span>
                       {' · '}
                       {player.team}
                       {source === 'keeper' ? ' · KEPT' : ''}

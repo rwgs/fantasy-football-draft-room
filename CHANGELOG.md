@@ -12,6 +12,45 @@ fixed.
 
 ### Added
 
+**The pick this turn is for.** Three readings decide a pick and they were in
+three places: what a player is worth, in the pool; which position runs out
+first, in the panel beside it; and what you still have to start, in the panel
+below that. The pool now marks the one player they agree on, and says why in a
+line you can argue with.
+
+Only the leader at each position is weighed, because the cost of waiting is
+measured against the best man left and the fourth receiver does not inherit the
+urgency of the first. Urgency counts only where it is yours: a position you can
+no longer start contributes none of it, which leaves worth alone to decide once
+your lineup is full. A position filled to its cap is never named however much
+the best man left is worth.
+
+It stays quiet when there is nothing to say. Two positions within a field goal
+of each other is not a decision, and naming one would invent it rather than
+report it. It also says nothing out of turn, when the pick is somebody else's.
+
+**Worth leads the pool row.** ADP, CONS and WORTH were the same size, so the row
+asked you to choose the question as well as answer it. Worth is the only one of
+the three that is points rather than a draft position, and the only one that
+says whether a player is worth taking here, so it now carries the size. The
+other two stay on the row: the gap between them is how you see the sources
+disagree, and demoting them out of comparison would take that reading away.
+
+
+**A light mode.** The board in daylight, following your system setting by
+default. A button in the masthead overrides it and cycles auto, light, dark, and
+what you choose is kept in the browser with everything else.
+
+It is not the felt lit brightly. A green ground washed pale goes grey and takes
+every position hue with it, so the metaphor turns over instead: the sticker
+paper the type was always made of becomes the ground the type sits on. The six
+position hues stay the same six hues, taken down in lightness until each one
+reads on paper.
+
+Both palettes are now held to one measured floor. Everything used as type
+clears 4.5:1 against every surface it can land on, and no two accent hues sit
+close enough to be confused for one another.
+
 **Choose which sources price the board.** The ADP setting was four fixed
 combinations of Sleeper, Fantasy Football Calculator and ESPN. It is now a tick
 per feed plus a rule — averaged, or read in order, where the first feed that has
@@ -240,6 +279,18 @@ self test exports a real board, feeds it back, and checks every row returns on
 an exact match in the order it left.
 
 ### Fixed
+
+**The board shows its position colours.** Every hue in this palette exists for
+the board, and the board was the one place not using them. A pick read `RB` in
+the same grey as its bye week, with the colour spent on a two-pixel edge you
+cannot scan a column by. The position now carries its own colour, in both
+themes.
+
+**Text you read while deciding was too faint.** The muted step sat at 3.1:1 on
+a raised surface, under the readable floor, and it carries the survival lines
+and the run counts next to every player. Both quiet steps now land on the same
+ratios in both themes, so neither theme is the legible one. QB red was under the
+floor too, at 4.1:1.
 
 **A choice of sources can no longer empty a position.** ESPN abstains on kickers
 and defences, because ranking those two last is a roster convention rather than a

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchBoard, fetchDraftPicks, fetchLeague, fetchLeagueSetup, fetchRoomState, matchNotes,
   matchRankings,
@@ -16,13 +16,24 @@ import type {
   AppMode, Board, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
   NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague,
 } from './engine/types';
-import type { RankingSource } from './storage';
+import type { RankingSource, Theme } from './storage';
 import { load, save } from './storage';
 
 type Screen = 'setup' | 'draft' | 'results';
 
 /** How often a Yahoo mock named before its room exists is asked about. */
 const ROOM_WAIT_MS = 5000;
+
+/** One button, three states, so the machine stays an option after an override. */
+const THEME_NEXT: Record<Theme, Theme> = { system: 'light', light: 'dark', dark: 'system' };
+const THEME_LABEL: Record<Theme, string> = {
+  system: 'Theme: auto', light: 'Theme: light', dark: 'Theme: dark',
+};
+const THEME_TITLE: Record<Theme, string> = {
+  system: 'Following your system setting. Click to force light.',
+  light: 'Light. Click to force dark.',
+  dark: 'Dark. Click to follow your system setting again.',
+};
 
 export default function App() {
   const saved = useRef(load()).current;
@@ -34,6 +45,7 @@ export default function App() {
 
   const [mode, setMode] = useState<AppMode>(saved.mode);
   const [anonymous, setAnonymous] = useState(saved.anonymous);
+  const [theme, setTheme] = useState<Theme>(saved.theme);
 
   const [rankings, setRankings] = useState<RankingSet | null>(saved.rankings);
   const [rankingSource, setRankingSource] = useState<RankingSource | null>(saved.rankingSource);
@@ -107,10 +119,35 @@ export default function App() {
   useEffect(() => {
     save({
       league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
-      cpuPreset: preset, pace, mode, anonymous, myManager, resumeLive, yahooMock,
+      cpuPreset: preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock,
     });
   }, [league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
-    preset, pace, mode, anonymous, myManager, resumeLive, yahooMock]);
+    preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock]);
+
+  /*
+   * The resolved theme goes on <html> rather than into the tree, because what
+   * it has to reach is the body's felt and the scrollbars the browser draws,
+   * neither of which React renders.
+   *
+   * Following the machine means listening to it, not reading it once: a desk
+   * that turns dark at sunset should take the app with it mid draft. An
+   * explicit choice opts out of that until it is set back to auto.
+   *
+   * Before paint rather than after it, so the first frame is already the right
+   * colour instead of a flash of the wrong one.
+   */
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (theme !== 'system') {
+      root.dataset.theme = theme;
+      return undefined;
+    }
+    const machine = window.matchMedia('(prefers-color-scheme: light)');
+    const follow = () => { root.dataset.theme = machine.matches ? 'light' : 'dark'; };
+    follow();
+    machine.addEventListener('change', follow);
+    return () => machine.removeEventListener('change', follow);
+  }, [theme]);
 
   const activeLeague = savedLeagues.find((l) => l.id === activeLeagueId) || null;
   /** A league saved before there was a choice of platform is a Sleeper league. */
@@ -798,6 +835,15 @@ export default function App() {
           )}
           . Projections from Rotowire via Sleeper.
         </span>
+
+        <button
+          type="button"
+          className="theme-toggle"
+          title={THEME_TITLE[theme]}
+          onClick={() => setTheme(THEME_NEXT[theme])}
+        >
+          {THEME_LABEL[theme]}
+        </button>
 
         {/*
           * One click before you record anything. League names, league IDs and

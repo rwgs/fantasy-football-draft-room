@@ -37,8 +37,13 @@ const MY_SEAT = 7;
 /** One beat of the wait for a room, and room to spare for the read that follows. */
 const ROOM_WAIT = 30000;
 
-async function reachDraft(browser, mode, viewport) {
-  const page = await browser.newPage({ viewport });
+/*
+ * `colorScheme` drives the real `prefers-color-scheme`, not a class the harness
+ * sets, so a light run exercises the path a light desk actually takes: the
+ * default 'system' preference resolving through matchMedia.
+ */
+async function reachDraft(browser, mode, viewport, colorScheme = 'dark') {
+  const page = await browser.newPage({ viewport, colorScheme });
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -227,16 +232,49 @@ async function main() {
     { mode: 'mock', viewport: WIDE, tag: 'mock-wide' },
     { mode: 'mock', viewport: NARROW, tag: 'mock-narrow' },
     { mode: 'assistant', viewport: WIDE, tag: 'assistant-wide' },
+    { mode: 'mock', viewport: WIDE, tag: 'mock-wide-light', colorScheme: 'light' },
+    { mode: 'mock', viewport: NARROW, tag: 'mock-narrow-light', colorScheme: 'light' },
   ];
 
-  for (const { mode, viewport, tag } of runs) {
+  for (const { mode, viewport, tag, colorScheme } of runs) {
     console.log(tag + ':');
-    const { page, errors } = await reachDraft(browser, mode, viewport);
+    const { page, errors } = await reachDraft(browser, mode, viewport, colorScheme);
+    const painted = await page.evaluate(() => document.documentElement.dataset.theme);
+    const wanted = colorScheme === 'light' ? 'light' : 'dark';
+    if (painted !== wanted) failures.push(tag + ': board painted ' + painted + ', wanted ' + wanted);
     await shoot(page, '.clock', tag + '-clock');
     await shoot(page, '.pool-col', tag + '-pool');
     await page.screenshot({ path: join(OUT, tag + '-full.png') });
     console.log('  ' + tag + '-full.png');
     if (errors.length) failures.push(tag + ': ' + errors.join(' | '));
+    await page.close();
+  }
+
+  /*
+   * The switch is three states on one button, and the third is the one worth
+   * checking: an override has to be able to hand the app back to the machine.
+   */
+  console.log('theme-toggle:');
+  {
+    const page = await browser.newPage({ viewport: WIDE, colorScheme: 'light' });
+    const errors = [];
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+    await page.goto(APP, { waitUntil: 'domcontentloaded' });
+    const btn = page.locator('.theme-toggle');
+    const seen = [];
+    for (let i = 0; i < 4; i += 1) {
+      seen.push(await page.evaluate(() => document.documentElement.dataset.theme)
+        + '/' + (await btn.textContent()).trim());
+      await btn.click();
+    }
+    const want = ['light/Theme: auto', 'light/Theme: light', 'dark/Theme: dark', 'light/Theme: auto'];
+    if (seen.join(' ') !== want.join(' ')) {
+      failures.push('theme-toggle: cycled ' + seen.join(' -> ') + ', wanted ' + want.join(' -> '));
+    } else {
+      console.log('  auto -> light -> dark -> auto, on a light machine');
+    }
+    if (errors.length) failures.push('theme-toggle: ' + errors.join(' | '));
     await page.close();
   }
 
