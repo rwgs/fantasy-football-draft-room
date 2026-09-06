@@ -108,6 +108,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  /**
+   * Which press of Refresh ADP has already been spent on a board.
+   *
+   * The token only ever counts up, so testing it against zero made every later
+   * fetch of the session a forced one: press Refresh once at setup and a board
+   * re-asked for mid-draft would go back out to all three upstream feeds and
+   * throw away the cache it should have been reading. A press is one forced
+   * fetch, and this is what says which press that was.
+   */
+  const spentRefresh = useRef(0);
 
   const [engine, setEngine] = useState<DraftEngine | null>(null);
   const [screen, setScreen] = useState<Screen>('setup');
@@ -219,6 +229,8 @@ export default function App() {
 
   useEffect(() => {
     const control = new AbortController();
+    const force = refreshToken > spentRefresh.current;
+    spentRefresh.current = refreshToken;
     setLoading(true);
     setError(null);
     fetchBoard(
@@ -228,7 +240,7 @@ export default function App() {
         adpSource: league.adpSource,
         year: league.year,
         room: boardRoom,
-        force: refreshToken > 0,
+        force,
       },
       control.signal,
     )

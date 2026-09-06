@@ -12,6 +12,13 @@ fixed.
 
 ### Fixed
 
+**"Refresh ADP" forces one fetch, not every fetch for the rest of the session.**
+The token behind the button only ever counted up and was tested against zero, so
+one press at setup left every later board fetch forcing its way past the cache
+and back out to all three upstream feeds — on a scoring change, a league size
+change, a feed change, and now on a draft room turning up. A press is one forced
+fetch again.
+
 **Yahoo's own ADP is offered whenever the room can supply it, not only when it
 happened to be there first.** A board reports the feeds it could have been
 priced on as of the moment it was built, and the app asked for one board and
