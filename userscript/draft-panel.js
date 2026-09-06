@@ -55,27 +55,50 @@
   const CSS = [
     ':host { all: initial; }',
     '.wrap { position: fixed; left: 12px; bottom: 12px; z-index: 2147483000;',
-    '  width: 246px; pointer-events: none; background: #111514; color: #e8e6e3;',
-    '  border: 1px solid #2b3330; border-left: 2px solid #b78a2e; border-radius: 6px;',
-    '  font: 12px/1.35 -apple-system, Segoe UI, Roboto, sans-serif;',
+    '  width: 320px; pointer-events: none; background: #111514; color: #f0eee9;',
+    '  border: 1px solid #2b3330; border-left: 3px solid #b78a2e; border-radius: 6px;',
+    '  font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;',
     '  box-shadow: 0 6px 20px rgba(0,0,0,0.4); }',
     '.wrap.clock { border-left-color: #3fa34d; }',
-    '.head { display: flex; gap: 6px; align-items: center; padding: 6px 8px;',
+    '.head { display: flex; gap: 6px; align-items: center; padding: 7px 10px;',
     '  border-bottom: 1px solid #2b3330; }',
-    '.title { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #8b948f; }',
-    '.pick { margin-left: auto; font-size: 11px; color: #b9c2bd; font-variant-numeric: tabular-nums; }',
+    '.title { font-size: 11px; font-weight: 700; letter-spacing: .1em;',
+    '  text-transform: uppercase; color: #a9b2ad; }',
+    '.wrap.clock .title { color: #6cc77a; }',
+    '.pick { margin-left: auto; font-size: 12px; color: #cdd4d0; font-variant-numeric: tabular-nums; }',
     '.hide { pointer-events: auto; cursor: pointer; background: none; border: 0;',
-    '  color: #8b948f; font: inherit; font-size: 13px; line-height: 1; padding: 0 2px; }',
-    '.hide:hover { color: #e8e6e3; }',
-    '.lean { margin: 0; padding: 6px 8px 0; color: #b78a2e; font-size: 11px; }',
-    '.rows { padding: 4px 8px 8px; }',
-    '.row { display: grid; grid-template-columns: 28px minmax(0,1fr) auto; gap: 6px;',
-    '  align-items: baseline; padding: 3px 0; }',
-    '.pos { font-size: 10px; font-weight: 700; color: #8b948f; }',
+    '  color: #a9b2ad; font: inherit; font-size: 14px; line-height: 1; padding: 0 2px; }',
+    '.hide:hover { color: #f0eee9; }',
+    '.lean { margin: 0; padding: 7px 10px 0; color: #d9a83c; font-size: 12px; }',
+    /*
+     * THE PICK, WHICH IS WHY THE PANEL IS OPEN
+     *
+     * Everything under it is the reasoning. This is the answer, so it is the
+     * one thing sized to be read at a glance from across a draft room, and it
+     * carries its arithmetic underneath so it can be argued with.
+     */
+    '.take { margin: 7px 10px 0; padding: 7px 9px; border-radius: 4px;',
+    '  background: rgba(63,163,77,0.13); border: 1px solid rgba(63,163,77,0.4); }',
+    '.take-head { display: flex; align-items: baseline; gap: 7px; }',
+    '.take-tag { font-size: 10px; font-weight: 700; letter-spacing: .12em;',
+    '  text-transform: uppercase; color: #6cc77a; flex: none; }',
+    '.take-name { font-size: 15px; font-weight: 700; overflow: hidden;',
+    '  text-overflow: ellipsis; white-space: nowrap; }',
+    '.take-pos { margin-left: auto; font-size: 11px; font-weight: 700; color: #a9b2ad; flex: none; }',
+    '.take-why { margin: 3px 0 0; font-size: 11px; color: #b9c2bd; }',
+    '.rows { padding: 5px 10px 8px; }',
+    '.row { display: grid; grid-template-columns: 30px minmax(0,1fr) auto auto; gap: 4px 7px;',
+    '  align-items: baseline; padding: 4px 0; border-top: 1px solid #1e2523; }',
+    '.row:first-child { border-top: 0; }',
+    '.pos { font-size: 11px; font-weight: 700; color: #a9b2ad; }',
     '.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
-    '.cost { font-variant-numeric: tabular-nums; color: #b9c2bd; font-size: 11px; }',
-    '.odds { grid-column: 2 / -1; font-size: 10px; color: #6f7873; }',
-    '.empty { padding: 8px; color: #8b948f; font-size: 11px; }',
+    '.worth { font-variant-numeric: tabular-nums; font-weight: 700; color: #f0eee9; font-size: 13px; }',
+    '.cost { font-variant-numeric: tabular-nums; color: #d9a83c; font-size: 12px; min-width: 30px;',
+    '  text-align: right; }',
+    '.odds { grid-column: 2 / -1; font-size: 11px; color: #8b948f; }',
+    '.foot { margin: 0; padding: 6px 10px 8px; border-top: 1px solid #2b3330;',
+    '  font-size: 10px; color: #7f8884; }',
+    '.empty { padding: 10px; color: #a9b2ad; font-size: 12px; }',
   ].join(String.fromCharCode(10));
 
   let host = null;
@@ -105,28 +128,54 @@
     document.body.append(host);
   }
 
-  /** One line: the position, who is left at it, and what waiting costs. */
+  /** A small helper, because every line below is the same three steps. */
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  /**
+   * The pick, and the arithmetic behind it.
+   *
+   * Shown only when the board sent one. It says nothing when the top two are
+   * close enough that naming one would invent a decision rather than report it,
+   * and an empty box would read as a failure rather than as that answer.
+   */
+  function take(p) {
+    const box = el('div', 'take');
+    const head = el('div', 'take-head');
+    head.append(
+      el('span', 'take-tag', 'Take'),
+      el('span', 'take-name', p.name || ''),
+      el('span', 'take-pos', p.position || ''),
+    );
+
+    const why = '+' + Math.round(p.worth) + ' over a replacement ' + (p.position || '')
+      + (p.urgency >= 1 ? ', and ' + Math.round(p.urgency) + ' of that goes if you wait' : '')
+      + (p.fillsStarter
+        ? '. You still have to start one.'
+        : '. Your lineup is full, so this is on worth alone.');
+
+    box.append(head, el('p', 'take-why', why));
+    return box;
+  }
+
+  /** One line: the position, who is left at it, what he is worth, and the wait. */
   function row(r) {
-    const line = document.createElement('div');
-    line.className = 'row';
+    const line = el('div', 'row');
+    const cliff = r.beforeCliff === 1
+      ? 'then a drop'
+      : Math.round(r.beforeCliff || 0) + ' before the drop';
 
-    const pos = document.createElement('span');
-    pos.className = 'pos';
-    pos.textContent = r.position || '';
-
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = r.name || '';
-
-    const cost = document.createElement('span');
-    cost.className = 'cost';
-    cost.textContent = r.cost >= 0.5 ? '-' + Math.round(r.cost) : '0';
-
-    const odds = document.createElement('span');
-    odds.className = 'odds';
-    odds.textContent = Math.round((r.odds || 0) * 100) + '% he lasts';
-
-    line.append(pos, name, cost, odds);
+    line.append(
+      el('span', 'pos', r.position || ''),
+      el('span', 'name', r.name || ''),
+      el('span', 'worth', (r.worth > 0 ? '+' : '') + Math.round(r.worth || 0)),
+      el('span', 'cost', r.cost >= 0.5 ? '-' + Math.round(r.cost) : '0'),
+      el('span', 'odds', Math.round((r.odds || 0) * 100) + '% he lasts - ' + cliff),
+    );
     return line;
   }
 
@@ -162,12 +211,8 @@
     head.append(title, pick, hide);
     wrap.append(head);
 
-    if (advice && advice.lean) {
-      const lean = document.createElement('p');
-      lean.className = 'lean';
-      lean.textContent = advice.lean;
-      wrap.append(lean);
-    }
+    if (advice && advice.lean) wrap.append(el('p', 'lean', advice.lean));
+    if (advice && advice.pick) wrap.append(take(advice.pick));
 
     const rows = (advice && advice.rows) || [];
     if (!rows.length) {
@@ -177,10 +222,19 @@
         + 'Follow this draft in the app and it fills in.';
       wrap.append(empty);
     } else {
-      const list = document.createElement('div');
-      list.className = 'rows';
+      const list = el('div', 'rows');
       for (const r of rows) list.append(row(r));
       wrap.append(list);
+
+      /*
+       * What the numbers were read off, which is what they mean. A run already
+       * under way moves a room reading and cannot move an ADP one, so a panel
+       * that does not say which is a panel you cannot weigh.
+       */
+      const src = advice.source;
+      wrap.append(el('p', 'foot', src && src.kind === 'room'
+        ? 'From ' + src.sims + ' runs of this room, off the real picks.'
+        : 'Read off ADP, not this room, so a run already under way will not show.'));
     }
 
     shadow.append(wrap);

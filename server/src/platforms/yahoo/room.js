@@ -195,15 +195,32 @@ export function setAdvice(leagueId, advice) {
   if (!room) return false;
 
   const rows = Array.isArray(advice?.rows) ? advice.rows.slice(0, MAX_ADVICE_ROWS) : [];
+  const pick = advice?.pick;
+  const source = advice?.source;
   room.advice = {
     onClock: !!advice?.onClock,
     pickLabel: text(advice?.pickLabel),
     lean: advice?.lean ? text(advice.lean) : null,
+    // Null is a real answer here, not a missing one: the app says nothing when
+    // the top two are close enough that naming one would invent a decision.
+    pick: pick ? {
+      name: text(pick.name),
+      position: text(pick.position),
+      worth: Number(pick.worth) || 0,
+      urgency: Number(pick.urgency) || 0,
+      fillsStarter: !!pick.fillsStarter,
+    } : null,
+    // Anything but a room reading is read off ADP, including a malformed one.
+    source: source?.kind === 'room'
+      ? { kind: 'room', sims: Number(source.sims) || 0 }
+      : { kind: 'adp' },
     rows: rows.map((row) => ({
       position: text(row?.position),
       name: text(row?.name),
+      worth: Number(row?.worth) || 0,
       cost: Number(row?.cost) || 0,
       odds: Number(row?.odds) || 0,
+      beforeCliff: Number(row?.beforeCliff) || 0,
     })),
     at: Date.now(),
   };

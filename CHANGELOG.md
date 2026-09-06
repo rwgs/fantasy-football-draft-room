@@ -12,6 +12,23 @@ fixed.
 
 ### Added
 
+**The panel over the Yahoo room says what to pick.** It showed three positions,
+who was left at each, and what waiting cost. It did not show the pick, which is
+the thing you open a panel for. It now leads with the recommendation and its
+arithmetic, the same one the pool shows, worked out once in the app and handed
+over rather than computed twice.
+
+Each row gained what the player is worth and how many are left before the drop,
+so the row says whether the wait matters rather than only what it costs. A line
+at the foot says whether the numbers were read from runs of your actual room or
+off ADP, because a run already under way moves one and cannot move the other,
+and a panel that does not say which is one you cannot weigh.
+
+Bigger with it: 320px rather than 246, larger type, and the pick sized to be
+read at a glance. It still takes no clicks and still covers nothing you can
+interact with.
+
+
 **The pick this turn is for.** Three readings decide a pick and they were in
 three places: what a player is worth, in the pool; which position runs out
 first, in the panel beside it; and what you still have to start, in the panel

@@ -333,20 +333,30 @@ export default function DraftScreen(props: Props) {
       onClock: yourTurn,
       pickLabel: pickLabelWithOverall(oddsTarget, teams),
       lean: room ? describeLean(room.lean) : null,
+      pick: recommended && {
+        name: recommended.player.name,
+        position: recommended.player.position,
+        worth: recommended.worth,
+        urgency: recommended.urgency,
+        fillsStarter: recommended.fillsStarter,
+      },
+      source: room ? { kind: 'room', sims: room.sims } : { kind: 'adp' },
       // Three is what fits over a draft room without covering it. They are
       // already sorted by what waiting costs, so these are the three worth
       // spending the pick on.
       rows: priced.slice(0, 3).map((row) => ({
         position: row.position,
         name: row.best?.name ?? '',
+        worth: row.now,
         cost: row.cost,
         odds: row.odds,
+        beforeCliff: row.beforeCliff,
       })),
     }).catch(() => {
       // The board on this screen is unaffected, and the panel in the other tab
       // simply keeps the last thing it was given.
     });
-  }, [assistant, platform, draftId, oddsTarget, yourTurn, teams, room, priced]);
+  }, [assistant, platform, draftId, oddsTarget, yourTurn, teams, room, priced, recommended]);
 
   const draft = (id: string) => {
     setQueue((q) => q.filter((x) => x !== id));

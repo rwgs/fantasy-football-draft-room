@@ -582,13 +582,41 @@ export interface RoomAdvice {
   pickLabel: string;
   /** What the room is leaning towards, when it is leaning hard enough to say. */
   lean: string | null;
+  /**
+   * The pick this turn is for, when there is one and it is yours to make.
+   *
+   * Null is a real answer: two positions within a field goal of each other is
+   * not a decision, and the panel says nothing rather than inventing one.
+   */
+  pick: {
+    name: string;
+    position: string;
+    /** Points over a replacement starter at his own position. */
+    worth: number;
+    /** How much of that goes if you wait a turn, when the wait is yours. */
+    urgency: number;
+    /** Whether he fills a starting slot you have still to fill. */
+    fillsStarter: boolean;
+  } | null;
+  /**
+   * Where the numbers came from, which changes what they mean.
+   *
+   * ADP is what an average room does. Once enough real picks exist the room is
+   * simulated forward from them, and a run already under way moves these
+   * numbers where ADP cannot see it. The panel says which it is reading.
+   */
+  source: { kind: 'room'; sims: number } | { kind: 'adp' };
   rows: {
     position: string;
     /** The best player left at that position. */
     name: string;
+    /** What that player is worth over a replacement starter. */
+    worth: number;
     /** Points over a replacement starter given up by waiting one turn. */
     cost: number;
     /** The chance that player is still there at your next pick. */
     odds: number;
+    /** How many are left at the position before the biggest drop in value. */
+    beforeCliff: number;
   }[];
 }

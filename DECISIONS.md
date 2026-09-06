@@ -663,3 +663,10 @@ decide, which is the right answer once the lineup is full.
 - It inherits the room forecast for free. Once enough real picks exist, the
   cost it reads is the room's rather than ADP's, because `pricedPositions`
   already makes that swap upstream.
+- It is also handed to the panel over a Yahoo draft room, through the advice
+  pigeonhole in `server/src/platforms/yahoo/room.js`. It is worked out once, in
+  the app: the service forms no opinion, and a second copy of the pricing would
+  give two answers to one question. Adding a field to that panel means adding it
+  in three places — the payload, that whitelist, and the panel itself — and the
+  round trip is checked in the engine self-test, because a field that does not
+  survive it draws an empty box rather than failing.

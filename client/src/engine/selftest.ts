@@ -2024,7 +2024,13 @@ async function yahooRoom() {
     onClock: true,
     pickLabel: '2.07 #19',
     lean: 'The room is leaning on backs.',
-    rows: [{ position: 'RB', name: 'A Back', cost: 18.4, odds: 0.22 }],
+    pick: {
+      name: 'A Back', position: 'RB', worth: 117.2, urgency: 18.4, fillsStarter: true,
+    },
+    source: { kind: 'room', sims: 400 },
+    rows: [{
+      position: 'RB', name: 'A Back', worth: 117.2, cost: 18.4, odds: 0.22, beforeCliff: 2,
+    }],
     // Anything reachable can post here, so the store keeps what it recognises
     // and drops the rest rather than handing a page it does not own whatever
     // arrived.
@@ -2042,6 +2048,35 @@ async function yahooRoom() {
     JSON.stringify(read.advice));
   check('with nothing it was not asked to keep',
     !('somethingElse' in read.advice), Object.keys(read.advice).join(','));
+
+  /*
+   * The panel draws the pick and its arithmetic, so every field it reads has to
+   * survive the round trip. It drew an empty box the first time one did not.
+   */
+  check('the pick it recommends reaches the panel',
+    read.advice.pick?.name === 'A Back'
+      && read.advice.pick.position === 'RB'
+      && Math.round(read.advice.pick.worth) === 117
+      && Math.round(read.advice.pick.urgency) === 18
+      && read.advice.pick.fillsStarter === true,
+    JSON.stringify(read.advice.pick));
+  check('and so does what a row is worth, and its cliff',
+    Math.round(read.advice.rows[0].worth) === 117 && read.advice.rows[0].beforeCliff === 2,
+    JSON.stringify(read.advice.rows[0]));
+  check('and where the numbers were read off',
+    read.advice.source?.kind === 'room' && read.advice.source.sims === 400,
+    JSON.stringify(read.advice.source));
+
+  /*
+   * Saying nothing has to survive too. A pick the app withheld must arrive as
+   * null rather than as an empty object the panel would draw a blank box for.
+   */
+  await advise(LEAGUE, { onClock: false, pickLabel: '3.02', rows: [] });
+  const quiet = await (await fetch(API + '/api/yahoo/room/' + LEAGUE + '/advice')).json();
+  check('a pick the board withheld arrives as no pick', quiet.advice.pick === null,
+    JSON.stringify(quiet.advice.pick));
+  check('and a reading with no room behind it says so',
+    quiet.advice.source?.kind === 'adp', JSON.stringify(quiet.advice.source));
 
   const stray = await fetch(API + '/api/sleeper/room/1234567890123456789', {
     method: 'POST',
