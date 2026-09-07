@@ -425,8 +425,18 @@ Phase 4: prove the platform seam against real leagues.
   - Validation not run: the two fixtures-dependent suites, still skipped for
     want of `client/fixtures.local.json`. The R2 board change was checked
     against a second service on port 5179 rather than by restarting the one on
-    5178, which had been heard from by a bridge three minutes earlier; 5178 is
-    left reporting STALE and needs a restart before it serves the fix.
+    5178, which had been heard from by a bridge three minutes earlier. 5178 was
+    then restarted with the user's agreement and reports current; the four R2
+    board checks pass against it.
+  - Found, pre-existing, not acted on: `engine:test` fails one check against
+    today's refreshed feeds -- "an ordinary room reads as no lean", reading WR
+    1.9 against a threshold of 1.5. It is not from this work. The pre-fix commit
+    was checked out into a worktree and run against the same board, and it fails
+    with the same four numbers; separately, `observedLean` computes bit-identical
+    readings on both versions, and it depends on nothing this change touched.
+    The lean tolerance is calibrated against upstream ADP that moves daily, so
+    the check is data-sensitive by construction. Left alone as an unrelated
+    defect rather than retuned to make a run go green.
   - Raised, not acted on: Travis Hunter's WR row still has no projection.
     Attaching Sleeper's DB total would assert that 83.1 points filed under DB is
     a receiving projection and not an IDP one, and if it is IDP that silently

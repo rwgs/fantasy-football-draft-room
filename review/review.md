@@ -54,8 +54,9 @@ The ranking is an engineering judgment about likely breadth and size of improvem
 
 Seven findings, in the order the report ranks them, each its own commit. 31 new
 checks in `npm run engine:test`. Typecheck, lint, `engine:test`, `server:test`,
-`bridge:test`, build and `shots` all clean, no console errors, lint warnings
-unchanged at 43 against a stashed baseline.
+`bridge:test`, build and `shots` clean, no console errors, lint warnings
+unchanged at 43 against a stashed baseline. One pre-existing `engine:test`
+failure is unrelated to these fixes and is described under "Still outstanding".
 
 | Finding | What changed | Checked by |
 | --- | --- | --- |
@@ -87,10 +88,14 @@ been inflating RB and WR worth against QB and TE for every player on it.
   rather than an IDP one, and if it is IDP then attaching it silently corrupts
   his worth -- worse than the missing value the board already shows honestly.
   That is a question about what the feed means, not about this code.
-- **The service on port 5178 reports STALE.** `server/src` changed after it
-  started, so it is serving the pre-R2 board. The fix was checked against a
-  second service on 5179 rather than by restarting it, because a bridge had been
-  heard from three minutes earlier and Yahoo rooms are held in memory only.
+- **One pre-existing check fails against today's feeds.** `engine:test` reports
+  "an ordinary room reads as no lean" with WR at 1.9 against a threshold of 1.5.
+  This is not from the fixes: the pre-fix commit run in a worktree against the
+  same board fails with the same four numbers, `observedLean` computes
+  bit-identical readings on both versions, and it depends on no code these fixes
+  touched. The lean tolerance is calibrated against upstream ADP that moves
+  daily, so the check is data-sensitive by construction. Reported rather than
+  retuned, since retuning a tolerance to make a run go green is not a fix.
 - **`nextUserPick` and `picksUntilUserTurn`** now have no production caller.
   Left as pre-existing surface rather than widened into these changes.
 
