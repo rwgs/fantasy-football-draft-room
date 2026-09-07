@@ -25,9 +25,11 @@ import {
 } from './order';
 import {
   DEFAULT_ROSTER, bestLineup, emptyCounts, handcuffsFor, positionCap, rosterSize,
-  startersFilled,
+  startersFilled, starterCount,
 } from './roster';
-import { positionValues, rankCandidates, recommendPick, replacementPoints } from './value';
+import {
+  positionValues, rankCandidates, recommendPick, replacementPoints, startingAllocation,
+} from './value';
 import {
   forecast, observedLean, priorLean, reachablePlayers, recommendChain, recommendSequence,
 } from './forecast';
@@ -398,6 +400,49 @@ async function main() {
     check('replacement level does not move as the draft runs',
       JSON.stringify(replacementPoints(all, 12, r))
         === JSON.stringify(replacementPoints(all, 12, r)));
+
+    /*
+     * A LEAGUE CANNOT START MORE PLAYERS THAN IT HAS SLOTS
+     *
+     * The market decides how the flex is split, and it used to decide the whole
+     * count: positions were tallied off the ADP window and then floored at
+     * their dedicated slots independently, so nothing reconciled the total. A
+     * run on quarterbacks put 24 inside a 12 team window and a one quarterback
+     * league priced its replacement at QB24, with 48 starters counted against
+     * 36 slots.
+     */
+    const sums = (roster: RosterSlots) => {
+      const alloc = startingAllocation(all, 12, roster);
+      return POSITIONS.reduce((n, p) => n + alloc[p], 0);
+    };
+    check('the allocated starters sum to the slots the league has',
+      sums(r) === 12 * starterCount(r), sums(r) + ' vs ' + 12 * starterCount(r));
+    const sflex = { ...r, SUPERFLEX: 1 };
+    check('and still do once a superflex widens who is eligible',
+      sums(sflex) === 12 * starterCount(sflex),
+      sums(sflex) + ' vs ' + 12 * starterCount(sflex));
+
+    /*
+     * Eligibility, on a board where the market takes 24 quarterbacks first. No
+     * flex can reach a quarterback here, so the league starts exactly `teams`
+     * of them however early they go.
+     */
+    const oneQb: RosterSlots = {
+      QB: 1, RB: 1, WR: 1, TE: 0, FLEX: 0, SUPERFLEX: 0, K: 0, DEF: 0, BENCH: 5,
+    };
+    const qbHeavy = [
+      ...Array.from({ length: 24 }, (_, i) => ({ ...all[0], id: 'q' + i, position: 'QB' as const, points: 400 - i, adp: 1 + i })),
+      ...Array.from({ length: 12 }, (_, i) => ({ ...all[0], id: 'r' + i, position: 'RB' as const, points: 300 - i, adp: 25 + i })),
+      ...Array.from({ length: 30 }, (_, i) => ({ ...all[0], id: 'w' + i, position: 'WR' as const, points: 200 - i, adp: 40 + i })),
+    ];
+    const tight1 = startingAllocation(qbHeavy, 12, oneQb);
+    check('a one quarterback league with no flex starts twelve of them, not 24',
+      tight1.QB === 12, String(tight1.QB));
+    check('so replacement is the first quarterback outside the starters',
+      replacementPoints(qbHeavy, 12, oneQb).QB === 388,
+      String(replacementPoints(qbHeavy, 12, oneQb).QB));
+    check('a position no flex can reach never rises above its own slots',
+      POSITIONS.every((p) => tight1[p] === 12 * oneQb[p]), JSON.stringify(tight1));
     const deeper = replacementPoints(all, 14, r);
     check('a deeper league has a worse replacement back', deeper.RB < rep.RB,
       deeper.RB + ' vs ' + rep.RB);

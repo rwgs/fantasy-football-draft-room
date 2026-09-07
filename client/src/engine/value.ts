@@ -1,5 +1,7 @@
 import { survivalOdds } from './survival';
-import { emptyCounts, fillsStarter, positionCap, starterCount } from './roster';
+import {
+  FLEX_POSITIONS, SUPERFLEX_POSITIONS, emptyCounts, fillsStarter, positionCap, starterCount,
+} from './roster';
 import type { Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
@@ -47,11 +49,7 @@ export function replacementPoints(
   teams: number,
   roster: RosterSlots,
 ): Record<Position, number> {
-  const depth = teams * starterCount(roster);
-  const counts = emptyCounts();
-  for (const p of [...all].sort((a, b) => a.adp - b.adp).slice(0, depth)) {
-    counts[p.position] += 1;
-  }
+  const started = startingAllocation(all, teams, roster);
 
   const out = {} as Record<Position, number>;
   for (const pos of POSITIONS) {
@@ -62,13 +60,78 @@ export function replacementPoints(
       out[pos] = 0;
       continue;
     }
-    // A league that starts one of something starts `teams` of them, however
-    // late the market takes them. Without that floor a kicker, who never
-    // appears inside the starter window at all, becomes his own replacement
-    // and every kicker on the board prices at zero.
-    const started = Math.max(counts[pos], teams * roster[pos]);
-    out[pos] = pool[Math.min(started, pool.length - 1)].points ?? 0;
+    out[pos] = pool[Math.min(started[pos], pool.length - 1)].points ?? 0;
   }
+  return out;
+}
+
+/**
+ * How many starters at each position the league actually starts.
+ *
+ * The roster decides the size and the market decides the shape. Dedicated slots
+ * are owed outright, which is what stops a kicker becoming his own replacement:
+ * he never appears inside the starter window at all, and without his own slots
+ * every kicker on the board would price at zero. The flex slots on top are
+ * shared, so they go out in the proportions the market is taking players beyond
+ * those dedicated slots -- to the positions eligible for them, and only as many
+ * as exist.
+ *
+ * The counts used to be read straight off the ADP window and then floored at
+ * the dedicated slots independently, one position at a time, with nothing
+ * removing the excess or reconciling the total. A run on quarterbacks that put
+ * 24 of them inside a 12 team window therefore priced a one quarterback
+ * league's replacement at QB24 while the league starts twelve, and the baseline
+ * counted 48 starters against 36 slots. Because those counts come from the
+ * market, changing ADP source moved WORTH with no change to projections or
+ * roster rules.
+ */
+export function startingAllocation(
+  all: Player[],
+  teams: number,
+  roster: RosterSlots,
+): Record<Position, number> {
+  const out = {} as Record<Position, number>;
+  for (const pos of POSITIONS) out[pos] = teams * roster[pos];
+
+  const eligible = POSITIONS.filter(
+    (pos) => (roster.FLEX > 0 && FLEX_POSITIONS.includes(pos))
+      || (roster.SUPERFLEX > 0 && SUPERFLEX_POSITIONS.includes(pos)),
+  );
+  const flexSlots = teams * (roster.FLEX + roster.SUPERFLEX);
+  if (!flexSlots || !eligible.length) return out;
+
+  const counts = emptyCounts();
+  for (const p of [...all].sort((a, b) => a.adp - b.adp).slice(0, teams * starterCount(roster))) {
+    counts[p.position] += 1;
+  }
+
+  const weight = emptyCounts();
+  let total = 0;
+  for (const pos of eligible) {
+    weight[pos] = Math.max(0, counts[pos] - out[pos]);
+    total += weight[pos];
+  }
+  // A window taking nobody beyond his dedicated slots says nothing about where
+  // the flex is spent, so the slots themselves stand in for the market.
+  if (total === 0) {
+    for (const pos of eligible) {
+      weight[pos] = roster[pos];
+      total += weight[pos];
+    }
+  }
+  if (total === 0) return out;
+
+  let given = 0;
+  const share = eligible.map((pos) => {
+    const exact = (flexSlots * weight[pos]) / total;
+    const whole = Math.floor(exact);
+    given += whole;
+    return { pos, whole, rest: exact - whole };
+  });
+  // Largest remainder, so what is handed out sums to the slots that exist.
+  share.sort((a, b) => b.rest - a.rest);
+  for (let i = 0; i < flexSlots - given; i += 1) share[i % share.length].whole += 1;
+  for (const s of share) out[s.pos] += s.whole;
   return out;
 }
 
