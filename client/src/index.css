@@ -1163,6 +1163,12 @@ input[type='range']::-moz-range-thumb {
 }
 .pool-legend > summary:hover { color: var(--chalk-2); }
 
+/*
+ * Open, it is longer than the column it sits in, and the column clips rather
+ * than scrolls: the controls above the list do not shrink, so an uncapped key
+ * pushed the pool to nothing and hid its own second half off the bottom with
+ * no way to reach it. Capped, the key scrolls and the list keeps a screen.
+ */
 .pool-legend dl {
   margin: 7px 0 2px;
   display: grid;
@@ -1170,15 +1176,24 @@ input[type='range']::-moz-range-thumb {
   gap: 4px 10px;
   font-size: 12px;
   line-height: 1.4;
+  max-height: 38vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+/* Named tracks, not the order they happen to be written in. Auto placement put
+   one extra cell in the term column, which both starved the readings of width
+   and swapped the two columns for every entry after it. */
 .pool-legend dt {
+  grid-column: 1;
   font-family: var(--narrow);
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--chalk-2);
   white-space: nowrap;
 }
-.pool-legend dd { margin: 0; color: var(--chalk-3); }
+.pool-legend dd { grid-column: 2; margin: 0; color: var(--chalk-3); }
+.pool-legend dd p { margin: 0; }
+.pool-legend dd p + p { margin-top: 5px; }
 
 /* ------------------------------------------------------- the cost of waiting */
 

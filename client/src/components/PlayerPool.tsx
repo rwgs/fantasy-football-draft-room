@@ -342,17 +342,25 @@ export default function PlayerPool(props: Props) {
               full round, which is the market saying he should already be gone.
             </dd>
             <dt>The bar</dt>
+            {/*
+              * Two paragraphs, one cell. The grid under this list pairs a term
+              * with the cell beside it, so a second <dd> took the next term's
+              * place and swapped every label and reading below it for the rest
+              * of the key.
+              */}
             <dd>
-              His chance of still being there at your next pick. Read off a simulation of
-              this actual room once enough of it has been drafted, and off ADP before
-              that. A low bar only matters if WORTH is high — the panel beside the pool
-              is what tells you whether waiting actually costs anything.
-            </dd>
-            <dd>
-              It appears only where the answer is in doubt, which is about twenty five
-              players at any moment. Everyone above that band is certain to be there and
-              says nothing; everyone below reads "gone by" your pick instead, because a
-              bar pinned empty is not a reading, it is a bar that looks broken.
+              <p>
+                His chance of still being there at your next pick. Read off a simulation of
+                this actual room once enough of it has been drafted, and off ADP before
+                that. A low bar only matters if WORTH is high — the panel beside the pool
+                is what tells you whether waiting actually costs anything.
+              </p>
+              <p>
+                It appears only where the answer is in doubt, which is about twenty five
+                players at any moment. Everyone above that band is certain to be there and
+                says nothing; everyone below reads "gone by" your pick instead, because a
+                bar pinned empty is not a reading, it is a bar that looks broken.
+              </p>
             </dd>
             <dt>R</dt>
             <dd>
