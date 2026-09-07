@@ -31,7 +31,8 @@ import {
   positionValues, rankCandidates, recommendPick, replacementPoints, startingAllocation,
 } from './value';
 import {
-  forecast, observedLean, priorLean, reachablePlayers, recommendChain, recommendSequence,
+  forecast, observedLean, pricedPositions, priorLean, reachablePlayers, recommendChain,
+  recommendSequence,
 } from './forecast';
 import { CERTAINLY_GONE, survivalOdds } from './survival';
 import type { Board, CpuConfig, LeagueConfig, Player, Position, RosterSlots } from './types';
@@ -843,6 +844,60 @@ async function main() {
 
     const runs = POSITIONS.map((p) => p + ' ' + f.taken[p].toFixed(1)).join(' ');
     console.log('        of the ' + (target - from) + ' picks before your turn: ' + runs);
+
+    /*
+     * A PLAYER THE ROOM NEVER LEAVES ON THE BOARD IS NOT A TARGET
+     *
+     * Only survivors used to be recorded, so a player taken in every run had no
+     * entry at all, which is indistinguishable from a player the forecast had
+     * never heard of. The two readings of that gap disagreed: the pool and
+     * `reachablePlayers` fell back to generic ADP odds and kept him as a target
+     * at around 45 per cent, while the position panel read the same gap as
+     * zero and printed that. Seat one waiting from pick 13 to pick 24 is long
+     * enough for the room to take the best receivers in all of them.
+     */
+    let long = createDraft(league({ mySlot: 1 }), DEFAULT_CPU, board.players, null);
+    while (long.state.picks.length < 12 && !long.state.done) long = runCpuPick(long);
+    const lf = forecast(long, 120)!;
+    const leftNow = availablePlayers(long);
+    const longFrom = currentPick(long.state);
+
+    check('every player still on the board has a forecast',
+      leftNow.every((p) => lf.survival.has(p.id)),
+      lf.survival.size + ' entries for ' + leftNow.length + ' available');
+    const never = leftNow.filter((p) => lf.survival.get(p.id) === 0);
+    check('the room takes somebody in every single run, or this proves nothing',
+      never.length > 0, String(never.length));
+    check('and the generic ADP reading would have called him reachable',
+      never.some((p) => survivalOdds(p, longFrom, lf.targetPick) > CERTAINLY_GONE),
+      never.map((p) => p.name + ' '
+        + Math.round(survivalOdds(p, longFrom, lf.targetPick) * 100) + '%').join(', '));
+    const canGet = reachablePlayers(leftNow, lf, longFrom, lf.targetPick);
+    check('yet none of them is offered as somebody to wait for',
+      never.every((p) => !canGet.includes(p)));
+
+    /*
+     * BOTH SIDES OF THE SUBTRACTION MEAN THE SAME "BEST"
+     *
+     * `now` is the best available at a position by projected points. `later`
+     * used to be the first survivor in board order, which is the best by the
+     * market. Where the two disagreed the subtraction invented scarcity out of
+     * nothing: a 300 point receiver surviving every run behind a 100 point
+     * receiver with an earlier ADP priced as 100. So if the best player at a
+     * position by points survives every run, waiting for him costs nothing.
+     */
+    const priced = pricedPositions(
+      leftNow, board.players, 12, DEFAULT_ROSTER, longFrom, lf.targetPick, lf,
+    );
+    const safe = priced.filter((v) => v.best && lf.survival.get(v.best.id) === 1);
+    check('some position keeps its best player in every run, or this proves nothing',
+      safe.length > 0, String(safe.length));
+    check('waiting for a player the room never takes costs nothing',
+      safe.every((v) => v.cost < 1e-6),
+      safe.map((v) => v.position + ' ' + v.cost.toFixed(1)).join(' '));
+    check('and what is expected to be left is never worth more than what is there',
+      priced.every((v) => v.later <= v.now + 1e-6),
+      priced.map((v) => v.position + ' ' + v.now.toFixed(0) + '/' + v.later.toFixed(0)).join(' '));
   }
 
   console.log('\nWhat the room says before it drafts');

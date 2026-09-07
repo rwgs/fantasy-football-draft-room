@@ -275,22 +275,38 @@ export function forecast(
     }
 
     const left = availablePlayers(live);
-    const seen = new Set<string>();
+    // The best survivor at a position, by what he is worth. This used to take
+    // the first one in board order, which is the best by the market, while the
+    // value being compared against it is the best by projected points. Two
+    // definitions of "best" on either side of a subtraction invented scarcity
+    // wherever the market and the projections disagreed: a 300 point receiver
+    // surviving every run behind a 100 point receiver with an earlier ADP read
+    // as 100, and the cost of waiting came out 200 points too high.
+    const bestHere = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 } as Record<Position, number>;
     for (const p of left) {
       survived.set(p.id, (survived.get(p.id) ?? 0) + 1);
-      if (!seen.has(p.position)) {
-        seen.add(p.position);
-        // The pool is in board order, so the first one at a position is the
-        // best available by the market. Value it against replacement.
-        bestLeft[p.position] += Math.max(0, (p.points ?? 0) - replacement[p.position]);
-      }
+      // No projection is no evidence, the same as it is in `positionValues`.
+      if (p.points == null) continue;
+      const worth = Math.max(0, p.points - replacement[p.position]);
+      if (worth > bestHere[p.position]) bestHere[p.position] = worth;
     }
+    for (const pos of POSITIONS) bestLeft[pos] += bestHere[pos];
     for (const pos of POSITIONS) {
       taken[pos] += countAt(engine, live, pos);
     }
   }
 
   const survival = new Map<string, number>();
+  // Every player available now gets an entry, even one no run ever left on the
+  // board. Only survivors used to be recorded, so a player the room took in all
+  // of them was indistinguishable from a player the forecast had never heard
+  // of, and the two readings of that absence disagreed: the pool and
+  // `reachablePlayers` fell back to generic ADP odds, which had him at 45 per
+  // cent and kept him as a target, while the position panel read the same gap
+  // as zero and printed it. An explicit zero means the room's own answer is
+  // used everywhere, and absence now means only what it says -- not in this
+  // forecast, because he was already drafted before it ran.
+  for (const p of availablePlayers(engine)) survival.set(p.id, 0);
   for (const [id, n] of survived) survival.set(id, n / sims);
   for (const pos of POSITIONS) {
     taken[pos] /= sims;
