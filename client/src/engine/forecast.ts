@@ -470,6 +470,61 @@ export function recommendChain(
   return out;
 }
 
+/**
+ * What to queue, as one pick after another rather than four ways to make one.
+ *
+ * `recommendChain` above answers "and if he goes". Every entry in it is a
+ * substitute for the same pick, priced against the roster as it stands, so the
+ * same position can be the right answer twice over and usually is: take the
+ * best defense away and the next defense inherits the slot and the urgency.
+ *
+ * A Yahoo queue is read the other way round. The room takes the next entry on
+ * each expiry, so that same list becomes a plan, and a plan that spends two
+ * picks on a position with one slot has a wasted pick in it. It took two
+ * defenses and two kickers in a real draft, and late on is exactly where it
+ * would: value over replacement is what puts a position on the list at all, and
+ * by the end the positions with anything left worth having are the ones with a
+ * single slot.
+ *
+ * The difference is one line. The roster advances as the list is built, so a
+ * position reaching its cap drops out of everything below it. Where nothing
+ * legal is left this stops early, because a queue shorter than it was asked for
+ * beats one holding a player who cannot be played.
+ *
+ * The leader is taken outright rather than through `recommendPick`, which
+ * withholds a name when two positions sit within a field goal of each other.
+ * That is right for advice, where naming one would invent a decision that is
+ * not there, and wrong here: a queue is what happens when nobody is present to
+ * make one.
+ */
+export function recommendSequence(
+  available: Player[],
+  all: Player[],
+  teams: number,
+  roster: RosterSlots,
+  currentPick: number,
+  targetPick: number | null,
+  room: Forecast | null,
+  mine: Record<Position, number>,
+  depth: number,
+): Recommendation[] {
+  const out: Recommendation[] = [];
+  const held = { ...mine };
+  let left = available;
+  while (out.length < depth) {
+    const next = rankCandidates(
+      pricedPositions(left, all, teams, roster, currentPick, targetPick, room),
+      held,
+      roster,
+    )[0];
+    if (!next) break;
+    out.push(next);
+    held[next.player.position] += 1;
+    left = left.filter((p) => p.id !== next.player.id);
+  }
+  return out;
+}
+
 
 /**
  * The players who can still reach your turn, for deciding what to aim at.

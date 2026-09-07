@@ -24,11 +24,12 @@ import {
   keeperPicksIn, pickOrder, picksForTeam, picksInRound, roundOrder, seatOf,
 } from './order';
 import {
-  DEFAULT_ROSTER, bestLineup, emptyCounts, handcuffsFor, rosterSize, startersFilled,
+  DEFAULT_ROSTER, bestLineup, emptyCounts, handcuffsFor, positionCap, rosterSize,
+  startersFilled,
 } from './roster';
 import { positionValues, rankCandidates, recommendPick, replacementPoints } from './value';
 import {
-  forecast, observedLean, priorLean, reachablePlayers, recommendChain,
+  forecast, observedLean, priorLean, reachablePlayers, recommendChain, recommendSequence,
 } from './forecast';
 import { CERTAINLY_GONE, survivalOdds } from './survival';
 import type { Board, CpuConfig, LeagueConfig, Player, Position, RosterSlots } from './types';
@@ -545,6 +546,43 @@ async function main() {
     check('a position filled to its cap is in none of them',
       chainAt(counts({ QB: 9, TE: 9, K: 9, DEF: 9 }))
         .every((c) => !['QB', 'TE', 'K', 'DEF'].includes(c.player.position)));
+
+    /*
+     * A QUEUE IS NOT A LIST OF SUBSTITUTES
+     *
+     * Everything above is four ways to make one pick, priced against the roster
+     * as it stands, which is why the same position comes up twice and why that
+     * is right. Yahoo reads a queue the other way round: it takes the next
+     * entry on each expiry, so the same list becomes a plan, and a plan that
+     * spends two picks on a position that can only play one has a wasted pick
+     * in it. It showed as two defenses and two kickers in a real draft, and
+     * late on is exactly where it would: value over replacement is what puts a
+     * position on this list at all, and by the end the positions with anything
+     * left worth having are the ones with a single slot.
+     */
+    const oneSlotOnly = after(19).filter((p) => p.position === 'K' || p.position === 'DEF');
+    const substitutes = recommendChain(oneSlotOnly, all, 12, r, 20, 29, null, counts({}), 4);
+    check('four substitutes drawn from two one-slot positions repeat both',
+      substitutes.length === 4
+        && new Set(substitutes.map((c) => c.player.position)).size === 2,
+      substitutes.map((c) => c.player.position).join(' '));
+
+    const plan = recommendSequence(oneSlotOnly, all, 12, r, 20, 29, null, counts({}), 4);
+    check('but a queue off the same board takes each of them once and stops',
+      plan.length === 2 && new Set(plan.map((c) => c.player.position)).size === 2,
+      plan.map((c) => c.player.position).join(' '));
+
+    const held = counts({});
+    for (const entry of recommendSequence(after(19), all, 12, r, 20, 29, null, held, 8)) {
+      held[entry.player.position] += 1;
+    }
+    check('and a queue fills no position past what the roster can play',
+      POSITIONS.every((pos) => held[pos] <= positionCap(r, pos)),
+      POSITIONS.map((pos) => pos + held[pos]).join(' '));
+
+    check('a queue counts what you already hold, not only what it adds',
+      recommendSequence(after(19), all, 12, r, 20, 29, null, counts({ K: 1 }), 8)
+        .every((c) => c.player.position !== 'K'));
 
     check('asking for one gets the pick and nothing else',
       chainAt(counts({}), 1).length === 1);

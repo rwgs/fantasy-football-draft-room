@@ -4,6 +4,7 @@ import PlayerPool from './PlayerPool';
 import ValuePanel from './ValuePanel';
 import {
   describeLean, forecast, pricedPositions, priorLean, reachablePlayers, recommendChain,
+  recommendSequence,
 } from '../engine/forecast';
 import RosterPanel from './RosterPanel';
 import {
@@ -372,13 +373,17 @@ export default function DraftScreen(props: Props) {
    * on rows that said "gone by" in the same glance. On the clock nothing is
    * filtered, because on the clock every one of them is takeable.
    */
+  const choosable = useMemo(
+    () => (yourTurn ? available : reachablePlayers(available, room, pick, oddsTarget)),
+    [yourTurn, available, room, pick, oddsTarget],
+  );
   const chain = useMemo(
     () => (state.done ? [] : recommendChain(
-      yourTurn ? available : reachablePlayers(available, room, pick, oddsTarget),
+      choosable,
       board.players, teams, state.league.roster,
       pick, oddsTarget, room, myCounts, PICKS_DEEP,
     )),
-    [state.done, yourTurn, available, board.players, teams, state.league.roster,
+    [state.done, choosable, board.players, teams, state.league.roster,
       pick, oddsTarget, room, myCounts],
   );
   const recommended = chain[0] ?? null;
@@ -457,6 +462,35 @@ export default function DraftScreen(props: Props) {
    * the bridge a queue until the room has said what its own holds, because the
    * frame that sets one replaces it.
    */
+  /**
+   * The same board read as a plan, for the queue rather than for the row above.
+   *
+   * `chain` is four ways to make this pick; a queue is four picks in a row. So
+   * it cannot be the same list, and `recommendSequence` is where the difference
+   * is explained. It starts from what the starred players would leave, because
+   * those are written above it and a plan blind to them queues a second defense
+   * just as surely as one blind to the roster.
+   *
+   * Built only for the mode that sends it. Off and mirror write nothing from
+   * here, and pricing the board again for a list nobody reads is work wasted on
+   * every render of a draft.
+   */
+  const queueChain = useMemo(() => {
+    if (queueWrite !== 'autodraft' || state.done) return [];
+    const stars = queue
+      .map((id) => available.find((p) => p.id === id))
+      .filter((p): p is Player => !!p);
+    const held = { ...myCounts };
+    for (const star of stars) held[star.position] += 1;
+    const starred = new Set(stars.map((p) => p.id));
+    return recommendSequence(
+      choosable.filter((p) => !starred.has(p.id)),
+      board.players, teams, state.league.roster,
+      pick, oddsTarget, room, held, PICKS_DEEP,
+    );
+  }, [queueWrite, state.done, queue, available, choosable, board.players, teams,
+    state.league.roster, pick, oddsTarget, room, myCounts]);
+
   const lastQueueSent = useRef<string | null>(null);
   useEffect(() => {
     if (!assistant || platform !== 'yahoo' || !draftId) return;
@@ -467,9 +501,9 @@ export default function DraftScreen(props: Props) {
         if (player && !wanted.some((had) => had.id === player.id)) wanted.push(player);
       };
       // Starred first and in the order they were starred, because that order is
-      // a decision the user made and the chain below is only an opinion.
+      // a decision the user made and the plan below is only an opinion.
       for (const id of queue) add(available.find((p) => p.id === id));
-      if (queueWrite === 'autodraft') for (const link of chain) add(link.player);
+      if (queueWrite === 'autodraft') for (const link of queueChain) add(link.player);
     }
 
     const payload = queueWrite === 'off'
@@ -488,7 +522,7 @@ export default function DraftScreen(props: Props) {
       // the room keeps whatever queue it already had.
       lastQueueSent.current = null;
     });
-  }, [assistant, platform, draftId, queueWrite, queuePriority, queue, available, chain]);
+  }, [assistant, platform, draftId, queueWrite, queuePriority, queue, available, queueChain]);
 
   const draft = (id: string) => {
     setQueue((q) => q.filter((x) => x !== id));

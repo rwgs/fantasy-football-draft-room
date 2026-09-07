@@ -90,6 +90,47 @@ Phase 4: prove the platform seam against real leagues.
     from the lobby instead; the older one still gives the advice that costs a
     seat.
 
+- [x] Build the autodraft queue as a plan, not as four ways to make one pick.
+  - Scope: new `recommendSequence` in `client/src/engine/forecast.ts`, which
+    advances the roster as it builds so a position reaching its cap drops out of
+    everything below it. The autodraft queue is built from that instead of from
+    `chain`, and it starts from the counts the starred players would leave,
+    because those are written above it. `recommendChain` is untouched: for the
+    row on screen, two defenses is the right answer.
+  - Why: reported in a live draft as Yahoo taking two defenses, and then two
+    kickers. `chain` is a pick and three substitutes, each priced against the
+    roster as it stands and with only the named player removed from the pool, so
+    the same position stays on top and the next man at it comes up again. That
+    is asserted behaviour and correct for advice. Yahoo reads a queue as
+    successive picks, so the same list became a plan with a wasted pick in it.
+    Late on is where it showed: value over replacement is what puts a position
+    on the list at all, and by the end the positions with anything left worth
+    having are the ones with a single slot.
+  - Acceptance criteria: a queue never holds a position more often than the
+    roster can play it, counting what is already held and what the stars add; a
+    queue that cannot legally be filled to depth stops rather than repeating;
+    the on-screen chain still repeats a position. All three met.
+  - Automated validation: four checks in `npm run engine:test`, including the
+    contrast — the same board gives four substitutes across two one-slot
+    positions and a queue of two. Typecheck, `server:test`, `engine:test`,
+    build and `shots` clean, no console errors.
+  - Lint: two new `react(preserve-manual-memoization)` warnings in
+    `DraftScreen.tsx`, taking it from two to four. Both are on the new memos and
+    are the same construct the `chain` memo beside them already carries. The
+    pool the board chooses from was hoisted into one memo read by both the
+    advice and the queue, which is one of the two: it costs an advisory warning
+    and removes the chance of the two lists filtering their pool differently.
+  - Manual validation: **outstanding.** The wiring in `DraftScreen.tsx` is not
+    covered by a check — no test drives the queue write from the component — so
+    what has been proven is the engine function and that the app renders and
+    builds. Watching a real autodraft take one defense is still to do.
+  - Not addressed: a duplicate already written into Yahoo's queue survives this.
+    `queuePlan` merges the room's own queue underneath the app's and drops only
+    players already drafted, so a second defense sitting in the room's queue is
+    carried on every write until it is deleted in the draft room by hand. The
+    app never clears a queue it did not read; see `DECISIONS.md`.
+  - Dependencies or blockers: none.
+
 - [ ] Populate `client/fixtures.local.json` and run the full engine self-test.
   - Scope: copy `client/fixtures.example.json`, fill in real Sleeper league
     IDs, a keeper league, and a finished draft with its pick and keeper counts.
