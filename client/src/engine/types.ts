@@ -653,6 +653,15 @@ export interface BridgeStatus {
   tooOld: boolean;
   fromSource: boolean;
   stale: boolean;
+  /**
+   * When it last posted, by this machine's own clock, or null if nothing has.
+   *
+   * The one field here about now rather than about which copy is installed, and
+   * the app needs both: a bridge posts every few seconds from inside a draft
+   * room and from nowhere else, so none of the flags above expires on its own
+   * and "current" outlives the browser that earned it.
+   */
+  heardAt: number | null;
   current: { version: string | null; build: string };
 }
 

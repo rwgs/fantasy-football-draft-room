@@ -24,6 +24,16 @@ type Screen = 'setup' | 'draft' | 'results';
 /** How often a Yahoo mock named before its room exists is asked about. */
 const ROOM_WAIT_MS = 5000;
 
+/**
+ * How long a bridge that was posting may go quiet before the app says so.
+ *
+ * The bridge posts every three seconds while a draft room is open, and this asks
+ * every five. Fifteen is a gap no dropped beat reaches and no working bridge
+ * produces, which is what a warning about silence has to clear to be worth
+ * showing at all.
+ */
+const BRIDGE_QUIET_MS = 15000;
+
 /** One button, three states, so the machine stays an option after an override. */
 const THEME_NEXT: Record<Theme, Theme> = { system: 'light', light: 'dark', dark: 'system' };
 const THEME_LABEL: Record<Theme, string> = {
@@ -34,6 +44,21 @@ const THEME_TITLE: Record<Theme, string> = {
   light: 'Light. Click to force dark.',
   dark: 'Dark. Click to follow your system setting again.',
 };
+
+/**
+ * How long a bridge has gone without posting, or null while it is still talking.
+ *
+ * Null for a bridge nothing has ever heard from too. That is not silence, it is
+ * a draft room that has not been opened yet, and the banners keep the two apart.
+ */
+function quiet(bridge: BridgeStatus | null): string | null {
+  if (!bridge?.heardAt) return null;
+  const seconds = Math.round((Date.now() - bridge.heardAt) / 1000);
+  if (seconds * 1000 <= BRIDGE_QUIET_MS) return null;
+  if (seconds < 90) return seconds + ' seconds ago';
+  const minutes = Math.round(seconds / 60);
+  return minutes === 1 ? 'a minute ago' : minutes + ' minutes ago';
+}
 
 export default function App() {
   const saved = useRef(load()).current;
@@ -229,6 +254,22 @@ export default function App() {
   const [bridge, setBridge] = useState<BridgeStatus | null>(null);
 
   /**
+   * How long the bridge has been silent, as of the last time it was asked.
+   *
+   * A bridge that was posting and has stopped, which the reading above cannot
+   * say: it names the copy that is installed, and 2026-09-07 needed a second
+   * lesson to show that this is a different question. The gate that allows user
+   * scripts at all went back off mid-session, so the copy named in the masthead
+   * was current, correct, and an hour stale, and the app went on saying picks
+   * would mirror while nothing was being injected into the room at all.
+   *
+   * Worded where the reading is taken rather than at render, because the clock
+   * is what is being consulted here and a render is not an event. It ages on
+   * the poll below, which is the same beat that notices the silence starting.
+   */
+  const [silence, setSilence] = useState<string | null>(null);
+
+  /**
    * Asked whenever Yahoo is the platform, on any screen and in either mode.
    *
    * The first version of this asked only while an assistant draft was being
@@ -249,6 +290,7 @@ export default function App() {
       // rather than a dropped request reading as a bridge that went away.
       if (!alive || !report) return;
       setBridge(report.running);
+      setSilence(quiet(report.running));
     };
     void ask();
     const timer = setInterval(() => { void ask(); }, ROOM_WAIT_MS);
@@ -257,6 +299,9 @@ export default function App() {
 
   /** What the masthead and the banner read. Absent where it does not apply. */
   const bridgeSeen = watchBridge ? bridge : null;
+
+  /** The same, and on the same terms: nothing to say where none applies. */
+  const bridgeSilence = watchBridge ? silence : null;
 
   useEffect(() => {
     // Left as it was where there is no room to ask about. What it is worth is
@@ -929,7 +974,10 @@ export default function App() {
           * which is the whole lesson of 2026-09-07.
           */}
         {bridgeSeen && (
-          <span className="hint" style={bridgeSeen.stale ? { color: 'var(--te)' } : undefined}>
+          <span
+            className="hint"
+            style={bridgeSeen.stale || bridgeSilence ? { color: 'var(--te)' } : undefined}
+          >
             {/*
               * "unknown" was the first wording and it said nothing worth
               * reading. A copy too old to name itself is not an unknown
@@ -941,6 +989,12 @@ export default function App() {
               : `bridge ${bridgeSeen.version ?? 'unversioned'}${
                 bridgeSeen.fromSource ? ' · from source'
                   : bridgeSeen.build ? ` · ${bridgeSeen.build}` : ''}`}
+            {/*
+              * Said here as well as in the banner because the banner is kept
+              * off the draft screen and this is not: a draft under way is
+              * exactly when a bridge going quiet costs something.
+              */}
+            {bridgeSilence ? ` · silent, last heard ${bridgeSilence}` : ''}
           </span>
         )}
 
@@ -1006,7 +1060,7 @@ export default function App() {
       </header>
 
       {/*
-        * Three states, said where each is worth reading.
+        * Four states, said where each is worth reading.
         *
         * A bridge that is behind still mirrors picks, which is what makes it
         * dangerous: the board looks right while the half that writes your queue
@@ -1019,7 +1073,39 @@ export default function App() {
         * setup only. A permanent row over the draft screen would be taking
         * space from the pool to say nothing is wrong.
         */}
-      {bridgeSeen?.stale && (
+      {/*
+        * Nothing is arriving, which reads as everything working.
+        *
+        * This is the one the second half of 2026-09-07 went to. The install was
+        * current, the masthead said so, and the browser had quietly taken the
+        * permission to inject it back off, so the board sat with its seats
+        * numbered and no picks on it while the app reassured. Said before the
+        * staleness below rather than after it, and instead of it: a bridge that
+        * is not running is not mirroring picks either, and the version it would
+        * have been running is the smaller of the two complaints.
+        */}
+      {bridgeSilence && (
+        <div className="banner is-bad" role="status" style={{ margin: '10px 18px 0' }}>
+          <span>
+            <b>The Yahoo bridge has stopped posting.</b>
+            {` It was last heard ${bridgeSilence}, so nothing is mirroring picks`}
+            {' onto this board now, and any seat it has not named is numbered'}
+            {' rather than empty.'}
+            {' If your draft room tab is closed, that is all this is.'}
+            {' If it is open, nothing is being injected into it: check that the'}
+            {' browser still allows user scripts for your userscript manager, on'}
+            {' that extension\'s own details page rather than the global'}
+            {' developer-mode switch. That gate can go back off on its own, and'}
+            {' nothing else reports it: the manager still lists the script and'}
+            {' still holds the right copy. A draft room console logging no'}
+            {' bridge version is the check.'}
+            {' Re-open the room from the lobby rather than reloading the tab:'}
+            {' Yahoo\'s auth token is single use, and a reload leaves the draft.'}
+          </span>
+        </div>
+      )}
+
+      {bridgeSeen?.stale && !bridgeSilence && (
         <div className="banner is-bad" role="status" style={{ margin: '10px 18px 0' }}>
           <span>
             <b>The Yahoo bridge in your browser is out of date.</b>
@@ -1042,7 +1128,7 @@ export default function App() {
         </div>
       )}
 
-      {screen === 'setup' && watchBridge && bridgeSeen && !bridgeSeen.stale && (
+      {screen === 'setup' && watchBridge && bridgeSeen && !bridgeSeen.stale && !bridgeSilence && (
         <div className="banner is-good" role="status" style={{ margin: '10px 18px 0' }}>
           <span>
             <b>The Yahoo bridge is current.</b>

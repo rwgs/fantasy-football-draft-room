@@ -395,7 +395,7 @@ export async function roomState(leagueId) {
     // Which userscript is feeding this room. It rides on the state the app
     // already polls rather than a check of its own, because a version nobody
     // asks for is a version nobody sees. See `server/src/bridge.js`.
-    bridge: bridgeStatus(room?.bridge, !!room?.bridgeSeen),
+    bridge: bridgeStatus(room?.bridge, !!room?.bridgeSeen, room?.updatedAt),
   };
 }
 
@@ -443,7 +443,7 @@ export async function readAdvice(leagueId) {
     advice: getAdvice(leagueId),
     // Which userscript is feeding this room, so the app can show it and say so
     // when it is behind. Null until something has posted. See `bridge.js`.
-    bridge: bridgeStatus(room?.bridge, !!room?.bridgeSeen),
+    bridge: bridgeStatus(room?.bridge, !!room?.bridgeSeen, room?.updatedAt),
     queue: {
       // `off`, `first` or `ready`. The panel says which, because `first` is the
       // write that replaced a queue nobody had read, and saying so afterwards is

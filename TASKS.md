@@ -50,6 +50,47 @@ Phase 4: prove the platform seam against real leagues.
     where the answer is worth having.
   - Dependencies or blockers: none.
 
+- [x] Let the app say when a bridge has stopped, not only when it is behind.
+  - Scope: every post is timed, and `bridgeStatus` carries `heardAt` in the
+    service-wide reading and the per-room one alike. Fifteen seconds of silence
+    reads as a bridge that has stopped: the reassurance goes, a banner naming
+    both causes shows on every screen, and the masthead says how long it has
+    been. Worded where the reading is taken rather than at render, so nothing
+    has to drive a clock for it to age.
+  - Why: 2026-09-07 again, the same evening. The install was current and the
+    masthead said so, the browser had taken the per-extension "Allow user
+    scripts" control back off underneath it, and the app went on saying picks
+    would mirror while nothing was being injected at all. None of the four
+    readings expires on its own, and a bridge posts only from inside a draft
+    room, so "current" is a fact about a copy that was talking then. What was on
+    screen was a board with its seats numbered — no seat name arrives without a
+    room — which reads as the app being broken rather than as nothing having
+    spoken to it.
+  - Acceptance criteria: a bridge nothing has ever heard from is not called
+    silent, because a draft room that has not been opened looks exactly like
+    that; a silent bridge is complained about instead of a stale one rather than
+    as well as; the reading ages on the beat that already polls it. All three
+    met.
+  - Automated validation: one check in `npm run server:test` (the time is the
+    post's, and every post moves it on) and one in `npm run engine:test` (a
+    posted room says when the bridge was last heard). Typecheck, lint unchanged
+    from baseline, `server:test`, `bridge:test`, `engine:test`, build and
+    `shots` clean, no console errors.
+  - Manual validation: **done.** Four states photographed in a real browser
+    against the running app: nothing ever heard, current, silent at 22 seconds
+    and at five minutes, and stale. The reading was served to the page rather
+    than posted to the service, because a real bridge was posting to it every
+    three seconds at the time and leaving that alone was the point.
+  - Dependencies or blockers: none. Found while diagnosing a room that was not
+    syncing, which was two faults rather than one. The other — a bridge posting
+    to a league the app is not following, which the app also cannot see — is not
+    addressed here.
+  - Noticed and not acted on: the stale-bridge banner says to reload the draft
+    room, and `docs/yahoo-draft-protocol.md` records that Yahoo's `auth` is
+    single-use and a reload leaves the draft. The new banner says to re-open
+    from the lobby instead; the older one still gives the advice that costs a
+    seat.
+
 - [ ] Populate `client/fixtures.local.json` and run the full engine self-test.
   - Scope: copy `client/fixtures.example.json`, fill in real Sleeper league
     IDs, a keeper league, and a finished draft with its pick and keeper counts.

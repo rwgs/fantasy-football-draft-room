@@ -116,3 +116,29 @@ test('the last bridge heard is remembered without a league', () => {
 
   forgetBridge();
 });
+
+test('the last bridge heard says when, so silence can be told from health', async () => {
+  // 2026-09-07, twice. The first time the running copy was old and would not
+  // say so. The second it was current and had stopped running, and the reading
+  // taken an hour earlier still read as health: the app went on saying picks
+  // would mirror while nothing was posting at all, because a reading with no
+  // time on it cannot expire. What is installed and whether it is still talking
+  // are two questions, and only one of them had an answer here.
+  forgetBridge();
+  assert.equal(lastBridge(), null, 'nothing has posted, so there is no when');
+
+  const opened = Date.now();
+  noteBridge(currentBridge());
+  const first = lastBridge().heardAt;
+  assert.ok(first >= opened && first <= Date.now(),
+    'the time is when the post arrived: ' + first);
+
+  // Every post moves it on, not only the first. A bridge is heard from every
+  // few seconds while a room is open, so what the app watches is the gap since
+  // the last one rather than the fact that there was ever a post.
+  await new Promise((resolve) => { setTimeout(resolve, 5); });
+  noteBridge({ version: '1.0.0', build: 'deadbeef' });
+  assert.ok(lastBridge().heardAt > first, 'a later post moves the time on');
+
+  forgetBridge();
+});

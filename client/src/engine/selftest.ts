@@ -2057,6 +2057,14 @@ async function yahooRoom() {
   check('and says it can price a board once the pool has landed',
     after.pricesBoard === true, JSON.stringify(after));
 
+  // When the bridge was last heard, which is the only thing separating one that
+  // is posting now from one that posted an hour ago and stopped. These posts
+  // name no version, so the reading is a complaint about the copy already; the
+  // time rides on it regardless, because the two are separate questions.
+  check('a posted room says when the bridge was last heard',
+    typeof after.bridge?.heardAt === 'number' && Date.now() - after.bridge.heardAt < 60000,
+    JSON.stringify(after.bridge));
+
   /*
    * Yahoo's own ADP is the one thing here no feed this service can reach will
    * tell it, so it has to survive the trip from the bridge intact and land

@@ -78,21 +78,24 @@ export function stampedBridge() {
  */
 let last = null;
 let heard = false;
+let heardAt = 0;
 
 export function noteBridge(reported) {
   heard = true;
+  heardAt = Date.now();
   if (reported) last = reported;
 }
 
 /** The last one heard, as a reading. Null until something has posted. */
 export function lastBridge() {
-  return bridgeStatus(last, heard);
+  return bridgeStatus(last, heard, heardAt);
 }
 
 /** Test seam. Nothing in the service calls this. */
 export function forgetBridge() {
   last = null;
   heard = false;
+  heardAt = 0;
 }
 
 /**
@@ -118,10 +121,22 @@ export function forgetBridge() {
  * The version rides along in every case it is known, because a version on
  * screen is how the next one of these is caught in seconds rather than in a
  * session.
+ *
+ * The time it was heard rides along for the reason none of those four answers
+ * covers: not one of them expires. A bridge posts only from inside a draft
+ * room, so "current" is a fact about a copy that was talking then and claims
+ * nothing about now — and the second failure of 2026-09-07 was exactly that, a
+ * correct reading an hour old, describing a browser that had had user scripts
+ * switched back off underneath it.
  */
-export function bridgeStatus(reported, seen) {
+export function bridgeStatus(reported, seen, at) {
   if (!seen) return null;
   const current = currentBridge();
+  // When it last spoke, which is a different question from what it is and is
+  // the one the reassurance turns on: a bridge posts every few seconds while a
+  // room is open and never otherwise, so the gap since this is what separates
+  // one that is mirroring picks now from one that stopped an hour ago.
+  const heardAt = at > 0 ? at : null;
   if (!reported || !reported.build) {
     return {
       version: (reported && reported.version) || null,
@@ -129,6 +144,7 @@ export function bridgeStatus(reported, seen) {
       tooOld: true,
       fromSource: false,
       stale: true,
+      heardAt,
       current,
     };
   }
@@ -139,6 +155,7 @@ export function bridgeStatus(reported, seen) {
     tooOld: false,
     fromSource,
     stale: !fromSource && reported.build !== current.build,
+    heardAt,
     current,
   };
 }
