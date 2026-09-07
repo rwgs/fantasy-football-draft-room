@@ -108,7 +108,9 @@ export default function QueueWriter(props: Props) {
           {unread
             ? 'A draft room never reports its queue until one changes, so the app '
               + 'cannot read yours: the first thing it writes replaces whatever is '
-              + 'in there. Everything after that merges and loses nothing.'
+              + 'in there. After that it merges, and never drops an entry you '
+              + 'made in Yahoo — only the ones it queued itself, when you '
+              + 'un-star them here.'
             : (roomQueue.length
               ? 'The room holds ' + roomQueue.length + ': '
                 + roomQueue.map((entry) => entry.name).join(', ')

@@ -304,24 +304,45 @@ Phase 4: prove the platform seam against real leagues.
       since the first write no longer waits for one, but it decides whether the
       first write can stop replacing anything.
 
-- [ ] Let the app take a player out of the Yahoo queue, not only put one in.
-  - Scope, if the user agrees it: the room remembers the ids it wrote, and
-    `queuePlan` treats Yahoo's reported queue minus those as the user's own
-    entries. Un-starring then removes, while anything added in Yahoo's own panel
-    still survives every write.
-  - Why: found live on 2026-09-07 in league `876392`, by the run that finally
-    proved the write works. Yahoo echoes the app's own list back in a `Q|`, and
-    `queuePlan` merges that under the stars on every write, so a player the app
-    queued once cannot be got rid of from the app at all. The star control is
-    one-way, which is not what a control that shows a filled star says.
+- [x] Let the app take a player out of the Yahoo queue, not only put one in.
+  - Scope: the room remembers the ids it asked for and `queuePlan` subtracts
+    them from the queue Yahoo reports, merging only what is left underneath the
+    stars. Un-starring removes; an entry made in Yahoo's own panel still
+    survives every write that does not name him. The disclosure under the
+    control said "merges and loses nothing" and now says what it does.
+  - Why: found live on 2026-09-07 in league `876392`, by the run that first
+    proved the write works. Yahoo echoes the app's own list back in a `Q|`, so
+    the merge read the app's own choices as the user's and rewrote them on every
+    beat; un-starring put a player straight back. A filled star that cannot be
+    emptied is a control that lies about what it is.
   - Acceptance criteria: un-starring a player the app queued removes him from
     the room; an entry the user made in Yahoo's own panel survives a write that
-    does not name him; nothing the app never wrote is ever cleared.
-  - Dependencies or blockers: **a decision.** This is the one path in the
-    project that writes to a league platform, and `DECISIONS.md` carries two
-    entries about it. The rule it is written under -- never clear a queue it did
-    not read -- is kept by the change rather than relaxed, but that is a reading
-    of the rule and the user's to confirm.
+    does not name him; nothing the app never wrote is ever cleared. All three
+    met and all three checked.
+  - **The first attempt was wrong in a way that looks right, and the checks
+    caught it.** Recording the whole written list marked the user's own entries
+    as the app's the first time they were merged into one, so they were dropped
+    as soon as nothing was starred -- the same defect, one write later. Two
+    existing checks went red on it. Only the part the app *asked* for is the
+    app's, and `queuePlan` now returns that separately from what it sends.
+  - Automated validation: five checks in `npm run engine:test` under "Writing a
+    Yahoo draft queue", in a room of their own so the existing sequence is
+    untouched. Three of the five confirmed by failing against the pre-fix
+    service, and the failure is the reported symptom exactly: un-starring one of
+    two wrote `["8002","8003"]` back. The other two are the rule-does-not-move
+    guards, which the old merge satisfied trivially. 369 passing. Typecheck
+    clean, lint unchanged at 43 warnings, `server:test` 26/26, `bridge:test`
+    7/7, build clean, `shots` clean with no console errors.
+  - Manual validation: the corrected disclosure photographed in a real browser.
+    **The behaviour itself is not manually validated** -- proving it needs a
+    live Yahoo room, and the draft that found it was in progress on a service
+    that predates the fix. Next Yahoo draft: star two, un-star one, and watch
+    the room drop him.
+  - Recorded: `DECISIONS.md`, 2026-09-07, "The queue this app wrote is the queue
+    it may take back", with the two costs -- a service restarted mid-draft
+    forgets whose entries were whose, and the last player the app queued still
+    has to be deleted in Yahoo's own panel, because an empty list is never sent.
+  - Dependencies or blockers: none. The user agreed the reading of the rule.
 
 - [ ] Keep a seat off Yahoo's autodraft.
   - Scope: not started, and deliberately not started. Reading the captures for

@@ -97,6 +97,20 @@ function blank(leagueId) {
     /** What the app wants queued, already resolved to Yahoo ids. */
     wanted: null,
     /**
+     * Every id this service has handed the bridge to write, for this room.
+     *
+     * Not a log. It is the only way to tell the app's own writes from the
+     * user's own entries, because Yahoo cannot: after any write it echoes the
+     * app's list straight back in a `Q|`, and without this every player the app
+     * had ever queued came back looking like one the user had queued by hand.
+     * See `queuePlan`.
+     *
+     * It accumulates rather than tracking the last plan. A player who has just
+     * been un-starred is not in the current plan, and he is exactly the one
+     * whose provenance has to be remembered.
+     */
+    written: new Set(),
+    /**
      * Which copy of the userscript is posting, as it describes itself.
      *
      * Null is two different things, so `bridgeSeen` keeps them apart: a room
@@ -216,6 +230,10 @@ export function applyPost(leagueId, body) {
   touch(id, room);
 
   const plan = queuePlan(id);
+  // Remembered here and not in `queuePlan`, because this is the reply the
+  // bridge writes from. `readAdvice` plans too, and a panel reading the state
+  // has written nothing.
+  if (plan.ours) for (const pid of plan.ours) room.written.add(pid);
 
   return {
     ok: true,
@@ -383,10 +401,32 @@ export function queuePlan(leagueId) {
   for (const pick of room.picks.values()) gone.add(pick.playerId);
 
   const mine = room.wanted.ids;
-  // Null is a room that has never said. Treated as empty to merge against,
-  // which is what makes the write happen; `reason` below keeps the difference
-  // so the app can say which of the two it is doing.
-  const theirs = room.queue || [];
+  const asked = new Set(mine);
+  /*
+   * THE ROOM'S OWN QUEUE MEANS THE ENTRIES THE USER PUT THERE.
+   *
+   * Yahoo does not distinguish them, and merging its whole report under the
+   * stars made the star one-way: after any write Yahoo echoes the app's own
+   * list back in a `Q|`, so every player the app had ever queued returned as
+   * though the user had queued him, and un-starring him put him straight back
+   * on the next write. Reported from a live draft on 2026-09-07, which is also
+   * the run that first proved the write works at all.
+   *
+   * So what this service has written is subtracted, and only what is left is
+   * the user's to protect. The rule does not move -- a queue this app never
+   * wrote is still never cleared -- it is only applied to the right list.
+   *
+   * What this cannot survive is a service restarted mid-draft: `written` is
+   * memory, like the rest of a room, so a queue written before the restart
+   * reads as the user's afterwards and goes back to being unremovable. The
+   * bridge knows what it last sent and could say so on reconnect, which is the
+   * fix if that turns out to matter.
+   *
+   * Null is a room that has never said. Treated as empty to merge against,
+   * which is what makes the write happen; `reason` below keeps the difference
+   * so the app can say which of the two it is doing.
+   */
+  const theirs = (room.queue || []).filter((id) => !room.written.has(id));
   const first = room.wanted.priority === 'yahoo' ? theirs : mine;
   const second = room.wanted.priority === 'yahoo' ? mine : theirs;
 
@@ -399,7 +439,21 @@ export function queuePlan(leagueId) {
     if (write.length >= MAX_QUEUE) break;
   }
 
-  return { write, queue: room.queue, reason: room.queue == null ? 'first' : 'ready' };
+  return {
+    write,
+    /*
+     * The part of that list this app chose, which is the only part it may ever
+     * take back. Recording the whole write instead marked the user's own
+     * entries as the app's the first time they were merged into one, and they
+     * were then dropped the moment nothing was starred -- the same defect as
+     * before, one write later. A player both starred here and queued by hand in
+     * Yahoo counts as the app's: the star is the more recent statement of the
+     * two, and un-starring has to mean something.
+     */
+    ours: write.filter((id) => asked.has(id)),
+    queue: room.queue,
+    reason: room.queue == null ? 'first' : 'ready',
+  };
 }
 
 /** How many seats the room has, by the most reliable evidence it holds. */

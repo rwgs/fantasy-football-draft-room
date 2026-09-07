@@ -3067,6 +3067,75 @@ async function yahooQueue() {
   check('turning it off writes nothing further', off.queue === null,
     JSON.stringify(off.queue));
 
+  /*
+   * UN-STARRING TAKES A PLAYER BACK OUT AGAIN.
+   *
+   * Its own room, because this is a sequence rather than a state and the checks
+   * above leave one they need. Reported from a live draft on 2026-09-07 by the
+   * run that first proved the write works: Yahoo echoes the app's own list back
+   * in a `Q|`, the merge read that as the user's own queue, and so every player
+   * the app had ever queued was written again on every beat for the rest of the
+   * draft. The star could add and could not remove.
+   */
+  const L2 = String(Date.now() + 2).slice(-9);
+  const post2 = (body: unknown) => fetch(API + '/api/yahoo/room/' + L2, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+  const want2 = (body: unknown) => fetch(API + '/api/yahoo/room/' + L2 + '/queue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  await post2({
+    team: 2,
+    pool,
+    seats: [1, 2, 3].map((id) => ({ id, teamname: 'Team ' + id, manager: 'm' + id })),
+    frames: ['H|S|30|0|0|1', 'R|1|2|3|3|2|1'],
+  });
+  await want2({ queue: [named(squad[1]), named(squad[2])], priority: 'app' });
+  const two = await post2({ team: 2, frames: [] });
+  check('two starred players are written',
+    JSON.stringify(two.queue) === JSON.stringify(['8002', '8003']),
+    JSON.stringify(two.queue));
+
+  // Yahoo answering with the list it was just given. This is the frame that
+  // used to make the two players permanent.
+  await post2({ team: 2, frames: ['Q|8002|8003'] });
+  await want2({ queue: [named(squad[1])], priority: 'app' });
+  const one = await post2({ team: 2, frames: [] });
+  check('un-starring one of them takes him back out of the room',
+    JSON.stringify(one.queue) === JSON.stringify(['8002']),
+    JSON.stringify(one.queue));
+
+  // And the other half of the rule, which does not move: 8006 is a player the
+  // app never wrote, so the user put him there and he is not ours to drop.
+  const byHand = await post2({ team: 2, frames: ['Q|8002|8006'] });
+  check('a player the user queued by hand survives a write that does not name him',
+    JSON.stringify(byHand.queue) === JSON.stringify(['8002', '8006']),
+    JSON.stringify(byHand.queue));
+
+  await want2({ queue: [], priority: 'app' });
+  const theirsAlone = await post2({ team: 2, frames: [] });
+  check('and he is still there with nothing starred at all',
+    JSON.stringify(theirsAlone.queue) === JSON.stringify(['8006']),
+    JSON.stringify(theirsAlone.queue));
+
+  /*
+   * The floor, which this change made reachable a new way. With nothing starred
+   * and nothing in the room but the app's own past writes, the plan is empty,
+   * where the old merge always echoed something back. An empty list is never
+   * sent, so the room keeps what it holds: down to one is removable, down to
+   * none is not. See the 2026-09-06 decision on what an empty queue does to a
+   * seat.
+   */
+  const floor = await post2({ team: 2, frames: ['Q|8002'] });
+  check('a plan of nothing is still never written',
+    JSON.stringify(floor.queue) === JSON.stringify([]),
+    JSON.stringify(floor.queue));
+
   const strayQueue = await fetch(API + '/api/sleeper/room/1234567890123456789/queue', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

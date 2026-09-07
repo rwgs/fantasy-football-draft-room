@@ -9,6 +9,57 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-07 The queue this app wrote is the queue it may take back
+
+Status: Accepted, by the user, during the live draft that found it. Applies
+`2026-09-06 The bridge writes the queue, and nothing else` to the right list
+rather than relaxing it; that entry stands.
+
+### Decision
+
+`queuePlan` subtracts the ids this service has handed the bridge from the queue
+Yahoo reports, and merges only what is left underneath the user's stars. So
+un-starring a player removes him from the room, while an entry the user made in
+Yahoo's own panel still survives every write that does not name him. The room
+keeps that record, per league, in memory with the rest of it.
+
+The rule it was written under does not move: **a queue this app never wrote is
+never cleared.**
+
+### Why
+
+Found live in league `876392`, by the run that first proved the write works at
+all. Nothing distinguishes the two kinds of entry from outside: after any write
+Yahoo echoes the app's own list straight back in a `Q|`, so a queue read off
+that frame contains the app's own choices wearing the user's clothes. Merging it
+whole under the stars therefore made the star one-way -- every player the app
+had ever queued was rewritten on every beat, and un-starring him put him back.
+A filled star that cannot be emptied is a control that lies about what it is.
+
+The first implementation recorded the whole written list, which was wrong in a
+way worth keeping here because it looks right: the merged write contains the
+user's entries too, so those became the app's the first time they were merged,
+and were dropped the moment nothing was starred. Only the part the app *asked*
+for is the app's. Both halves of that are checked.
+
+### What it costs
+
+**A service restarted mid-draft forgets.** `written` is memory, like every other
+part of a room, so a queue written before a restart reads as the user's own
+afterwards and goes back to being unremovable. The bridge knows what it last
+sent and could say so on reconnect; that is the fix if it matters, and it is not
+built.
+
+**Down to one, not down to none.** With nothing starred and nothing in the room
+but the app's own past writes, the plan is empty -- which this makes reachable
+where the old merge always echoed something back. An empty list is still never
+sent, on the 2026-09-06 reasoning about what an empty queue may do to a seat, so
+the last player the app queued has to be deleted in Yahoo's own panel.
+
+**A player both starred here and queued by hand in Yahoo counts as the app's.**
+The two are indistinguishable, and the star is the more recent statement of the
+two. Un-starring has to mean something.
+
 ## 2026-09-07 A pick is scored on what two turns come to, not on worth counted twice
 
 Status: Accepted. Amends the 2026-09-05 entry "The board names a pick, and
