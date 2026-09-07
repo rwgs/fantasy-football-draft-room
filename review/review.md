@@ -10,7 +10,10 @@ are defects with one right answer, so none of them needed a product decision
 first. See "What has been fixed" below for what changed and what each fix is
 checked by. The other eight findings are open and each is annotated in place.
 The description of current behaviour in every fixed section is kept as written,
-because it is what the defect was; the FIXED note says what it is now.
+because it is what the defect was; the FIXED note says what it is now. Every
+finding carries its state in the Status column below and, where it is fixed, in
+its own heading, so a scan of this report does not read finished work as work
+waiting.
 
 ## Assessment
 
@@ -30,23 +33,23 @@ Sleeper as a **data source** remains in scope: Yahoo's board still uses its play
 
 The ranking is an engineering judgment about likely breadth and size of improvement, not a measured winning advantage or a strict implementation dependency order. Priorities 1-8 address the values and decisions affecting many picks; 9-11 address narrower correctness failures; 12 measures real effectiveness; 13-14 address availability and reporting. Check the actual Yahoo scoring first: if the existing preset is correct, skip the unsupported-scoring work in R1. The forecast repairs remain prerequisites for trusting a revised recommendation model that uses those forecasts.
 
-| Impact priority | Finding | Yahoo assistant applicability | Deferrable portion |
-| --- | --- | --- | --- |
-| 1 | R1 - Scoring and eligibility | **IN SCOPE, conditional on the actual Yahoo rules.** Format-only projections and limited eligibility also affect Yahoo. | **DEFERRABLE:** Sleeper's automatic reception-format selection, dedicated-2QB detection, import warnings, and `WRRB_FLEX`/`REC_FLEX` mapping. |
-| 2 | R7 - Replacement allocation | **IN SCOPE.** Yahoo WORTH and recommendations use this baseline. | None. |
-| 3 | M1 - Team-building objective | **IN SCOPE.** The Yahoo recommendation and queue use this scoring model. | Standalone mock-mode polish is outside this work. |
-| 4 | R6 - Roster completion and queue | **IN SCOPE.** Advice is affected; automatic queue behavior matters when enabled. | Queue-specific work is conditional on using the automatic queue, not a Sleeper/mock-only issue. |
-| 5 | R3 - Forecast horizon | **IN SCOPE.** The room forecast disappearing on the user's turn directly affects Yahoo advice. | **DEFERRABLE:** the future-keeper-preset horizon extension; the current Yahoo import supplies no future keeper presets. |
-| 6 | R4 - Wrong survivor value | **IN SCOPE.** Yahoo uses this forecast. | None. |
-| 7 | R5 - Zero survival fallback | **IN SCOPE.** Yahoo targets and pool odds use these consumers. | None. |
-| 8 | M2 - Projections and personal ranks | **IN SCOPE.** These limitations affect Yahoo player assessment. | Changes solely to how mock opponents follow uploaded rankings can wait; preserve checks on any shared forecast behavior. |
-| 9 | R2 - Duplicate player identity | **IN SCOPE.** Yahoo resolves its picks against this same board. | None: the invalid position and unmatched projection are shared data defects. |
-| 10 | R9 - Corrected live picks | **IN SCOPE.** Yahoo uses the same polling guard. | Sleeper-specific end-to-end coverage can wait; the shared correction needs a Yahoo check. |
-| 11 | R8 - Numerical survival tail | **IN SCOPE.** Yahoo uses the generic fallback, including on-clock advice under R3. | None. |
-| 12 | M4 - Calibration | **IN SCOPE.** Calibrate the Yahoo assistant's forecasts and advice. | **DEFERRABLE:** Sleeper-specific calibration and standalone mock-room realism, controls, or pacing. Shared forecast behavior remains in scope. |
-| 13 | R10 - Feed degradation | **IN SCOPE.** Yahoo depends on the shared board builder and feeds. | None for the board sources; these are not Sleeper league-import requests. |
-| 14 | M5 - Grade and byes | **IN SCOPE, lower priority than live picks.** The assistant also opens the results screen when the draft ends. | Not mock-only. A richer post-draft grade can follow the live-advice repairs. |
-| Conditional / deferrable | M3 - Dynasty context | **CONDITIONAL.** Applies if the Yahoo league is dynasty or the dynasty board is selected. | **DEFERRABLE if the Yahoo draft is redraft.** The league's dynasty status has not been established in this review. |
+| Impact priority | Finding | Status | Yahoo assistant applicability | Deferrable portion |
+| --- | --- | --- | --- | --- |
+| 1 | R1 - Scoring and eligibility | Open | **IN SCOPE, conditional on the actual Yahoo rules.** Format-only projections and limited eligibility also affect Yahoo. | **DEFERRABLE:** Sleeper's automatic reception-format selection, dedicated-2QB detection, import warnings, and `WRRB_FLEX`/`REC_FLEX` mapping. |
+| 2 | R7 - Replacement allocation | **Fixed** | **IN SCOPE.** Yahoo WORTH and recommendations use this baseline. | None. |
+| 3 | M1 - Team-building objective | Open | **IN SCOPE.** The Yahoo recommendation and queue use this scoring model. | Standalone mock-mode polish is outside this work. |
+| 4 | R6 - Roster completion and queue | Open | **IN SCOPE.** Advice is affected; automatic queue behavior matters when enabled. | Queue-specific work is conditional on using the automatic queue, not a Sleeper/mock-only issue. |
+| 5 | R3 - Forecast horizon | **Fixed** | **IN SCOPE.** The room forecast disappearing on the user's turn directly affects Yahoo advice. | **DEFERRABLE:** the future-keeper-preset horizon extension; the current Yahoo import supplies no future keeper presets. |
+| 6 | R4 - Wrong survivor value | **Fixed** | **IN SCOPE.** Yahoo uses this forecast. | None. |
+| 7 | R5 - Zero survival fallback | **Fixed** | **IN SCOPE.** Yahoo targets and pool odds use these consumers. | None. |
+| 8 | M2 - Projections and personal ranks | Open | **IN SCOPE.** These limitations affect Yahoo player assessment. | Changes solely to how mock opponents follow uploaded rankings can wait; preserve checks on any shared forecast behavior. |
+| 9 | R2 - Duplicate player identity | **Fixed**, bar the projection | **IN SCOPE.** Yahoo resolves its picks against this same board. | None: the invalid position and unmatched projection are shared data defects. |
+| 10 | R9 - Corrected live picks | **Fixed** | **IN SCOPE.** Yahoo uses the same polling guard. | Sleeper-specific end-to-end coverage can wait; the shared correction needs a Yahoo check. |
+| 11 | R8 - Numerical survival tail | **Fixed** | **IN SCOPE.** Yahoo uses the generic fallback, including on-clock advice under R3. | None. |
+| 12 | M4 - Calibration | Open | **IN SCOPE.** Calibrate the Yahoo assistant's forecasts and advice. | **DEFERRABLE:** Sleeper-specific calibration and standalone mock-room realism, controls, or pacing. Shared forecast behavior remains in scope. |
+| 13 | R10 - Feed degradation | Open | **IN SCOPE.** Yahoo depends on the shared board builder and feeds. | None for the board sources; these are not Sleeper league-import requests. |
+| 14 | M5 - Grade and byes | Open | **IN SCOPE, lower priority than live picks.** The assistant also opens the results screen when the draft ends. | Not mock-only. A richer post-draft grade can follow the live-advice repairs. |
+| Conditional / deferrable | M3 - Dynasty context | Open | **CONDITIONAL.** Applies if the Yahoo league is dynasty or the dynasty board is selected. | **DEFERRABLE if the Yahoo draft is redraft.** The league's dynasty status has not been established in this review. |
 
 **DEFERRABLE validation:** populating Sleeper league fixtures and completing the two skipped Sleeper real-league suites is not a blocker for this Yahoo-focused review. Checks dedicated solely to the standalone Mock draft option can also wait. Shared engine tests, synthetic forecast fixtures, board-source checks, and Yahoo bridge/assistant checks remain relevant even when they use simulated inputs. Preserve the existing broader gate results recorded below; they were already run during the initial audit.
 
@@ -165,7 +168,7 @@ Recommendation: separate scoring rules, roster eligibility, redraft/dynasty cont
 
 Acceptance check for current scope: compare projected points and legal lineups against hand-calculated fixtures for the actual Yahoo scoring and roster. Include PPR superflex, dedicated 2QB, six-point passing TDs, TE premium, or restricted flex only where applicable to that league. **DEFERRABLE:** exercising Sleeper's automatic import of those settings. Any shared configuration/model change still requires a decision before implementation.
 
-### R7 - P2: replacement levels can allocate more starters than the league has slots
+### R7 - P2: replacement levels can allocate more starters than the league has slots (FIXED)
 
 **FIXED** in `startingAllocation` (`client/src/engine/value.ts`). Dedicated slots are owed outright and the flex is shared by largest remainder among eligible positions only, so the total reconciles with `teams * starterCount` by construction. On the live board this moved the allocation from 131 starters against 108 slots to 108 against 108. The kicker floor is now inherent rather than a separate clamp. Five checks in `engine:test`.
 
@@ -216,7 +219,7 @@ Recommendation: preserve the ability to finish a legal lineup using the team's a
 
 Acceptance check: the final necessary starter is chosen over an unusable backup, and queue generation continues with legal depth when the remaining worth values are nonpositive. Bench valuation revisits an accepted design decision; see M1.
 
-### R3 - P1: the room forecast disappears exactly when the user is on the clock
+### R3 - P1: the room forecast disappears exactly when the user is on the clock (FIXED)
 
 **FIXED.** `decisionHorizon` in `client/src/engine/draft.ts` is now the one horizon, read by both the screen and `forecast`, which also closes the keeper-preset disagreement noted below. Your own turn inside the window is stepped over by `skipPick` rather than played, so the simulation cannot draft the candidate you are weighing: from pick 5 to 20 it plays the room's 14 picks and not your 1. Five checks in `engine:test`.
 
@@ -232,7 +235,7 @@ Recommendation: pass one explicit decision horizon through the forecast and the 
 
 Acceptance check: the Yahoo assistant on-clock fixture forecasts to pick 20 and preserves the room reading. **DEFERRABLE:** extending the check to ensure a future keeper before the next selectable pick does not shorten that horizon.
 
-### R4 - P1: expected remaining value measures the first player by ADP, not the best by points
+### R4 - P1: expected remaining value measures the first player by ADP, not the best by points (FIXED)
 
 **FIXED.** The forecast takes the maximum worth among everyone left, which is the definition `positionValues` already used for `now`, and treats a missing projection as no evidence on both sides. Three checks in `engine:test`, including that waiting for a player the room never takes costs nothing, and that what is expected to be left is never worth more than what is there.
 
@@ -246,7 +249,7 @@ Recommendation: in each simulation, find the maximum usable projected value amon
 
 Acceptance check: the fixture reports 250 expected WR worth and zero waiting cost for its best WR.
 
-### R5 - P1: zero simulated survival is interpreted as missing data and replaced with generic ADP odds
+### R5 - P1: zero simulated survival is interpreted as missing data and replaced with generic ADP odds (FIXED)
 
 **FIXED.** Every player available when the forecast runs gets an explicit entry, so absence now means only "already drafted before it ran" and all three consumers read the room's own answer. Four checks in `engine:test`, on a horizon long enough that the room really does take five players in all 120 runs.
 
@@ -274,7 +277,7 @@ Recommended direction: keep **market availability** and **player assessment** se
 
 The [FantasyPros decision](../DECISIONS.md), under "2026-09-05 FantasyPros is not a source on the free tier", records a tested row limit and explicitly defers integration without suitable paid access. This review does not propose working around that limit or making a paid service mandatory.
 
-### R2 - P1: the current feed creates two draftable versions of Travis Hunter
+### R2 - P1: the current feed creates two draftable versions of Travis Hunter (FIXED, except the projection)
 
 **FIXED, except the projection.** `DRAFTABLE` in `server/src/names.js` names the six positions a roster slot can hold, and both boundaries that build a board row check against it, so the DB record no longer reaches the board: 625 rows, six positions, no duplicate name, no `NaN` count. `normPos` keeps its pass-through, and PK/DST/dual-eligibility mapping is unchanged. **Still open:** Hunter's WR row has no projection, and attaching Sleeper's DB total would assert it is a receiving projection rather than an IDP one -- if it is IDP that silently corrupts his worth, which is worse than the honest gap. Left for a decision. Four checks in `engine:test`, confirmed by failing against a pre-fix service.
 
@@ -295,7 +298,7 @@ Recommendation: reconcile player identity separately from platform eligibility, 
 
 Acceptance check: this snapshot produces one canonical Hunter, with supported offensive eligibility and an appropriate projection; drafting him removes every source alias. Every board position is supported and every roster count remains finite.
 
-### R9 - P1: a corrected live pick is ignored when the total number of picks stays the same
+### R9 - P1: a corrected live pick is ignored when the total number of picks stays the same (FIXED)
 
 **FIXED.** `sameLivePicks` in `client/src/engine/live.ts` compares by slot and player, sorted, rather than by count, and only the live claims are compared since those are the ones the poll owns. The ordering concern is handled too: requests are numbered and an answer older than one already applied is dropped. Six checks in `engine:test`.
 
@@ -309,7 +312,7 @@ Recommendation: compare normalized pick content, not just its length, and accoun
 
 Acceptance check: polling `[A, B]` followed by `[A, C]` restores B, removes C, updates the roster, and recalculates advice without waiting for a third pick.
 
-### R8 - P2: numerical tail handling can report 100% survival for a severely overdue player
+### R8 - P2: numerical tail handling can report 100% survival for a severely overdue player (FIXED)
 
 **FIXED.** `logNormalTail` in `client/src/engine/random.ts` takes the tail from the Mills ratio as a continued fraction above two standard deviations, and `survivalOdds` takes the conditional ratio in logs. The ADP 10, sd 1 case now reads 0.21% rather than 100%. Past about eighty standard deviations the result is still zero, because to double precision it genuinely is; the defect was turning underflow into confidence. Four checks in `engine:test`.
 
@@ -410,16 +413,16 @@ Scope update validation: rechecked the Yahoo board-building path, assistant fore
 ## Recommended order by expected improvement to Yahoo pick accuracy
 
 1. **Correct the league's scoring inputs (R1).** Confirm the actual Yahoo rules; correct the point calculations if they differ from the selected preset. Wrong scoring propagates into every valuation. Sleeper importer fixes remain deferred.
-2. **Make positional WORTH comparable (R7).** Correct starter/flex allocation and distinguish a marginal starter from an available waiver replacement. This changes comparisons across the entire board.
+2. **Make positional WORTH comparable (R7).** Correct starter/flex allocation and distinguish a marginal starter from an available waiver replacement. This changes comparisons across the entire board. **FIXED.**
 3. **Choose the better resulting team (M1).** Compare marginal lineup improvement and candidate-conditioned continuations, instead of assuming worth plus waiting cost is optimal. This is the central change to the selection objective; validate it with the forecast repairs below.
 4. **Protect roster completion and useful depth (R6).** Account for the quality already held and remaining choices; avoid backups displacing required starters and automatic queues ending at the positive-worth cutoff.
-5. **Keep room knowledge when on the clock (R3).** Forecast to the next actual choice so the recommendation uses the Yahoo room at decision time.
-6. **Measure the best survivor consistently (R4).** Remove false scarcity caused by comparing the points leader now with the ADP leader later.
-7. **Honor zero simulated survival (R5).** Stop recycling players the forecast always loses into reachable targets with generic odds.
+5. **Keep room knowledge when on the clock (R3).** Forecast to the next actual choice so the recommendation uses the Yahoo room at decision time. **FIXED.**
+6. **Measure the best survivor consistently (R4).** Remove false scarcity caused by comparing the points leader now with the ADP leader later. **FIXED.**
+7. **Honor zero simulated survival (R5).** Stop recycling players the forecast always loses into reachable targets with generic odds. **FIXED.**
 8. **Make the chosen player research influence advice (M2).** Define the role of personal ranks/projections and separate player assessment from market prices. Source accuracy must be evaluated rather than assumed.
-9. **Repair duplicate identity and eligibility (R2).** Restore correct valuation and removal of affected players, including the reproduced Hunter case. Narrower coverage does not make the duplicate acceptable.
-10. **Apply corrected Yahoo picks immediately (R9).** Keep availability and rosters correct when pick contents change without a change in count.
-11. **Fix extreme-tail odds (R8).** Remove false certainty for unusually overdue players; this is a narrower probability defect.
+9. **Repair duplicate identity and eligibility (R2).** Restore correct valuation and removal of affected players, including the reproduced Hunter case. Narrower coverage does not make the duplicate acceptable. **FIXED, except the projection.**
+10. **Apply corrected Yahoo picks immediately (R9).** Keep availability and rosters correct when pick contents change without a change in count. **FIXED.**
+11. **Fix extreme-tail odds (R8).** Remove false certainty for unusually overdue players; this is a narrower probability defect. **FIXED.**
 12. **Measure real Yahoo effectiveness (M4).** Calibrate forecasts and evaluate strategies against held-out drafts/outcomes. This can change the estimated ranking above; it is required before claiming a winning advantage.
 13. **Harden feed degradation and freshness (R10).** Preserve useful advice through bad or delayed source responses. This is primarily a reliability improvement when feeds misbehave.
 14. **Improve result interpretation and bye coverage (M5).** Address misleading grade confidence and missing byes after the live selection issues. The assistant also displays these results.
