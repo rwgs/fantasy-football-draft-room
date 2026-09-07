@@ -333,16 +333,41 @@ Phase 4: prove the platform seam against real leagues.
     guards, which the old merge satisfied trivially. 369 passing. Typecheck
     clean, lint unchanged at 43 warnings, `server:test` 26/26, `bridge:test`
     7/7, build clean, `shots` clean with no console errors.
-  - Manual validation: the corrected disclosure photographed in a real browser.
-    **The behaviour itself is not manually validated** -- proving it needs a
-    live Yahoo room, and the draft that found it was in progress on a service
-    that predates the fix. Next Yahoo draft: star two, un-star one, and watch
-    the room drop him.
+  - Manual validation: **done, live, and it is a natural experiment.** Yahoo
+    mock `10977360`, seat 11, 2026-09-07. The service was restarted onto this
+    fix in the middle of the same draft, so the room, the draft, the bridge
+    build and the recorder are all held constant and only the service changes.
+    Read off the capture, by taking each `S|` against the one before it and
+    asking of every id that left whether a pick frame had taken him: before the
+    restart, 25 removals and every one of them a drafted player, which is the
+    pruning the old code could already do. After it, 13 more of those and
+    **seven removals with no pick behind them** -- 30977 at 15:03:40, 31002 and
+    40881 at 15:05:10, 33989 at 15:05:41, 40901 at 15:05:53, and 40063 twice, at
+    15:06:27 and again at 15:06:39 after being re-starred in between. Yahoo
+    echoed each write back with the shorter list. The disclosure was
+    photographed separately.
   - Recorded: `DECISIONS.md`, 2026-09-07, "The queue this app wrote is the queue
     it may take back", with the two costs -- a service restarted mid-draft
     forgets whose entries were whose, and the last player the app queued still
     has to be deleted in Yahoo's own panel, because an empty list is never sent.
   - Dependencies or blockers: none. The user agreed the reading of the rule.
+
+- [ ] Re-post what the app wants queued when the service has forgotten it.
+  - Scope: the app posts its wanted list only when the list changes, guarded by
+    `lastQueueSent` in `DraftScreen.tsx`. A service restarted mid-draft has
+    forgotten `wanted`, the app's guard still holds the same string, and no
+    write happens again until a star is touched. Nothing says so on either side.
+  - Why: found on 2026-09-07 while restarting onto the queue-removal fix during
+    mock `10977360`. The room came back whole -- picks, pool, seats and the last
+    `Q|` all restored -- and queue writing alone stayed dormant. It did not cost
+    anything there because the test being run was starring a player, which is
+    exactly what lifts it, and that is the trap: it hides behind any use.
+  - Acceptance criteria: a service that has forgotten a room's wanted list is
+    told it again without the user touching a star; nothing is written more
+    often than now while the service does remember.
+  - Dependencies or blockers: none. The reading is already on hand -- the advice
+    route answers `queue.state`, and `off` while the setting is on is exactly
+    the disagreement that should trigger a re-post.
 
 - [ ] Keep a seat off Yahoo's autodraft.
   - Scope: not started, and deliberately not started. Reading the captures for
