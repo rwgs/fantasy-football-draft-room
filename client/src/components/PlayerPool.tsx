@@ -541,9 +541,22 @@ export default function PlayerPool(props: Props) {
                   {pick.nextTurn >= 1
                     ? ', and ' + Math.round(pick.nextTurn) + ' more at your next turn'
                     : ''}
+                  {/*
+                    * WHAT `fillsStarter` KNOWS IS THAT HE GOES INTO SOME OPEN
+                    * SLOT, AND NOT WHICH ONE.
+                    *
+                    * This read "you still have to start one", which asserts a
+                    * need at his own position. A flex takes a back, a receiver
+                    * or a tight end, so with one empty a second tight end does
+                    * fill a starter -- and a live draft read the sentence as
+                    * being told to start two of them. The other branch claimed
+                    * the lineup was full, which this does not establish
+                    * either: a backup quarterback fills no starting slot while
+                    * your receiver slot is still open.
+                    */}
                   {pick.fillsStarter
-                    ? '. You still have to start one.'
-                    : '. Your lineup is full, so this is on worth alone.'}
+                    ? '. He fills a starting slot you have open.'
+                    : '. He fills no starting slot, so this is depth.'}
                 </p>
               )}
 

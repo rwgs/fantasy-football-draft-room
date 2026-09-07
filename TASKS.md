@@ -131,6 +131,43 @@ Phase 4: prove the platform seam against real leagues.
     app never clears a queue it did not read; see `DECISIONS.md`.
   - Dependencies or blockers: none.
 
+- [x] Say that a pick fills a starting slot, not that you have to start one.
+  - Scope: the take line's last sentence, in `PlayerPool.tsx` and in
+    `userscript/draft-panel.js`, which print the same string from the same
+    `fillsStarter`. "You still have to start one" became "He fills a starting
+    slot you have open", and "Your lineup is full, so this is on worth alone"
+    became "He fills no starting slot, so this is depth."
+  - Why: reported from a live Yahoo draft on 2026-09-07. The user drafted a
+    tight end and the board went on saying he still had to start one, which he
+    read as being told to take a second. `fillsStarter` knows only that a
+    candidate goes into some open slot: a flex takes RB, WR or TE, so with the
+    flex empty a second tight end genuinely does fill a starter, and the
+    arithmetic was right while the sentence was not. The other branch was wrong
+    in the same way -- it claimed the lineup was full, which `fillsStarter` does
+    not establish, since a backup quarterback fills no starting slot while a
+    receiver slot is still open.
+  - Acceptance criteria: both sentences say only what the flag they are printed
+    from actually says, and neither names a position or claims anything about
+    the rest of the lineup. Met.
+  - Automated validation: none added, and none is possible from the flag alone
+    -- what changed is a string, and no check can tell a true sentence from a
+    misleading one. Typecheck clean, lint unchanged at 43 warnings, build clean.
+  - Manual validation: **done.** Photographed in a real browser: "+126 over a
+    replacement WR, and 120 more at your next turn. He fills a starting slot you
+    have open." `shots` clean, no console errors.
+  - Raised, not acted on, and both belong to findings already open. Naming the
+    actual slot -- "he fills your flex" -- would be the better sentence, and
+    needs the roster and counts the panel is not given. And the number itself
+    is still overstated for that tight end: worth is measured against a
+    replacement at his own position, about TE12 in a one-TE league, while the
+    slot he is competing for is a flex whose bar is the best available RB, WR or
+    TE. That is the open half of M1 and R6 in `review/review.md`, which two
+    decision entries left for a bench model rather than a coefficient.
+  - Also pre-existing, and worth naming: the sentence is one string in two
+    files, because the panel is a separate script that cannot import from the
+    client. Nothing checks that the two agree.
+  - Dependencies or blockers: none.
+
 - [ ] Populate `client/fixtures.local.json` and run the full engine self-test.
   - Scope: copy `client/fixtures.example.json`, fill in real Sleeper league
     IDs, a keeper league, and a finished draft with its pick and keeper counts.

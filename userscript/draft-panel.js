@@ -193,9 +193,11 @@
       + (p.nextTurn >= 1
         ? ', and ' + Math.round(p.nextTurn) + ' more at your next turn'
         : '')
+      // Worded as in the app's own pool, and for the reason recorded there:
+      // this says he fills some open slot, never which one or at what position.
       + (p.fillsStarter
-        ? '. You still have to start one.'
-        : '. Your lineup is full, so this is on worth alone.');
+        ? '. He fills a starting slot you have open.'
+        : '. He fills no starting slot, so this is depth.');
 
     box.append(head, el('p', 'take-why', why));
 
