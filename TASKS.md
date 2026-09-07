@@ -341,9 +341,11 @@ Phase 4: prove the platform seam against real leagues.
     asking of every id that left whether a pick frame had taken him: before the
     restart, 25 removals and every one of them a drafted player, which is the
     pruning the old code could already do. After it, 13 more of those and
-    **seven removals with no pick behind them** -- 30977 at 15:03:40, 31002 and
-    40881 at 15:05:10, 33989 at 15:05:41, 40901 at 15:05:53, and 40063 twice, at
-    15:06:27 and again at 15:06:39 after being re-starred in between. Yahoo
+    **seven removals with no pick behind them** -- 30977 at 20:03:40, 31002 and
+    40881 at 20:05:10, 33989 at 20:05:41, 40901 at 20:05:53, and 40063 twice, at
+    20:06:27 and again at 20:06:39 after being re-starred in between. Times are
+    UTC, as the dump's own filename is, because the capture stamps epochs and
+    this machine reads them four hours behind. Yahoo
     echoed each write back with the shorter list. The disclosure was
     photographed separately.
   - Recorded: `DECISIONS.md`, 2026-09-07, "The queue this app wrote is the queue
