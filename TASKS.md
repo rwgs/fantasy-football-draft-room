@@ -63,9 +63,8 @@ Phase 4: prove the platform seam against real leagues.
     would mirror while nothing was being injected at all. None of the four
     readings expires on its own, and a bridge posts only from inside a draft
     room, so "current" is a fact about a copy that was talking then. What was on
-    screen was a board with its seats numbered — no seat name arrives without a
-    room — which reads as the app being broken rather than as nothing having
-    spoken to it.
+    screen was the green banner, over a board with no picks on it, which reads
+    as the app being broken rather than as nothing having spoken to it.
   - Acceptance criteria: a bridge nothing has ever heard from is not called
     silent, because a draft room that has not been opened looks exactly like
     that; a silent bridge is complained about instead of a stale one rather than
