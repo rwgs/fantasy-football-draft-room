@@ -381,6 +381,64 @@ Phase 4: prove the platform seam against real leagues.
     more frequent. The `split` sort key is unreachable — no control sets it —
     and was left in place.
 
+- [x] Repair the seven correctness defects the value and forecast audit found.
+  - Scope: the audit in `review/review.md`, worked in its own order of expected
+    impact on Yahoo pick accuracy, taking only the findings that are defects
+    with one right answer. R8, the survival tail read in logs so a player far
+    past his ADP stops reading as certain to last. R7, replacement starters
+    allocated inside the slots the league actually has. R4, the best survivor
+    measured by what he is worth rather than by ADP order, so both sides of the
+    waiting-cost subtraction mean the same "best". R5, an explicit zero for a
+    player no run leaves on the board, which three consumers had been reading
+    two different ways. R3, one `decisionHorizon` for the screen and the
+    forecast, so the room is still read while the pick is being made, with your
+    own turn stepped over rather than played by the CPU. R9, a corrected live
+    pick read as a change rather than as the same room, plus out-of-order poll
+    answers dropped. R2, a position the engine cannot start kept off the board.
+  - Why: the audit reproduced each one against the real modules. The two with
+    the widest reach were silent: the live 12 team half-PPR board allocated 131
+    starters against 108 slots, inflating RB and WR worth against QB and TE for
+    every player on it; and the forecast returned null whenever the user was on
+    the clock, so every measurement of the actual room was dropped for generic
+    ADP at the one moment the pick had to be made.
+  - Acceptance criteria: each finding's own acceptance check from the audit.
+    Replacement allocation sums to the league total and respects eligibility; a
+    one-QB no-flex league starts twelve on a board that takes 24 first; the
+    on-clock forecast reaches pick 20 from pick 5; waiting for a player the room
+    never takes costs nothing; a player taken in every run reads as zero
+    everywhere; extreme tails stay probabilities; `[A, B]` then `[A, C]` puts B
+    back and takes C; every board position is supported and every count finite.
+    All met.
+  - Automated validation: 31 new checks in `npm run engine:test`, and one
+    existing check repointed at the horizon the forecast actually uses rather
+    than the one it happened to agree with. Typecheck, lint, `engine:test`,
+    `server:test`, `bridge:test`, build and `shots` all clean, no console
+    errors, lint warnings unchanged at 43 against a stashed baseline. Two of the
+    new checks were confirmed by failing: the R2 board checks fail against the
+    pre-fix service and pass against the fixed one, and the extreme-tail check
+    caught a genuine underflow boundary while being written, which corrected the
+    assertion rather than the code.
+  - Manual validation: `npm run shots` clean. The on-clock mock screen shows all
+    of it working together: the cost-of-waiting panel headed "to 2.07 #19" and
+    populated rather than empty, explicit "0% he lasts" and "100% he lasts"
+    rows, and worth over replacement that no longer counts phantom starters.
+  - Validation not run: the two fixtures-dependent suites, still skipped for
+    want of `client/fixtures.local.json`. The R2 board change was checked
+    against a second service on port 5179 rather than by restarting the one on
+    5178, which had been heard from by a bridge three minutes earlier; 5178 is
+    left reporting STALE and needs a restart before it serves the fix.
+  - Raised, not acted on: Travis Hunter's WR row still has no projection.
+    Attaching Sleeper's DB total would assert that 83.1 points filed under DB is
+    a receiving projection and not an IDP one, and if it is IDP that silently
+    corrupts his worth, which is worse than the missing value the board already
+    shows honestly. A data question about the feed, left for a decision.
+    `nextUserPick` and `picksUntilUserTurn` now have no production caller; both
+    left as pre-existing surface. The eight findings the audit ranks that this
+    does not touch are listed at the end of `review/review.md`: R1 needs the
+    real Yahoo scoring, and M1, M2, M4, M5, R6, R10 and M3 change accepted
+    product decisions.
+  - Dependencies or blockers: none.
+
 ## Blocked
 
 - [ ] Yahoo's own Fantasy Sports API, if the application is ever approved.
