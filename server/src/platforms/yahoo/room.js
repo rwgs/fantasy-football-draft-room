@@ -28,6 +28,9 @@ const MAX_POOL = 5000;
 const MAX_FRAMES = 1000;
 /** Lines of advice held for the bridge to show. A panel nobody reads past. */
 const MAX_ADVICE_ROWS = 5;
+
+/** The starting slots a recommendation may name. Anything else is nothing. */
+const STARTER_SLOTS = new Set(['own', 'flex', 'superflex']);
 /** Names to fall back on when the pick goes first. The app sends three. */
 const MAX_ADVICE_ALTS = 5;
 /** Characters kept from one field of it. Everything here is a name or a count. */
@@ -293,7 +296,9 @@ export function setAdvice(leagueId, advice) {
       // What his next turn is still expected to bring once he is taken. The
       // two added together are what the pick was chosen on.
       nextTurn: Number(pick.nextTurn) || 0,
-      fillsStarter: !!pick.fillsStarter,
+      // One of three words or nothing. A whitelist that passed the string
+      // through would let the page put anything on the panel over the draft.
+      slot: STARTER_SLOTS.has(pick.slot) ? pick.slot : null,
     } : null,
     // Who the pick is instead, once the name above has gone. Kept beside it
     // rather than inside it because the pick is null far more often than these

@@ -354,6 +354,45 @@ Phase 4: prove the platform seam against real leagues.
     has to be deleted in Yahoo's own panel, because an empty list is never sent.
   - Dependencies or blockers: none. The user agreed the reading of the rule.
 
+- [x] Say which starting slot a pick fills, since "a slot" was not enough.
+  - Scope: new `starterSlot` in `client/src/engine/roster.ts` answers `own`,
+    `flex`, `superflex` or null, reading the same order `startersFilled` spends
+    slots in. `Recommendation.fillsStarter` becomes `slot` -- the boolean is
+    `slot != null`, so keeping both would have been two fields for one fact --
+    and it carries through the advice payload, the whitelist in `room.js`, the
+    pool's take line and the panel's.
+  - Why: the wording fix earlier the same day stopped the sentence claiming a
+    need at the player's own position, but left it unable to say which slot it
+    meant. The user asked for the slot by name, and it is worth more than
+    politeness: "he fills your flex" names the bar he should be judged against,
+    which for a flex is a back or a receiver rather than the next man at his own
+    position. The pool now says exactly that.
+  - Acceptance criteria: the first tight end reads `own` and the second reads
+    `flex` with the flex open and null once it is spent; a quarterback skips the
+    flex, which does not take him, and lands in a superflex where there is one;
+    a kicker fills his own slot and then nothing. All met.
+  - Automated validation: six checks in `npm run engine:test`, in the pure
+    "Roster maths" block, plus the two existing advice checks repointed at
+    `slot`. 375 passing. Typecheck clean, lint unchanged at 43 warnings,
+    `server:test` 26/26, `bridge:test` 7/7, build clean, `shots` clean with no
+    console errors.
+  - Manual validation: the `own` case photographed -- "+126 over a replacement
+    WR, and 119 more at your next turn. He fills your open WR slot." **The flex
+    wording is not photographed**: reaching it needs a roster whose own slots
+    at the recommended position are full, which no `shots` scenario drives to,
+    and building one for a sentence is not worth a scenario. The reading behind
+    it is checked and the render is a ternary over it.
+  - A stale panel degrades honestly. An absent `slot` means a service older than
+    the panel, and the clause is dropped rather than guessed -- saying he fills
+    nothing would be a false statement where the boolean it replaced said the
+    opposite. The whitelist takes one of three words or nothing, so the page
+    cannot put arbitrary text on the panel over a draft.
+  - Not touched: the valuation half. He is still priced against a replacement at
+    his own position while filling a flex, so the number is overstated even
+    where the sentence is now honest about which slot he takes. That is the open
+    half of M1 and R6.
+  - Dependencies or blockers: none.
+
 - [ ] Re-post what the app wants queued when the service has forgotten it.
   - Scope: the app posts its wanted list only when the list changes, guarded by
     `lastQueueSent` in `DraftScreen.tsx`. A service restarted mid-draft has

@@ -740,8 +740,8 @@ export interface RoomAdvice {
     worth: number;
     /** What your next turn is still expected to bring once he is taken. */
     nextTurn: number;
-    /** Whether he fills a starting slot you have still to fill. */
-    fillsStarter: boolean;
+    /** Which starting slot he fills: `own`, `flex`, `superflex`, or none. */
+    slot: 'own' | 'flex' | 'superflex' | null;
   } | null;
   /**
    * Who the pick is instead, once the name above has gone.

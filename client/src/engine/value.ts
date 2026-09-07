@@ -1,8 +1,10 @@
 import { survivalOdds } from './survival';
 import {
   FLEX_POSITIONS, SUPERFLEX_POSITIONS, emptyCounts, fillsStarter, positionCap, starterCount,
+  starterSlot,
   startersFilled,
 } from './roster';
+import type { StarterSlot } from './roster';
 import type { Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
 
@@ -249,8 +251,16 @@ export interface Recommendation {
   worth: number;
   /** What your next turn is still expected to bring once he is taken. */
   nextTurn: number;
-  /** Whether he fills a starting slot you have still to fill. */
-  fillsStarter: boolean;
+  /**
+   * Which starting slot he fills, or null where he fills none.
+   *
+   * `own`, `flex` or `superflex`. It replaces a boolean that said only whether,
+   * which is not enough to say anything to a user: with a flex open, a second
+   * tight end fills a starter, and "you still have to start one" reads as
+   * needing another tight end. It also names the bar he should be judged
+   * against, which for a flex is not a replacement at his own position.
+   */
+  slot: StarterSlot | null;
   /** How far clear of the next position's leader he came. */
   margin: number;
 }
@@ -346,7 +356,7 @@ export function rankCandidates(
 
   const scored = candidates
     .map((row) => {
-      const starter = fillsStarter(mine, roster, row.position);
+      const starter = starterSlot(mine, roster, row.position);
       /*
        * The roster advances before the next turn is priced, because a slot he
        * fills is a slot the turn after him no longer has to. His own position
@@ -368,7 +378,7 @@ export function rankCandidates(
     player: entry.row.best!,
     worth: entry.row.now,
     nextTurn: entry.nextTurn,
-    fillsStarter: entry.starter,
+    slot: entry.starter,
     margin: i + 1 < scored.length ? entry.score - scored[i + 1].score : entry.score,
   }));
 }

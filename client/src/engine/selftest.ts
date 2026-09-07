@@ -26,7 +26,7 @@ import {
 } from './order';
 import {
   DEFAULT_ROSTER, bestLineup, emptyCounts, handcuffsFor, positionCap, rosterSize,
-  startersFilled, starterCount,
+  startersFilled, starterCount, starterSlot,
 } from './roster';
 import {
   positionValues, rankCandidates, recommendPick, replacementPoints, startingAllocation,
@@ -377,6 +377,33 @@ async function main() {
     check('three quarterbacks fill one slot', startersFilled(three, r) === 1, String(startersFilled(three, r)));
     const flexed = { QB: 1, RB: 3, WR: 2, TE: 1, K: 1, DEF: 1 } as Record<Position, number>;
     check('the third back takes the flex', startersFilled(flexed, r) === 9, String(startersFilled(flexed, r)));
+
+    /*
+     * WHICH slot, not merely whether. Told "you still have to start one" after
+     * taking a tight end, a live draft on 2026-09-07 read it as needing a
+     * second one; what was true is that a second one goes in the flex, which is
+     * a different claim and a different bar to judge him against.
+     */
+    const none = emptyCounts();
+    check('the first tight end fills the slot of his own name',
+      starterSlot(none, r, 'TE') === 'own', String(starterSlot(none, r, 'TE')));
+    const oneTe = { ...none, TE: 1 };
+    check('and the second fills the flex, not another of his own',
+      starterSlot(oneTe, r, 'TE') === 'flex', String(starterSlot(oneTe, r, 'TE')));
+    const flexGone = { ...none, TE: 1, RB: 3 };
+    check('and the third fills nothing once the flex is spent',
+      starterSlot(flexGone, r, 'TE') === null, String(starterSlot(flexGone, r, 'TE')));
+    check('a kicker fills his own slot and then no slot at all',
+      starterSlot(none, r, 'K') === 'own' && starterSlot({ ...none, K: 1 }, r, 'K') === null);
+
+    // A quarterback is not one of the positions a flex takes, so in a superflex
+    // league the second one skips it and lands where he actually goes.
+    const sf = { ...r, SUPERFLEX: 1 };
+    check('a second quarterback lands in the superflex, never in the flex',
+      starterSlot({ ...none, QB: 1 }, sf, 'QB') === 'superflex',
+      String(starterSlot({ ...none, QB: 1 }, sf, 'QB')));
+    check('and in a one-quarterback league he fills nothing',
+      starterSlot({ ...none, QB: 1 }, r, 'QB') === null);
   }
 
   console.log('\nA consensus of three sources');
@@ -732,7 +759,7 @@ async function main() {
     const backupOrStarter = [rowFor('QB', 100, 100), rowFor('WR', 30, 20)];
     const forced = recommendPick(backupOrStarter, nearlyFull, r, 2);
     check('the last picks that can fill a lineup are not spent on a backup',
-      forced?.player.position === 'WR' && forced.fillsStarter,
+      forced?.player.position === 'WR' && forced.slot != null,
       forced ? forced.player.position + ' worth ' + forced.worth : 'none');
 
     /*
@@ -2761,7 +2788,7 @@ async function yahooRoom() {
     pickLabel: '2.07 #19',
     lean: 'The room is leaning on backs.',
     pick: {
-      name: 'A Back', position: 'RB', worth: 117.2, nextTurn: 18.4, fillsStarter: true,
+      name: 'A Back', position: 'RB', worth: 117.2, nextTurn: 18.4, slot: 'own',
     },
     source: { kind: 'room', sims: 400 },
     rows: [{
@@ -2798,7 +2825,7 @@ async function yahooRoom() {
       && read.advice.pick.position === 'RB'
       && Math.round(read.advice.pick.worth) === 117
       && Math.round(read.advice.pick.nextTurn) === 18
-      && read.advice.pick.fillsStarter === true,
+      && read.advice.pick.slot === 'own',
     JSON.stringify(read.advice.pick));
   check('and so do the names to fall back on when he goes first',
     read.advice.alternates?.length === 2

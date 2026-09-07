@@ -193,11 +193,19 @@
       + (p.nextTurn >= 1
         ? ', and ' + Math.round(p.nextTurn) + ' more at your next turn'
         : '')
-      // Worded as in the app's own pool, and for the reason recorded there:
-      // this says he fills some open slot, never which one or at what position.
-      + (p.fillsStarter
-        ? '. He fills a starting slot you have open.'
-        : '. He fills no starting slot, so this is depth.');
+      // Worded as in the app's own pool, and naming the slot for the reason
+      // recorded there: with a flex open, "you still have to start one" reads
+      // as needing another of his position, which is a different claim.
+      //
+      // An absent `slot` is a service older than this panel, and the clause is
+      // dropped rather than guessed: saying he fills nothing would be a false
+      // statement where the boolean it replaced said the opposite.
+      + (p.slot === undefined ? ''
+        : p.slot === 'own' ? '. He fills your open ' + (p.position || '') + ' slot.'
+          : p.slot === 'flex' ? '. He fills your flex, so weigh him against a back '
+            + 'or a receiver rather than the next ' + (p.position || '') + '.'
+            : p.slot === 'superflex' ? '. He fills your superflex.'
+              : '. He fills no starting slot, so this is depth.');
 
     box.append(head, el('p', 'take-why', why));
 

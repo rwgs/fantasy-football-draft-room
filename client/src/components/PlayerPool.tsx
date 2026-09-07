@@ -554,9 +554,14 @@ export default function PlayerPool(props: Props) {
                     * either: a backup quarterback fills no starting slot while
                     * your receiver slot is still open.
                     */}
-                  {pick.fillsStarter
-                    ? '. He fills a starting slot you have open.'
-                    : '. He fills no starting slot, so this is depth.'}
+                  {pick.slot === 'own'
+                    ? '. He fills your open ' + player.position + ' slot.'
+                    : pick.slot === 'flex'
+                      ? '. He fills your flex, so weigh him against a back or a '
+                        + 'receiver rather than the next ' + player.position + '.'
+                      : pick.slot === 'superflex'
+                        ? '. He fills your superflex.'
+                        : '. He fills no starting slot, so this is depth.'}
                 </p>
               )}
 

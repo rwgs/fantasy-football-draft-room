@@ -81,6 +81,42 @@ export function fillsStarter(
   return after > before;
 }
 
+/** Which kind of starting slot a player lands in. */
+export type StarterSlot = 'own' | 'flex' | 'superflex';
+
+/**
+ * Which starting slot one more at this position would fill, or null for none.
+ *
+ * `fillsStarter` answers whether, and that turned out not to be enough to say
+ * anything to a user with it: told "you still have to start one" after drafting
+ * a tight end, the honest statement was that a second one goes in the flex,
+ * which is a different claim about a different slot. Reported from a live draft
+ * on 2026-09-07.
+ *
+ * It reads the same order `startersFilled` spends slots in -- a player's own
+ * first, then the flex, then the superflex -- so the answer is the slot that
+ * function actually counted rather than a second opinion about it.
+ */
+export function starterSlot(
+  counts: Record<Position, number>,
+  roster: RosterSlots,
+  pos: Position,
+): StarterSlot | null {
+  if (!fillsStarter(counts, roster, pos)) return null;
+  if (counts[pos] < roster[pos]) return 'own';
+
+  // What is left over once every dedicated slot is spent, which is the pool the
+  // flex is filled from. He takes a flex where one is going spare and he is one
+  // of the positions that feeds it; past that the superflex is the only slot
+  // left, and `fillsStarter` above has already said there is one.
+  const spare = FLEX_POSITIONS.reduce(
+    (n, p) => n + Math.max(0, counts[p] - roster[p]),
+    0,
+  );
+  if (FLEX_POSITIONS.includes(pos) && spare < roster.FLEX) return 'flex';
+  return 'superflex';
+}
+
 /**
  * The most of one position any team will ever hold.
  *
