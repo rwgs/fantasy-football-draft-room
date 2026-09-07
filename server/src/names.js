@@ -38,6 +38,30 @@ export function normPos(pos) {
   return p;
 }
 
+/**
+ * The six positions a roster slot can hold.
+ *
+ * `normPos` maps the labels the sources disagree about and passes anything else
+ * through, which is what a diagnostic wants. A board row is not a diagnostic:
+ * the engine counts a pick into a roster slot, and a position it has no slot
+ * for counts into `undefined`, which arithmetic turns into `NaN` and never
+ * recovers from. So a row is checked against this set at the point it is built,
+ * and a position outside it is not a draftable player.
+ *
+ * Sleeper's 2026 projections call Travis Hunter a DB while Fantasy Football
+ * Calculator calls him a WR. Since the join is name plus position, that made
+ * two draftable people out of one: an unprojected WR at ADP 161.9 and a DB at
+ * 191.6 carrying the projection, both of whom could be drafted, and drafting
+ * the DB gave that team a `NaN` count. Tests for unique ids cannot see a
+ * duplicate person under two of them.
+ */
+export const DRAFTABLE = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
+
+/** Is this a position the engine can hold a roster slot for? */
+export function draftable(pos) {
+  return DRAFTABLE.has(normPos(pos));
+}
+
 const TEAM_FIX = { JAC: 'JAX', WSH: 'WAS', LA: 'LAR', OAK: 'LV', SD: 'LAC', STL: 'LAR' };
 
 /** Reduce a team abbreviation to the form both sources agree on. */

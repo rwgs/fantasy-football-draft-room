@@ -10,7 +10,7 @@
 // play and are dropped, not scored as zero.
 
 import { cached } from '../cache.js';
-import { normPos, normTeam, joinKey } from '../names.js';
+import { DRAFTABLE, normPos, normTeam, joinKey } from '../names.js';
 
 const BASE = 'https://api.sleeper.app/projections/nfl';
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
@@ -95,7 +95,9 @@ export function projectionMap(rows, format) {
 
     const p = rec.player || {};
     const position = normPos(p.position);
-    if (!position) continue;
+    // Not just "has a position": one the engine can put in a roster slot. A
+    // DB row joins as a different person from the same player's WR row.
+    if (!DRAFTABLE.has(position)) continue;
 
     const team = normTeam(rec.team || p.team);
     const name = position === 'DEF'

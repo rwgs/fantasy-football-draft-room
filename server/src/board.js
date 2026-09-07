@@ -20,6 +20,7 @@
 import { fetchAdp, FORMATS, nearestSize } from './sources/ffc.js';
 import { fetchProjections, projectionMap } from './sources/sleeper.js';
 import { fetchEspnRanks } from './sources/espnRanks.js';
+import { DRAFTABLE } from './names.js';
 
 export { FORMATS, nearestSize };
 
@@ -259,6 +260,9 @@ export async function buildBoard({
   // Start from the market board. These are the players humans actually draft.
   let matched = 0;
   for (const p of ffc.players) {
+    // Both boundaries are checked, not just Sleeper's: a board row the engine
+    // has no roster slot for counts a pick into `undefined`.
+    if (!DRAFTABLE.has(p.position)) continue;
     const proj = projections.get(p.key);
     if (proj) matched += 1;
     byKey.set(p.key, {

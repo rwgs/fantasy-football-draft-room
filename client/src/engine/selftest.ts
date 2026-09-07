@@ -115,7 +115,48 @@ async function main() {
   console.log('Board: ' + board.players.length + ' players, join rate '
     + Math.round(board.meta.joinRate * 100) + '%\n');
 
-  console.log('Pick order');
+  console.log('One row per player, at a position the engine can start');
+  {
+    /*
+     * The join is name plus position, so a source that disagrees about a
+     * player's position makes two draftable people out of him. Sleeper's 2026
+     * projections called Travis Hunter a DB where Fantasy Football Calculator
+     * called him a WR, and the board carried both: an unprojected WR at ADP
+     * 161.9 and a DB at 191.6 holding the projection. Both could be drafted,
+     * and drafting the DB gave that team a `NaN` count, because the engine has
+     * no roster slot called DB. Tests for unique ids cannot see one person
+     * under two of them.
+     */
+    const unsupported = board.players.filter((p) => !POSITIONS.includes(p.position));
+    check('every position on the board is one a roster can hold',
+      unsupported.length === 0,
+      unsupported.map((p) => p.name + ' ' + p.position).join(', '));
+
+    const byName = new Map<string, Player[]>();
+    for (const p of board.players) {
+      const k = p.name.toLowerCase();
+      byName.set(k, [...(byName.get(k) ?? []), p]);
+    }
+    const twice = [...byName.values()].filter((rows) => rows.length > 1);
+    check('and nobody is on it twice under two ids',
+      twice.length === 0,
+      twice.map((rows) => rows[0].name + ': '
+        + rows.map((p) => p.position + ' ' + p.id).join(' / ')).join(', '));
+
+    check('every id is still unique', new Set(board.players.map((p) => p.id)).size
+      === board.players.length);
+
+    /* Whoever is drafted, every count stays a number. */
+    let e = createDraft(league(), DEFAULT_CPU, board.players, null);
+    const spread = board.players.filter((_, i) => i % 37 === 0).slice(0, 12);
+    for (const p of spread) e = draftPlayer(e, p.id);
+    check('drafting across the whole board leaves every count finite',
+      e.state.teams.every((t) => POSITIONS.every((pos) => Number.isFinite(t.counts[pos]))),
+      JSON.stringify(e.state.teams.find((t) => POSITIONS
+        .some((pos) => !Number.isFinite(t.counts[pos])))?.counts ?? 'all finite'));
+  }
+
+  console.log('\nPick order');
   {
     const snake = pickOrder('snake', 12, 3);
     check('snake round 1 runs 1 to 12', snake.slice(0, 12).join() === '0,1,2,3,4,5,6,7,8,9,10,11');
