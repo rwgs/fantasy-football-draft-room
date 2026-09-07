@@ -656,6 +656,18 @@ export interface BridgeStatus {
   current: { version: string | null; build: string };
 }
 
+/**
+ * What the service says about the bridge, league-independent.
+ *
+ * `version` and `build` are the copy this build expects; `running` is what is
+ * actually installed, or null until something has posted.
+ */
+export interface BridgeReport {
+  version: string | null;
+  build: string;
+  running: BridgeStatus | null;
+}
+
 export interface RoomState {
   orderIsSet: boolean;
   mySeat: number | null;

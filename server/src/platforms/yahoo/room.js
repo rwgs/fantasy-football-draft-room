@@ -17,6 +17,7 @@
 // so the number of rooms, the size of a pool and the number of frames in one
 // post are all capped rather than left for the caller to decide.
 
+import { noteBridge } from '../../bridge.js';
 import { decodeFrame } from './frames.js';
 
 /** Rooms kept at once. A person drafts in one league at a time. */
@@ -146,6 +147,7 @@ export function applyPost(leagueId, body) {
   // Recorded before anything can throw, so a post that fails halfway still
   // counts as a bridge having spoken. Silence is the signal being read here.
   room.bridgeSeen = true;
+  noteBridge(body?.bridge);
   if (body?.bridge && typeof body.bridge === 'object') {
     room.bridge = {
       version: String(body.bridge.version ?? '').slice(0, 32) || null,

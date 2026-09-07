@@ -64,6 +64,38 @@ export function stampedBridge() {
 }
 
 /**
+ * The last bridge to say anything, to anyone.
+ *
+ * Held per service rather than per room because the question the user asks is
+ * "is my userscript current", which has nothing to do with which league they
+ * happen to have open. Tying the answer to a room meant it could only be given
+ * once a draft was being followed — which is after the point where knowing it
+ * would have helped, and is exactly how 2026-09-07 went.
+ *
+ * One browser, one machine, one bridge: this is not a set. A second bridge
+ * posting simply replaces the first, which is the right answer to a question
+ * about the copy that is installed.
+ */
+let last = null;
+let heard = false;
+
+export function noteBridge(reported) {
+  heard = true;
+  if (reported) last = reported;
+}
+
+/** The last one heard, as a reading. Null until something has posted. */
+export function lastBridge() {
+  return bridgeStatus(last, heard);
+}
+
+/** Test seam. Nothing in the service calls this. */
+export function forgetBridge() {
+  last = null;
+  heard = false;
+}
+
+/**
  * What to say about the bridge posting to a room, or null when nothing has.
  *
  * `seen` is whether any post has arrived at all, and it is separate from

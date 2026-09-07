@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { ADP_FEEDS, ADP_RULES, FORMATS, buildBoard, nearestSize } from './board.js';
 import { parseRankings } from './rankings.js';
 import { PLATFORM_NAMES, platformFor } from './platforms/index.js';
-import { currentBridge, stampedBridge } from './bridge.js';
+import { currentBridge, lastBridge, stampedBridge } from './bridge.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -173,7 +173,8 @@ app.get('/api/health', (_req, res) => {
  */
 app.get('/api/bridge/build', (_req, res) => {
   res.set('cache-control', 'no-store');
-  res.json(currentBridge());
+  // `running` is what is installed; the rest is what this build expects.
+  res.json({ ...currentBridge(), running: lastBridge() });
 });
 
 app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {

@@ -1,6 +1,6 @@
 import type {
-  Board, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState, NoteSet,
-  Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState,
+  Board, BridgeReport, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState,
+  NoteSet, Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState,
 } from './engine/types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -132,6 +132,19 @@ export async function fetchDraftState(
   draftId: string,
 ): Promise<LiveDraftState> {
   const res = await fetch(on(platform, '/draft/' + encodeURIComponent(draftId)));
+  if (!res.ok) return fail(res);
+  return res.json();
+}
+
+/**
+ * Which bridge userscript this build expects, and which one is installed.
+ *
+ * Not scoped to a league, deliberately. "Is my userscript current" has nothing
+ * to do with which draft is open, and answering it only once a draft is being
+ * followed is answering it after it mattered.
+ */
+export async function fetchBridge(): Promise<BridgeReport> {
+  const res = await fetch(BASE + '/bridge/build', { cache: 'no-store' });
   if (!res.ok) return fail(res);
   return res.json();
 }

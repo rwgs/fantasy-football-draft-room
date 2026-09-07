@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  fetchBoard, fetchDraftPicks, fetchLeague, fetchLeagueSetup, fetchRoomState, matchNotes,
-  matchRankings,
+  fetchBoard, fetchBridge, fetchDraftPicks, fetchLeague, fetchLeagueSetup, fetchRoomState,
+  matchNotes, matchRankings,
 } from './api';
 import { maskLeague } from './anon';
 import { keeperPicksIn } from './engine/order';
@@ -229,31 +229,34 @@ export default function App() {
   const [bridge, setBridge] = useState<BridgeStatus | null>(null);
 
   /**
-   * Which room the question even applies to, derived rather than cleared.
+   * Asked whenever Yahoo is the platform, on any screen and in either mode.
    *
-   * The last answer is left in state when it stops applying and the render is
-   * gated on this instead, because clearing it from the effect would be a
-   * synchronous setState on a path that renders nothing anyway.
+   * The first version of this asked only while an assistant draft was being
+   * followed, which is after the point where the answer is worth anything: what
+   * a stale bridge costs is the draft you are about to start, and by then the
+   * room is already being mirrored by the wrong copy. It is also why the service
+   * keeps the last bridge it heard from rather than one per room — the question
+   * is about the install, not about a league. See `server/src/bridge.js`.
    */
-  const bridgeRoom = mode === 'assistant' && activePlatform === 'yahoo' ? liveDraftId : null;
+  const watchBridge = activePlatform === 'yahoo';
 
   useEffect(() => {
-    if (!bridgeRoom) return undefined;
+    if (!watchBridge) return undefined;
     let alive = true;
     const ask = async () => {
-      const room = await fetchRoomState('yahoo', bridgeRoom).catch(() => null);
+      const report = await fetchBridge().catch(() => null);
       // A refusal says nothing about the bridge, so the last answer stands
       // rather than a dropped request reading as a bridge that went away.
-      if (!alive || !room) return;
-      setBridge(room.bridge);
+      if (!alive || !report) return;
+      setBridge(report.running);
     };
     void ask();
     const timer = setInterval(() => { void ask(); }, ROOM_WAIT_MS);
     return () => { alive = false; clearInterval(timer); };
-  }, [bridgeRoom]);
+  }, [watchBridge]);
 
   /** What the masthead and the banner read. Absent where it does not apply. */
-  const bridgeSeen = bridgeRoom ? bridge : null;
+  const bridgeSeen = watchBridge ? bridge : null;
 
   useEffect(() => {
     // Left as it was where there is no room to ask about. What it is worth is

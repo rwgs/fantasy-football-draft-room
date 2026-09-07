@@ -16,7 +16,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  BRIDGE_MARK, bridgeBuild, bridgeSource, bridgeStatus, currentBridge, stampedBridge,
+  BRIDGE_MARK, bridgeBuild, bridgeSource, bridgeStatus, currentBridge, forgetBridge,
+  lastBridge, noteBridge, stampedBridge,
 } from './bridge.js';
 
 test('the served copy carries a build where the mark was', () => {
@@ -91,4 +92,27 @@ test('a current install is not stale, and a stale one is', () => {
   const bad = bridgeStatus({ version: current.version, build: 'deadbeef' }, true);
   assert.equal(bad.stale, true);
   assert.equal(bad.version, current.version, 'a matching version does not excuse the build');
+});
+
+test('the last bridge heard is remembered without a league', () => {
+  // The reading has to exist before any draft is followed, because a stale
+  // install costs the draft you are about to start rather than the one you are
+  // in. Nothing here names a league, which is the point.
+  forgetBridge();
+  assert.equal(lastBridge(), null, 'nothing has posted, so nothing is claimed');
+
+  noteBridge(undefined);
+  assert.equal(lastBridge().tooOld, true, 'something posted and would not say what');
+
+  const current = currentBridge();
+  noteBridge({ version: current.version, build: current.build });
+  assert.equal(lastBridge().stale, false);
+
+  // A second bridge replaces the first rather than joining it: the question is
+  // about the copy that is installed, and there is only one of those.
+  noteBridge({ version: '1.0.0', build: 'deadbeef' });
+  assert.equal(lastBridge().stale, true);
+  assert.equal(lastBridge().version, '1.0.0');
+
+  forgetBridge();
 });

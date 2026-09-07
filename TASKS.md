@@ -25,17 +25,28 @@ Phase 4: prove the platform seam against real leagues.
   - Acceptance criteria: a copy too old to name itself reads as behind rather
     than as unknown; a copy run from the repository is never called stale; a
     matching version with a different build is called stale. All three met.
-  - Automated validation: eight checks in `npm run server:test` under
+  - Automated validation: thirteen checks in `npm run server:test` under
     `bridge.test.js`, covering the stamp, that both ends hash the same bytes,
-    the mark appearing exactly once, and each of the five readings. Typecheck,
-    lint, `server:test` and `bridge:test` clean. `bridge:test` runs unstamped by
-    construction and its log now says so, which is the escape hatch being
-    exercised rather than asserted about.
-  - Manual validation: **outstanding.** The banner has not been seen on screen,
-    because seeing it needs the very reinstall it exists to ask for. Next mock:
-    install from the service, confirm the room's console names the build, and
-    confirm the masthead shows it and no banner appears. Then, separately,
-    confirm the banner does appear against a deliberately stale copy.
+    the mark appearing exactly once, each of the five readings, and the
+    service-wide record. Typecheck, lint, `server:test`, `bridge:test`, build
+    and `shots` clean, no console errors. `bridge:test` runs unstamped by
+    construction and its log now says so, which exercises the escape hatch
+    rather than asserting about it.
+  - Manual validation: **half done, and the half that matters worked.** The
+    banner appeared on its first outing, 2026-09-07, against league `10901687`:
+    a genuinely stale install, reported `tooOld`, named on screen. That is the
+    failure of the previous three drafts becoming visible in a second instead of
+    a session.
+    Still to see: the clean case. A current install should show
+    `bridge <version> · <build>` in the masthead with no banner, and that needs
+    an install that actually takes — see the version-bump note below, since a
+    manager that will not fetch is a separate problem from a body that will not
+    report.
+  - Also built, after the first outing showed it too narrow: the reading is held
+    per service rather than per room and read from `/api/bridge/build`, so it is
+    answered whenever Yahoo is the platform on any screen in either mode. It had
+    been scoped to an assistant draft in progress, which is after the point
+    where the answer is worth having.
   - Dependencies or blockers: none.
 
 - [ ] Populate `client/fixtures.local.json` and run the full engine self-test.
