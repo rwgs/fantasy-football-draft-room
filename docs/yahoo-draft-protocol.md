@@ -137,7 +137,7 @@ holds.
 `A|` is sent **once, in the connect burst, and never again** when the state it
 reports changes, which is how the reading above was taken — by reconnecting and
 reading the value afresh. It does not follow that a seat cannot be watched
-flipping: `5|` and `6|` appear to announce exactly that, one direction each. See
+flipping: `5|` and `6|` announce exactly that, one direction each, confirmed. See
 `Autopick, announced` below.
 
 `R|` gives the order rather than implying it. A league with keepers, traded
@@ -161,9 +161,9 @@ it missed, so nothing has to be remembered across a crash.
 | `L\|<team>` | A manager disconnected. **Inferred** from timing |
 | `G\|[…]` | Yahoo's own grade for a pick, as JSON: `letterGrade`, `score`, weighted components with explanations |
 | `g\|[…]` | Yahoo's own grade for each **team**, as JSON: `teamId`, `score`, `letterGrade`, `pickCount`, `basis`. Lowercase, and a different frame from `G\|` |
-| `5\|<seat>` | **Inferred: that seat has gone onto autopick.** See `Autopick, announced` below |
-| `6\|<seat>` | **Inferred: that seat has come off autopick.** Answers the outbound `6\|` above |
-| `X\|<n>` | Unknown, single numeric payload. `X\|29` five times |
+| `5\|<seat>` | **Observed: that seat has gone onto autopick.** See `Autopick, announced` below |
+| `6\|<seat>` | **Observed: that seat has come off autopick.** Answers the outbound `6\|` above |
+| `X\|<n>` | Unknown, single numeric payload, always `X\|29`. **Observed** immediately before a `5\|` naming *your own* seat, and never before one naming another |
 | `O\|draft-labels\|<overall>\|[…]` | Yahoo's own value labels, as JSON: `BEST_VALUE` and similar, with a `reason` and `signals` |
 
 `playerId` matches `id` in `players/nfl/<league>`, which is how a pick becomes a
@@ -254,21 +254,48 @@ immediately built a queue. **Inferred** from that pairing: outbound `6|` is a
 seat taking itself off autopick, and the queue that followed is what somebody
 does next having just been drafted for.
 
-**Observed: autopick does not stay off.** The same seat is named by `5|13` sixty
-lines later and picked for again. So a seat is returned to autopick on whatever
-Yahoo's inactivity rule is, and one `6|` buys one reprieve rather than a
-setting.
+**Confirmed, in `frames-2026-09-06T23-47-40-033Z.jsonl`.** The direction is no
+longer inferred, and settling it needed no guess about which way a control had
+been moved, because the seat's state was known independently on both sides of
+each frame. Seat 3 of league `10892178`, over 314 frames:
 
-**Observed: a queue fires under autopick.** That later `5|13` is followed
-immediately by pick 44 taking `41824`, which is exactly the top of the queue
-that seat had set eight frames earlier. It is the only direct evidence in any
-capture of a queue actually firing, and it says the queue is what autopick draws
-from rather than something autopick ignores.
+| | frame | state before | state after |
+|---|---|---|---|
+| **On** | `5\|3` | picking by hand, outbound `0\|10892178\|3\|3\|30121` | picked for 30-50 ms later |
+| **Off** | `6\|10892178\|3` then `6\|3` | on autopick, from the row above | back on its own clock |
 
-**Not confirmed, and it inverts if wrong.** `5|` and `6|` could be the other way
-round, in which case anything sending `6|` to escape autopick would be switching
-it on. One mock settles it: run `capture.ps1`, toggle Yahoo's own autopick
-control, and read which frame leaves. Nothing should send `6|` before that.
+So `5|` is autopick going **on** and `6|` is it coming **off**, which is what
+this section inferred above and could not show. The outbound form is
+`6|<league>|<seat>`, answered by a broadcast `6|<seat>` in 34 and 139 ms across
+the two occurrences.
+
+**Observed: what returns a seat to autopick is its clock expiring.** Every one
+of the six `5|` frames in that capture sits within 100 ms of a `C|0`, and three
+of them named a seat that had just let a full 30-second clock run out unpicked.
+This replaces the older reading of "whatever Yahoo's inactivity rule is" with
+the rule itself: a seat is not dropped for being quiet, it is dropped for
+missing a pick. One `6|` buys one clock rather than a setting, which is why the
+same seat was named by `5|3` three times in eleven rounds.
+
+**Observed: `5|` announces a transition, not a pick.** After the third `5|3`
+that seat stayed on autopick and took picks 82 and 87 with no further `5|`. So a
+reader tracking autopick state has to treat `5|` and `6|` as edges and hold the
+state between them. Counting `5|` frames counts flips, not autopicked picks.
+
+**Observed: a queue fires under autopick.** In `capture-mock2.log` the seat that
+took itself off with an outbound `6|` is named by `5|13` sixty lines later, and
+that frame is followed immediately by pick 44 taking `41824`, which is exactly
+the top of the queue that seat had set eight frames earlier. It is the only
+direct evidence in any capture of a queue actually firing, and it says the queue
+is what autopick draws from rather than something autopick ignores.
+
+**Observed: `X|29` accompanies the flip, but only your own.** All three `X|29`
+frames in the capture land between a `C|0` and a `5|3`, 20 to 90 ms ahead of it.
+None precedes `5|9`, `5|12` or `5|1`, which are the same transition on somebody
+else's seat. Three for three on the reader's own seat and zero for three on
+another is thin, but it is a shape rather than the loose numeric the frame table
+used to carry, and it suggests `X|` is addressed rather than broadcast. What the
+`29` itself means is still unknown.
 
 ## The queue
 
@@ -369,10 +396,11 @@ pool response would close that gap.
 ## Still unknown
 
 - **What `w|` and `X|` are.** Neither is needed to read picks. `Q`, `5|` and
-  `6|` were on this list until the outbound frames were read: `Q` is the queue,
-  and `5|` and `6|` are autopick going on and coming off, inferred rather than
-  observed and with the direction still to be confirmed. See `Autopick,
-  announced` above.
+  `6|` were on this list until the outbound frames were read, and the direction
+  of the last two has been confirmed in a mock since: `Q` is the queue, `5|` is
+  autopick going on, `6|` is it coming off. `X|29` is now known to sit between a
+  `C|0` and a `5|` naming your own seat, which is more than was known about it
+  and still not what it means. See `Autopick, announced` above.
 - **Whether a queue survives a reconnect**, which decides whether anything can
   write one it did not build. See `The queue` above.
 - **Whether Yahoo's own room redraws its queue from a `Q|` it did not ask for.**

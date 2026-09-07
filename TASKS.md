@@ -123,23 +123,29 @@ Phase 4: prove the platform seam against real leagues.
       since the first write no longer waits for one, but it decides whether the
       first write can stop replacing anything.
 
-- [ ] Keep a seat off Yahoo's autodraft, if the frames mean what they look like.
+- [ ] Keep a seat off Yahoo's autodraft.
   - Scope: not started, and deliberately not started. Reading the captures for
-    the queue turned up `5|<seat>` and `6|<seat>`, which appear to be autopick
-    going on and coming off, and one outbound `6|<league>|<team>` sent by
-    Yahoo's own client. If that reading is right, a seat can take itself off
-    autodraft, and `docs/yahoo-draft-protocol.md` now carries the evidence.
-  - Blocked on one experiment, and it must come first: the direction is
-    inferred, not observed. If `6|` is autopick *on*, anything sending it to
-    escape autodraft would be switching it on. Run `capture.ps1` against a mock,
-    toggle Yahoo's own autopick control, and read which frame leaves.
+    the queue turned up `5|<seat>` and `6|<seat>`, autopick going on and coming
+    off, and one outbound `6|<league>|<team>` sent by Yahoo's own client. So a
+    seat can take itself off autodraft.
+  - No longer blocked on the experiment: it was run, against mock `10892178`,
+    and the direction is confirmed rather than inferred. `5|` is autopick going
+    on and `6|` is it coming off, established from a seat whose state was known
+    on both sides — it had picked by hand, its clock expired, `5|3` landed and
+    it was picked for 30 ms later; it then sent `6|10892178|3` and got its own
+    clock back. `docs/yahoo-draft-protocol.md` carries the frames. So sending
+    `6|` to escape autodraft cannot switch it on.
+  - What the same capture sharpened: the trigger is a clock that expires
+    unpicked, not a vaguer inactivity rule, and `5|` marks the transition rather
+    than each autopicked pick. The seat was named three times in eleven rounds
+    and took two picks under autopick with no `5|` between them.
   - Then a product question worth its own decision rather than an
-    implementation: autopick does not stay off. The same seat is named by `5|`
-    sixty lines later and picked for again, so this is not a setting to flip but
-    a counter-action to repeat for the whole draft — the app persistently
-    fighting Yahoo's inactivity rule on the user's behalf. That is a larger
-    claim on a live draft than writing a queue, and it should be decided rather
-    than assumed.
+    implementation: one `6|` buys one clock. Keeping a seat off autodraft means
+    answering every `5|<your seat>` with a `6|`, for the whole draft — the app
+    persistently fighting Yahoo's inactivity rule on the user's behalf, and
+    doing it within the ~30 ms between the flip and the pick if it is to save
+    the pick at all. That is a larger claim on a live draft than writing a
+    queue, and it should be decided rather than assumed.
 
 - [x] Choose which sources price the board, and say what the numbers imply.
   - Scope: `adpSource` became `<rule>:<feed>,<feed>` — a tick per feed plus
