@@ -535,7 +535,13 @@ export default function PlayerPool(props: Props) {
                   {/* Worth is negative when nobody left beats a replacement
                       starter, which by the last rounds is usual. */}
                   {(pick.worth > 0 ? '+' : '') + Math.round(pick.worth)
-                    + ' over a replacement ' + player.position}
+                    + ' over a replacement '
+                    // Over the bar of the slot he fills, which for a flex is
+                    // whichever of a back, a receiver or a tight end you could
+                    // pick up free -- not a replacement at his own position.
+                    + (pick.slot === 'flex' ? 'flex'
+                      : pick.slot === 'superflex' ? 'superflex'
+                        : player.position)}
                   {/* The two numbers added together are the score he was
                       chosen on, so the verdict can be checked and overruled. */}
                   {pick.nextTurn >= 1
@@ -557,8 +563,7 @@ export default function PlayerPool(props: Props) {
                   {pick.slot === 'own'
                     ? '. He fills your open ' + player.position + ' slot.'
                     : pick.slot === 'flex'
-                      ? '. He fills your flex, so weigh him against a back or a '
-                        + 'receiver rather than the next ' + player.position + '.'
+                      ? '. He fills your flex.'
                       : pick.slot === 'superflex'
                         ? '. He fills your superflex.'
                         : '. He fills no starting slot, so this is depth.'}

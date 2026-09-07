@@ -9,6 +9,62 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-07 A shared slot is priced at what a shared slot costs to fill
+
+Status: Accepted, by the user, off a live draft that showed it. Amends
+`2026-09-07 A pick is scored on what two turns come to`, which stands: this
+changes one of the two numbers that score names, not the scoring.
+
+### Decision
+
+A candidate who would fill a flex or a superflex is priced over that slot's own
+bar -- the **highest** replacement level among the positions the slot takes --
+instead of over a replacement at his own position. `PositionValue` carries the
+replacement level its `now` was taken over, because two bars can only be
+subtracted from each other when they come from the same allocation.
+
+A candidate filling no slot at all is left exactly as he was.
+
+### Why
+
+Value over replacement asks how much better your lineup is with him than
+without him, so the answer depends on what would otherwise sit in the slot he
+takes. For his own position's slot that is a replacement at his own position.
+For a flex it is not: a flex takes a back, a receiver or a tight end, so what
+you would otherwise put there is the best of those you could pick up free.
+
+Reported live on 2026-09-07. With a tight end already held and the flex open, a
+second one was priced against roughly TE12 in a one tight end league, where the
+top of that board is steep, and read far better than he was -- against a bar he
+was not competing with. The slot he was competing for was the flex.
+
+The direction is not a matter of sampling: the flex bar is a maximum taken over
+a set that includes his own replacement level, so a flex filler's worth can only
+fall or stay, never rise. Shared-slot candidates therefore move down relative to
+candidates filling a slot of their own, and never up.
+
+### What it does not do, deliberately
+
+**The bench case is untouched.** A player who fills no slot is still priced over
+a replacement starter he is not replacing, which overstates every backup. That
+is the open half of M1 and R6 and it needs expected usable weeks, replacement
+access and M4's calibration -- not another bar to swap. Two earlier entries
+refused a bench multiplier for the same reason, and this is not one: no
+coefficient is introduced, and the number it replaces a bar with is a
+replacement level the allocation already computes.
+
+**It does not change the pool's WORTH column.** That is a fact about a player at
+his position on this board, the same for every reader, and it does not know
+whose roster is asking. Only the recommendation is roster-aware, and only the
+recommendation moves.
+
+### What it costs
+
+The printed number changes for a flex filler, so the line says which bar it
+stands over: "over a replacement flex" rather than "over a replacement TE". The
+two numbers a panel prints still have to be the two the pick was chosen on, and
+they are.
+
 ## 2026-09-07 The queue this app wrote is the queue it may take back
 
 Status: Accepted, by the user, during the live draft that found it. Applies

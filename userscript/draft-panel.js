@@ -189,7 +189,10 @@
     );
 
     const why = (p.worth > 0 ? '+' : '') + Math.round(p.worth)
-      + ' over a replacement ' + (p.position || '')
+      // Over the bar of the slot he fills. A flex is filled from three
+      // positions, so its bar is the best of their replacements, not his own.
+      + ' over a replacement ' + (p.slot === 'flex' ? 'flex'
+        : p.slot === 'superflex' ? 'superflex' : (p.position || ''))
       + (p.nextTurn >= 1
         ? ', and ' + Math.round(p.nextTurn) + ' more at your next turn'
         : '')
@@ -202,8 +205,7 @@
       // statement where the boolean it replaced said the opposite.
       + (p.slot === undefined ? ''
         : p.slot === 'own' ? '. He fills your open ' + (p.position || '') + ' slot.'
-          : p.slot === 'flex' ? '. He fills your flex, so weigh him against a back '
-            + 'or a receiver rather than the next ' + (p.position || '') + '.'
+          : p.slot === 'flex' ? '. He fills your flex.'
             : p.slot === 'superflex' ? '. He fills your superflex.'
               : '. He fills no starting slot, so this is depth.');
 

@@ -393,6 +393,48 @@ Phase 4: prove the platform seam against real leagues.
     half of M1 and R6.
   - Dependencies or blockers: none.
 
+- [x] Price a flex filler at what a flex costs to fill.
+  - Scope: `PositionValue` carries the replacement level its `now` was taken
+    over, and `rankCandidates` re-prices a candidate whose slot is `flex` or
+    `superflex` over that slot's bar -- the highest replacement among the
+    positions the slot takes. The `nextTurn` term is re-based the same way,
+    which only bites on a roster with more than one flex. The take line says
+    which bar it stands over, in the pool and on the panel.
+  - Why: reported live 2026-09-07 and approved as its own change. With a tight
+    end held and the flex open, a second one was priced against roughly TE12 in
+    a one tight end league -- a soft bar the top of that board is steep above --
+    while the slot he was competing for was the flex, whose bar is a back or a
+    receiver. Value over replacement asks what the slot would otherwise hold.
+  - Acceptance criteria: a flex filler is priced over the flex bar and an own
+    slot filler is unchanged; between two flex candidates the one with more
+    points wins rather than the one with the softer bar; nothing about the
+    pool's WORTH column moves, since that is a fact about a player at his
+    position and not about a roster. All met.
+  - Automated validation: four checks in `npm run engine:test`, 379 passing.
+    **Three of the four confirmed by failing** with the re-pricing neutered in
+    place, and the failure is the report itself -- "TE worth 60", the tight end
+    taking the flex on the soft bar. The fourth is the control and passes both
+    ways, because an own-slot filler is what does not change. Typecheck clean,
+    lint unchanged at 43 warnings, `server:test` 26/26, `bridge:test` 7/7, build
+    clean, `shots` clean with no console errors.
+  - Manual validation: the own-slot line photographed -- "+112 over a
+    replacement RB, and 87 more at your next turn. He fills your open RB slot."
+    The flex line is still not photographed, for the reason recorded in the task
+    above it: no `shots` scenario reaches a roster with its own slots full.
+  - The direction is proved rather than sampled, which is worth more than a
+    measurement here: the flex bar is a maximum over a set that includes the
+    candidate's own replacement level, so a flex filler's worth can only fall or
+    stay. Shared-slot candidates move down relative to own-slot ones and never
+    up. No draft was replayed to count how often it fires.
+  - Not touched, and the reason is unchanged: the bench case. A player filling
+    no slot is still priced over a replacement starter he is not replacing. That
+    is the open half of M1 and R6 and it needs expected usable weeks,
+    replacement access and M4's calibration.
+  - Recorded: `DECISIONS.md`, 2026-09-07, "A shared slot is priced at what a
+    shared slot costs to fill", amending the scoring entry from earlier the same
+    day, which stands.
+  - Dependencies or blockers: none.
+
 - [ ] Re-post what the app wants queued when the service has forgotten it.
   - Scope: the app posts its wanted list only when the list changes, guarded by
     `lastQueueSent` in `DraftScreen.tsx`. A service restarted mid-draft has

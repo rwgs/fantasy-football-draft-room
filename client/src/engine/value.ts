@@ -23,6 +23,14 @@ export interface PositionValue {
   best: Player | null;
   /** His value over replacement, in projected points. */
   now: number;
+  /**
+   * The replacement level `now` was taken over, in projected points.
+   *
+   * Carried rather than recomputed, because a player filling a flex has to be
+   * re-priced against a different bar and the two numbers have to come from the
+   * same allocation to be subtracted from each other at all.
+   */
+  replacement: number;
   /** The value you expect to still be there at your next pick. */
   later: number;
   /** now - later: what this pick buys you over waiting one turn. */
@@ -222,6 +230,7 @@ export function positionValues(
       position: pos,
       best,
       now,
+      replacement: replacement[pos],
       later,
       cost: now - later,
       odds: targetPick == null ? 1 : survivalOdds(best, currentPick, targetPick),
@@ -354,6 +363,40 @@ export function rankCandidates(
   const worthy = playable.filter((row) => row.now > 0);
   const candidates = worthy.length ? worthy : playable;
 
+  /*
+   * WHAT A SHARED SLOT COSTS TO FILL.
+   *
+   * Value over replacement asks how much better your lineup is with him than
+   * without him, and the answer depends on what would otherwise be in the slot
+   * he takes. For his own position's slot that is a replacement at his own
+   * position, which is what `now` already holds. For a flex it is not: a flex
+   * takes a back, a receiver or a tight end, so what you would otherwise put
+   * there is the best freely available player among all three -- the HIGHEST of
+   * their replacement levels, not his own.
+   *
+   * Reported from a live draft on 2026-09-07. With a tight end already held and
+   * the flex open, a second one was priced against roughly TE12 in a one tight
+   * end league, where the top of that board is steep, and so read far better
+   * than he was: the slot he was actually competing for was the flex, whose bar
+   * is a back or a receiver.
+   *
+   * A player filling no slot at all is left alone. He is overstated too -- a
+   * backup priced against a replacement starter he is not replacing -- but that
+   * needs expected usable weeks and what you could stream instead, which is the
+   * open half of M1 and R6 and not a bar to swap.
+   */
+  const barOf = (positions: Position[]) => candidates
+    .filter((row) => positions.includes(row.position))
+    .reduce((high, row) => Math.max(high, row.replacement), -Infinity);
+  const flexBar = barOf(FLEX_POSITIONS);
+  const superflexBar = barOf(SUPERFLEX_POSITIONS);
+
+  /** What a value taken over `row.replacement` is worth over the slot's bar. */
+  const overSlot = (value: number, row: PositionValue, slot: StarterSlot | null) => {
+    const bar = slot === 'flex' ? flexBar : slot === 'superflex' ? superflexBar : null;
+    return bar == null || !Number.isFinite(bar) ? value : value - (bar - row.replacement);
+  };
+
   const scored = candidates
     .map((row) => {
       const starter = starterSlot(mine, roster, row.position);
@@ -367,16 +410,22 @@ export function rankCandidates(
       let nextTurn = 0;
       for (const other of candidates) {
         if (other.position === row.position) continue;
-        if (!fillsStarter(after, roster, other.position)) continue;
-        if (other.later > nextTurn) nextTurn = other.later;
+        // Priced against the slot he would fill once this pick is made, which
+        // matters where a roster has more than one flex: with only one, taking
+        // it here leaves every other candidate filling a slot of his own.
+        const otherSlot = starterSlot(after, roster, other.position);
+        if (otherSlot == null) continue;
+        const later = overSlot(other.later, other, otherSlot);
+        if (later > nextTurn) nextTurn = later;
       }
-      return { row, starter, nextTurn, score: row.now + nextTurn };
+      const now = overSlot(row.now, row, starter);
+      return { row, starter, now, nextTurn, score: now + nextTurn };
     })
     .sort((a, b) => b.score - a.score);
 
   return scored.map((entry, i) => ({
     player: entry.row.best!,
-    worth: entry.row.now,
+    worth: entry.now,
     nextTurn: entry.nextTurn,
     slot: entry.starter,
     margin: i + 1 < scored.length ? entry.score - scored[i + 1].score : entry.score,

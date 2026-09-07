@@ -745,10 +745,16 @@ async function main() {
      * a replacement outscored the receiver worth 30 filling the last empty
      * slot, and named him with `fillsStarter: false` on the final pick.
      */
-    const rowFor = (pos: Position, now: number, later: number): PositionValue => ({
+    // `replacement` defaults to zero, which leaves every row on one scale and
+    // so leaves the checks below measuring what they always measured. The flex
+    // checks further down pass real levels, because that is their whole point.
+    const rowFor = (
+      pos: Position, now: number, later: number, replacement = 0,
+    ): PositionValue => ({
       position: pos,
       best: after(19).find((p) => p.position === pos && p.points != null)!,
       now,
+      replacement,
       later,
       cost: now - later,
       odds: 1,
@@ -768,6 +774,45 @@ async function main() {
      */
     check('but with the bench still to come the backup is allowed back',
       recommendPick(backupOrStarter, nearlyFull, r, 8)?.player.position === 'QB');
+
+    /*
+     * A FLEX IS PRICED AT WHAT A FLEX COSTS TO FILL.
+     *
+     * Reported live on 2026-09-07. With the tight end slot already filled and
+     * the flex open, a second tight end was priced over a replacement tight end
+     * -- about TE12 in a one tight end league, where the top of the board is
+     * steep -- while the slot he was competing for was the flex, whose bar is
+     * whichever of a back, a receiver or a tight end you could pick up free.
+     *
+     * The numbers here are the shape of that: a tight end worth 60 over a soft
+     * bar of 90, and a back worth 30 over a hard one of 140. He has 150 points
+     * to the back's 170, so the back is the better flex, and the old scoring
+     * took the tight end on 60 to 30.
+     */
+    const dedicatedFull = counts({ QB: 1, RB: 2, WR: 2, TE: 1, K: 0, DEF: 0 });
+    const forTheFlex = [rowFor('TE', 60, 60, 90), rowFor('RB', 30, 30, 140)];
+    const flexPick = recommendPick(forTheFlex, dedicatedFull, r, 8);
+    check('the flex goes to the man with the points, not the softest bar',
+      flexPick?.player.position === 'RB',
+      flexPick ? flexPick.player.position + ' worth ' + flexPick.worth : 'none');
+    check('and a flex filler is priced over the flex, not over his own position',
+      flexPick?.slot === 'flex' && flexPick.worth === 30,
+      flexPick ? String(flexPick.worth) : 'none');
+
+    const te = rankCandidates(forTheFlex, dedicatedFull, r, 8)
+      .find((c) => c.player.position === 'TE');
+    check('the tight end keeps his points and loses the soft bar',
+      te?.worth === 10, te ? String(te.worth) : 'none');
+
+    /*
+     * And nothing moves for the slot of his own name. The same tight end with
+     * the slot still empty is worth what he was always worth, because there the
+     * thing he replaces really is a replacement tight end.
+     */
+    const teOpen = counts({ QB: 1, RB: 2, WR: 2, TE: 0, K: 0, DEF: 0 });
+    const own = rankCandidates(forTheFlex, teOpen, r, 8).find((c) => c.player.position === 'TE');
+    check('and his own slot is still priced over his own position',
+      own?.slot === 'own' && own.worth === 60, own ? String(own.worth) : 'none');
 
     /*
      * WORTH PLUS WAITING COST IS NOT THE TOTAL OF TWO PICKS
