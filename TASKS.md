@@ -228,7 +228,7 @@ Phase 4: prove the platform seam against real leagues.
     watching the check fail. Defences were never affected: Yahoo writes `DEF` and
     a team abbreviation, which is what `joinKey` already wanted.
 
-- [ ] Write the Yahoo draft queue from the board.
+- [x] Write the Yahoo draft queue from the board.
   - Scope: the app can set your queue in a Yahoo draft room, behind a setting
     that is off. `Mirror` sends the players you starred; `Autodraft` tops those
     up from the board's own chain. The client decides who, the service resolves
@@ -254,8 +254,8 @@ Phase 4: prove the platform seam against real leagues.
     See `DECISIONS.md`, both entries dated 2026-09-06.
   - Acceptance criteria: a queue set from the app appears in the room; the
     user's own Yahoo entries survive every write after the first; an empty queue
-    is never written; no pick is ever sent. The last three are met and checked.
-    **The first is still not met** — see manual validation.
+    is never written; no pick is ever sent. **All four now met**, the first of
+    them live on 2026-09-07 — see manual validation.
   - Automated validation: run and passing. Fifteen checks in `engine:test` under
     "Writing a Yahoo draft queue" covering the first write and what it reports,
     the refusal to write an empty one, both merge orders, the pruning of a
@@ -267,17 +267,34 @@ Phase 4: prove the platform seam against real leagues.
     `server:test` and `shots` clean, no console errors; lint up two warnings on
     the two new `useState(saved.…)` lines, the pattern every other setting in
     `App.tsx` already uses.
-  - Manual validation: **still not done — no real queue has ever been written.**
-    Two more mocks on 2026-09-07 got no further, and the reason is now confirmed
-    rather than suspected: the browser was running bridge **1.0.0** throughout.
-    It logs no version banner, its filter is `/^(?:0|H|R|P)(?:\||$)/` so every
-    `Q` is dropped before it leaves the page, and it has no write path at all.
-    That accounts for all three symptoms seen, and for the `10888301` run above.
-    The manager's own stored source reads 1.3.0, so what is saved and what is
-    injected disagree: it is a real reinstall that is untested, not the code.
-    Next mock: confirm `v1.3.0 loading` in the room's console **first**, and only
-    then turn the setting on, star a player, and watch for the `S|` and the `Q|`
-    that answers it.
+  - Manual validation: **done, live, 2026-09-07 in league `876392`.** A queue
+    set from the app appeared in Yahoo's own queue panel: the user cleared the
+    room's queue by hand, turned Autodraft on and watched it fill, then switched
+    to Mirror, starred a few players and watched those written too. That is the
+    criterion this task had never met, and the two mocks earlier the same day
+    that got no further were the browser running bridge **1.0.0** throughout —
+    it logs no version banner, its filter drops every `Q` before it leaves the
+    page, and it has no write path at all.
+  - **Found by the same run, and it is a defect rather than a limitation:**
+    un-starring a player does not remove him from the Yahoo queue. `queuePlan`
+    merges `theirs` — the queue Yahoo last reported — underneath `mine`, and
+    after any write Yahoo echoes the app's own list straight back, so every
+    player the app has ever queued returns as though the user had put him there.
+    The star control can add and can never remove. This task recorded the
+    symptom as "a duplicate already written into Yahoo's queue survives this",
+    which undersells it: it is every removal, not only a duplicate.
+    The fix is knowable — have the room remember the ids it wrote and treat
+    Yahoo's reported queue minus those as the user's own — and it is not taken
+    here, because it changes the one path that writes to a league platform and
+    `DECISIONS.md` constrains it. **Raised with the user, awaiting a decision.**
+    Until then the workaround is ordered: un-star in the app first, then delete
+    in Yahoo's panel, because deleting while starred writes him back.
+  - Not explained, and not chased mid-draft: the capture running throughout
+    recorded 113 frames on the watched tab and not one `S|`, on a tab whose
+    `window.WebSocket` is `Bridged`. The likeliest reading is that the watched
+    tab's socket was displaced when a second connection took the seat, so its
+    own bridge returns early at the `readyState !== OPEN` guard while still
+    recording what arrives. A hypothesis, recorded as one.
   - Dependencies or blockers: none.
   - Still unverified, and cheap to settle in the same mock:
     - Whether Yahoo's own draft room redraws its queue from a `Q|` it did not
@@ -286,6 +303,25 @@ Phase 4: prove the platform seam against real leagues.
     - Whether Yahoo hands back an existing queue on connect. No longer blocking,
       since the first write no longer waits for one, but it decides whether the
       first write can stop replacing anything.
+
+- [ ] Let the app take a player out of the Yahoo queue, not only put one in.
+  - Scope, if the user agrees it: the room remembers the ids it wrote, and
+    `queuePlan` treats Yahoo's reported queue minus those as the user's own
+    entries. Un-starring then removes, while anything added in Yahoo's own panel
+    still survives every write.
+  - Why: found live on 2026-09-07 in league `876392`, by the run that finally
+    proved the write works. Yahoo echoes the app's own list back in a `Q|`, and
+    `queuePlan` merges that under the stars on every write, so a player the app
+    queued once cannot be got rid of from the app at all. The star control is
+    one-way, which is not what a control that shows a filled star says.
+  - Acceptance criteria: un-starring a player the app queued removes him from
+    the room; an entry the user made in Yahoo's own panel survives a write that
+    does not name him; nothing the app never wrote is ever cleared.
+  - Dependencies or blockers: **a decision.** This is the one path in the
+    project that writes to a league platform, and `DECISIONS.md` carries two
+    entries about it. The rule it is written under -- never clear a queue it did
+    not read -- is kept by the change rather than relaxed, but that is a reading
+    of the rule and the user's to confirm.
 
 - [ ] Keep a seat off Yahoo's autodraft.
   - Scope: not started, and deliberately not started. Reading the captures for
