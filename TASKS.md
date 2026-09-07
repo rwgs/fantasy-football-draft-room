@@ -8,6 +8,36 @@ and belongs in `ROADMAP.md`.
 
 Phase 4: prove the platform seam against real leagues.
 
+- [x] Say which bridge is running, in the app, before it costs another draft.
+  - Scope: the service stamps a build into every copy of the userscript it hands
+    out at `/userscript/yahoo-draft-bridge.user.js`; the running copy reports
+    that build and its `@version` on every post; the room records it; the app
+    shows the version in the masthead always and raises a banner when the build
+    does not match the file on disk. New `server/src/bridge.js` holds the
+    reading, because what a stale install looks like is not obvious and the
+    reasoning belongs next to it.
+  - Why: 2026-09-07 cost three mock drafts to a bridge that served, stored and
+    listed as 1.3.0 while running 1.0.0 — no queue write, and every `Q` dropped
+    by a filter three versions old. The service was working correctly the whole
+    time. `DECISIONS.md` records it, and the same failure had already taken a
+    live draft from the panel, which is why the panel left the manager entirely.
+    The bridge cannot: it needs `document-start` to wrap `WebSocket`.
+  - Acceptance criteria: a copy too old to name itself reads as behind rather
+    than as unknown; a copy run from the repository is never called stale; a
+    matching version with a different build is called stale. All three met.
+  - Automated validation: eight checks in `npm run server:test` under
+    `bridge.test.js`, covering the stamp, that both ends hash the same bytes,
+    the mark appearing exactly once, and each of the five readings. Typecheck,
+    lint, `server:test` and `bridge:test` clean. `bridge:test` runs unstamped by
+    construction and its log now says so, which is the escape hatch being
+    exercised rather than asserted about.
+  - Manual validation: **outstanding.** The banner has not been seen on screen,
+    because seeing it needs the very reinstall it exists to ask for. Next mock:
+    install from the service, confirm the room's console names the build, and
+    confirm the masthead shows it and no banner appears. Then, separately,
+    confirm the banner does appear against a deliberately stale copy.
+  - Dependencies or blockers: none.
+
 - [ ] Populate `client/fixtures.local.json` and run the full engine self-test.
   - Scope: copy `client/fixtures.example.json`, fill in real Sleeper league
     IDs, a keeper league, and a finished draft with its pick and keeper counts.

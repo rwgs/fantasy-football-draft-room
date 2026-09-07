@@ -47,10 +47,12 @@ same player.
     stranger can name a league ID and each one is a new key.
 - `userscript/` — the Yahoo draft bridge, which runs in the user's own browser
   because Yahoo answers a session cookie the service must never hold. It is
-  installed by hand into a userscript manager, not built or served from here.
-  Sleeper needs nothing like it. The one thing this project sends to a league
-  platform leaves from here: a draft queue, behind a setting that is off, and
-  never a pick. See `DECISIONS.md` before widening that.
+  installed into a userscript manager from the service, which stamps a build
+  into the copy it hands out so the running copy can report which one it is; a
+  stale install otherwise mirrors picks perfectly while writing no queue, and
+  says nothing. Sleeper needs nothing like it. The one thing this project sends
+  to a league platform leaves from here: a draft queue, behind a setting that is
+  off, and never a pick. See `DECISIONS.md` before widening that.
 
 Nothing is generated or built into the tree. `client/dist` is a build output
 and `server/data/cache` is a cache; neither is edited by hand.

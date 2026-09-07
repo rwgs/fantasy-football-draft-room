@@ -115,6 +115,20 @@
   /** Bumped with `@version` above. Logged so the running copy is never in doubt. */
   const VERSION = '1.3.0';
 
+  /**
+   * Which copy this is, stamped in by the service on the way out.
+   *
+   * `@version` is not enough and 2026-09-07 is why: the manager served 1.3.0,
+   * stored 1.3.0 and listed 1.3.0 while running 1.0.0 in the room. Every
+   * account agreed except the running one, so the running one is what reports
+   * now. See `server/src/bridge.js`.
+   *
+   * The comparison is split so this line is not itself the thing substituted:
+   * the mark appears exactly once in this file, and that once is above.
+   */
+  const BUILD = '__BRIDGE_BUILD__';
+  const STAMPED = BUILD !== '__BRIDGE' + '_BUILD__';
+
   const log = (...args) => console.log('[yahoo-bridge]', ...args);
 
   // Said before anything that could go wrong, so the running version is known
@@ -122,7 +136,8 @@
   // end, which told you the version only when nothing had gone wrong, which is
   // exactly when nobody needs it.
   log('v' + VERSION + ' loading in the ' + (window.top === window ? 'top frame' : 'an iframe')
-    + ' at ' + location.pathname);
+    + ' at ' + location.pathname
+    + ', build ' + (STAMPED ? BUILD : 'unstamped (running from source)'));
 
   // ---- Which league, and which seat --------------------------------------
   //
@@ -322,7 +337,10 @@
     const sendingFrames = pending;
     pending = [];
 
-    const body = { team: TEAM, frames: sendingFrames };
+    // Says which copy is talking, on every post rather than once. It is forty
+    // bytes and it survives a service restart without anything having to
+    // remember to say it again, which is the same reason `needPool` exists.
+    const body = { team: TEAM, frames: sendingFrames, bridge: { version: VERSION, build: BUILD } };
     try {
       if (!poolSent) body.pool = await readPool();
       if (!seatsSent) body.seats = await readSeats();

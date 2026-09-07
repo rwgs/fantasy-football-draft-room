@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { ADP_FEEDS, ADP_RULES, FORMATS, buildBoard, nearestSize } from './board.js';
 import { parseRankings } from './rankings.js';
 import { PLATFORM_NAMES, platformFor } from './platforms/index.js';
+import { currentBridge, stampedBridge } from './bridge.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -158,25 +159,30 @@ app.get('/api/health', (_req, res) => {
 });
 
 /**
- * The Yahoo bridge userscript, served so a userscript manager can install it.
+ * The Yahoo bridge userscript, served so a manager can install it and stamped
+ * so the copy that ends up running can say which one it is.
  *
- * Pasting the file into Tampermonkey's editor works once and then rots: the
- * copy in the browser stops matching the copy in the repository and nothing
- * says so. Installed from this address instead, the manager records where it
+ * Installed from this address rather than pasted, the manager records where it
  * came from and can fetch it again, which is the only way an edit here reaches
- * a draft room without a human remembering to re-paste it.
+ * a draft room without a human remembering to re-paste it. That was not enough
+ * on its own, and `bridge.js` says what happened when it was relied on.
  *
- * It is served from the service rather than the client because the service is
- * the half that is running whenever the bridge has anything to post to, and
- * because this is the origin the bridge already names.
+ * Served from the service rather than the client because the service is the
+ * half that is running whenever the bridge has anything to post to, and because
+ * this is the origin the bridge already names.
  */
+app.get('/api/bridge/build', (_req, res) => {
+  res.set('cache-control', 'no-store');
+  res.json(currentBridge());
+});
+
 app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
   // The extension is what makes a userscript manager offer to install rather
   // than the browser offering to display, so the type must not turn it into a
   // download or a page.
   res.type('text/javascript; charset=utf-8');
   res.set('cache-control', 'no-store');
-  res.sendFile(join(HERE, '..', '..', 'userscript', 'yahoo-draft-bridge.user.js'));
+  res.send(stampedBridge());
 });
 
 /*

@@ -13,7 +13,7 @@ import { createDraft, runToUserTurn } from './engine/draft';
 import type { DraftEngine } from './engine/draft';
 import { YAHOO_MOCK_ROSTER, rosterSize } from './engine/roster';
 import type {
-  AppMode, Board, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
+  AppMode, Board, BridgeStatus, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
   NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague, SortKey,
 } from './engine/types';
 import type { RankingSource, Theme } from './storage';
@@ -216,6 +216,44 @@ export default function App() {
    * so with a refusal rather than a false, and there is nothing to ask it again.
    */
   const [roomPrices, setRoomPrices] = useState(false);
+
+  /**
+   * Which userscript is feeding the room, and whether it is the one this build
+   * expects.
+   *
+   * Asked from here rather than from the draft screen because a stale bridge is
+   * a condition of the whole app rather than of one screen, and because the
+   * answer is worth most before a draft opens, while there is still time to
+   * reinstall. It rides on the room state the app already reads.
+   */
+  const [bridge, setBridge] = useState<BridgeStatus | null>(null);
+
+  /**
+   * Which room the question even applies to, derived rather than cleared.
+   *
+   * The last answer is left in state when it stops applying and the render is
+   * gated on this instead, because clearing it from the effect would be a
+   * synchronous setState on a path that renders nothing anyway.
+   */
+  const bridgeRoom = mode === 'assistant' && activePlatform === 'yahoo' ? liveDraftId : null;
+
+  useEffect(() => {
+    if (!bridgeRoom) return undefined;
+    let alive = true;
+    const ask = async () => {
+      const room = await fetchRoomState('yahoo', bridgeRoom).catch(() => null);
+      // A refusal says nothing about the bridge, so the last answer stands
+      // rather than a dropped request reading as a bridge that went away.
+      if (!alive || !room) return;
+      setBridge(room.bridge);
+    };
+    void ask();
+    const timer = setInterval(() => { void ask(); }, ROOM_WAIT_MS);
+    return () => { alive = false; clearInterval(timer); };
+  }, [bridgeRoom]);
+
+  /** What the masthead and the banner read. Absent where it does not apply. */
+  const bridgeSeen = bridgeRoom ? bridge : null;
 
   useEffect(() => {
     // Left as it was where there is no room to ask about. What it is worth is
@@ -880,6 +918,22 @@ export default function App() {
           {mode === 'assistant' ? 'Draft assistant' : 'Mock'}
         </span>
 
+        {/*
+          * The bridge's own account of itself, shown whenever one is talking.
+          *
+          * Not only on a mismatch: a version on screen while things work is how
+          * the next stale copy is spotted in seconds rather than in a session,
+          * which is the whole lesson of 2026-09-07.
+          */}
+        {bridgeSeen && (
+          <span className="hint">
+            {'bridge '}
+            {bridgeSeen.version ?? 'unknown'}
+            {bridgeSeen.fromSource ? ' · from source'
+              : bridgeSeen.build ? ` · ${bridgeSeen.build}` : ''}
+          </span>
+        )}
+
         {board && (
           <span className="hint" style={{ marginLeft: 'auto' }}>
             {board.meta.year}
@@ -940,6 +994,37 @@ export default function App() {
           {anonymous ? 'Names hidden' : 'Hide names'}
         </button>
       </header>
+
+      {/*
+        * Said once, where it cannot be missed, and only when it is true.
+        *
+        * A bridge that is behind still mirrors picks, which is exactly what
+        * makes it dangerous: the board looks right while the half that writes
+        * your queue is missing. On 2026-09-07 a copy three versions old ran a
+        * whole session that way, with the manager reporting it as current.
+        */}
+      {bridgeSeen?.stale && (
+        <div className="banner is-bad" role="status" style={{ margin: '10px 18px 0' }}>
+          <span>
+            <b>The Yahoo bridge in your browser is out of date.</b>
+            {' '}
+            {bridgeSeen.tooOld
+              ? 'It is too old to say which build it is'
+              : `It is build ${bridgeSeen.build}`}
+            {bridgeSeen.version ? ` (version ${bridgeSeen.version})` : ''}
+            {`, and this app expects ${bridgeSeen.current.version} (build ${bridgeSeen.current.build}).`}
+            {' Picks will still mirror, but your queue will not be written.'}
+            {' Reinstall from '}
+            <a
+              href="http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js"
+              style={{ color: 'var(--chalk-2)' }}
+            >
+              the service
+            </a>
+            {', then reload the draft room and check its console says the build above.'}
+          </span>
+        </div>
+      )}
 
       {screen === 'setup' && (
         <SetupScreen

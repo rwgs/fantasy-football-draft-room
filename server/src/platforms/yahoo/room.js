@@ -95,6 +95,17 @@ function blank(leagueId) {
     queue: null,
     /** What the app wants queued, already resolved to Yahoo ids. */
     wanted: null,
+    /**
+     * Which copy of the userscript is posting, as it describes itself.
+     *
+     * Null is two different things, so `bridgeSeen` keeps them apart: a room
+     * nothing has posted to knows of no bridge at all, while a room being
+     * posted to by something that sends no identity is being posted to by a
+     * copy older than the stamp. That second case is the one that cost a
+     * session on 2026-09-07. See `server/src/bridge.js`.
+     */
+    bridge: null,
+    bridgeSeen: false,
     updatedAt: 0,
   };
 }
@@ -131,6 +142,16 @@ export function applyPost(leagueId, body) {
   const room = rooms.get(id) || blank(id);
 
   if (Number(body?.team) > 0) room.mySeat = Number(body.team);
+
+  // Recorded before anything can throw, so a post that fails halfway still
+  // counts as a bridge having spoken. Silence is the signal being read here.
+  room.bridgeSeen = true;
+  if (body?.bridge && typeof body.bridge === 'object') {
+    room.bridge = {
+      version: String(body.bridge.version ?? '').slice(0, 32) || null,
+      build: String(body.bridge.build ?? '').slice(0, 64) || null,
+    };
+  }
 
   // The pool is the only thing here that maps a pick to a person, so it is
   // replaced wholesale rather than merged: a partial pool would resolve some

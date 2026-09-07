@@ -21,6 +21,7 @@ import { joinKey, normPos, normTeam } from '../../names.js';
 import {
   applyPost, getAdvice, getRoom, queuePlan, roundCount, setAdvice, setWanted, teamCount,
 } from './room.js';
+import { bridgeStatus } from '../../bridge.js';
 
 /**
  * A Yahoo league ID as the draft room writes it: bare digits.
@@ -391,6 +392,10 @@ export async function roomState(leagueId) {
     // whose pool carries no ADP at all cannot price one, and saying it could
     // would send the app back for a board that is no different.
     pricesBoard: !!(room && adpFromPool(room)),
+    // Which userscript is feeding this room. It rides on the state the app
+    // already polls rather than a check of its own, because a version nobody
+    // asks for is a version nobody sees. See `server/src/bridge.js`.
+    bridge: bridgeStatus(room?.bridge, !!room?.bridgeSeen),
   };
 }
 
@@ -433,8 +438,12 @@ export async function putAdvice(leagueId, advice) {
  */
 export async function readAdvice(leagueId) {
   const plan = queuePlan(leagueId);
+  const room = getRoom(leagueId);
   return {
     advice: getAdvice(leagueId),
+    // Which userscript is feeding this room, so the app can show it and say so
+    // when it is behind. Null until something has posted. See `bridge.js`.
+    bridge: bridgeStatus(room?.bridge, !!room?.bridgeSeen),
     queue: {
       // `off`, `first` or `ready`. The panel says which, because `first` is the
       // write that replaced a queue nobody had read, and saying so afterwards is

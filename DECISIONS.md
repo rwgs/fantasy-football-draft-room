@@ -9,6 +9,113 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-07 The running bridge reports its own build, and the app says so
+
+Status: Accepted.
+
+### Decision
+
+The service stamps a build into every copy of the userscript it hands out, the
+running copy reports that build on every post, and the app shows the version it
+is talking to — always, not only when it is wrong. A build that does not match
+the file on disk raises a banner naming both.
+
+The build is a hash of the source. The `@version` rides alongside it because
+that is what a manager displays and what a human recognises.
+
+### Why
+
+A userscript manager is a place a script can go stale in silence, and this
+project has now lost two live drafts to it.
+
+The first was the panel, and `The panel is a bookmarklet` below records it: "the
+manager reported the script as up to date, the served file was right, and the
+body being executed was not." The panel escaped by leaving the manager entirely.
+
+The bridge cannot take that exit. It has to be injected at `document-start` to
+wrap `WebSocket` before Yahoo's bundle builds one, and only a manager can do
+that. On 2026-09-07 it failed the same way and cost a session: the service
+served 1.3.0, the manager's storage held 1.3.0, the manager's list said 1.3.0,
+and the body running in the draft room was 1.0.0 — no queue write, and every
+`Q` dropped by a filter three versions old. Three mock drafts were spent
+diagnosing a service that was working correctly.
+
+Every account of that script agreed except the only one that mattered. So the
+account that matters is the one that now speaks: a script describing itself is
+the single claim a stale install cannot fake.
+
+A hash rather than a number, for the reason the panel decision gives — the
+version that goes wrong is the one somebody forgot to raise. Hashed before the
+stamp is applied so both ends measure the same bytes, and read per request so an
+edit needs no restart of a service that may be holding a live draft.
+
+Shown always rather than on mismatch alone, because the failure was never that
+nobody was told; it was that there was nothing on screen to contradict. A
+version in the masthead is how the next one is caught in seconds.
+
+### What it costs, and what still holds
+
+A copy run straight from the repository leaves the mark unspent. It claims no
+build rather than a wrong one, and is never called stale, because that copy is
+the current source and cannot be behind it. `npm run bridge:test` runs in
+exactly that state and its log says so.
+
+A copy too old to name itself at all is reported as behind by definition rather
+than as unknown. That is the case this exists for, and treating silence from
+something that is actively posting as "no information" is precisely what went
+wrong.
+
+The bridge still decodes nothing and still sends only `S|`. Nothing here widens
+what leaves the browser: the identity rides on the post it already makes.
+
+### Rejected
+
+**A version number alone.** It would have caught 2026-09-07, and it would miss
+a copy edited without the number being raised — the failure the panel decision
+already argued about and settled.
+
+**The bridge hashing its own source at runtime.** No serving needed, but a
+manager that wraps or rewrites the body yields a false mismatch on an identical
+script, and a banner that cries wolf is worse than no banner.
+
+**Warning in the bridge's own console only.** That is where the evidence was all
+along, and nobody was looking at it. The app is where the user is.
+
+## 2026-09-07 Two premises under the first queue write did not survive
+
+Status: Accepted. Corrects the reasoning under
+`2026-09-06 The first queue write happens without reading the queue`, which is
+left standing: its decision holds and its record is not rewritten.
+
+### Decision
+
+The decision it corrects is unchanged. What changes is what is believed about
+why, and how often it applies.
+
+### Why
+
+**A Yahoo queue can be read.** The entry says no frame reports one unprompted.
+The connect burst does: a `Q`, arriving bare when the queue is empty, observed
+twice in league `10893050` and again in `10900454` by a recorder attached before
+the room loaded. Every capture behind the original finding began after the socket
+was already open, which is why none of them held one.
+
+So `first` should mean "the bridge attached late" rather than "the queue is
+unknowable", and it should be rare. It was not rare in testing because the
+browser was running bridge 1.0.0, whose filter drops every `Q` before it leaves
+the page — see the entry above this one.
+
+**An empty queue causing autodraft is unsupported** rather than false. Nothing
+observed since shows it. Every drop watched has followed a clock expiring
+unpicked, which accounts for all of them without the queue coming into it.
+
+### What it costs, and what still holds
+
+The cost the original weighed is unchanged: a first write still replaces a queue
+it has not seen. What changed is how often that arises, and with it the weight
+of the argument for writing in ignorance. Whether `first` should still write now
+that it is the narrow case is open, and deliberately not settled here.
+
 ## 2026-09-06 The first queue write happens without reading the queue
 
 Status: Accepted. Reverses "a queue the app has not read is never overwritten"
@@ -45,28 +152,6 @@ insurance against wandering off; it is what stands between the user and Yahoo's
 algorithm from the first pick. A rule that withholds the write until the user
 acts withholds it for the whole draft, and does so most firmly in the rooms
 where it was most wanted.
-
-**Corrected 2026-09-07.** Two of the premises above do not survive, and the decision
-still stands.
-
-The first bullet is false: Yahoo does report a queue unprompted. The connect
-burst carries a `Q`, arriving bare when the queue is empty, observed twice in
-league `10893050` by a recorder attached before the room loaded. Every capture
-behind the original finding began after the socket was already open, which is
-why none of them held one. So `first` should mean "the bridge attached late"
-rather than "the queue is unknowable" — and the `10888301` run above, where the
-queue was never written, was running bridge 1.0.0, whose filter drops every `Q`
-before it leaves the page.
-
-The autodraft premise is unsupported rather than false. Nothing observed since
-shows an empty queue putting a seat into autodraft; every drop watched has
-followed a clock expiring unpicked, which accounts for all of them without the
-queue coming into it.
-
-What is unchanged is the cost the decision weighed: the first write still
-replaces a queue it has not seen. What has changed is how often that arises,
-and whether `first` should still write in ignorance now that it is the narrow
-case rather than the ordinary one is worth reopening.
 
 ### What it costs, and what still holds
 

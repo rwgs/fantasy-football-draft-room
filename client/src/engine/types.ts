@@ -639,6 +639,23 @@ export type QueuePriority = 'app' | 'yahoo';
  * The one question about a Yahoo league whose ordinary answer is "not yet", and
  * so the one that reports rather than refusing.
  */
+/**
+ * Which copy of the Yahoo bridge is posting, and whether it is the one this
+ * build expects.
+ *
+ * Null on a room nothing has posted to. `tooOld` is a copy that posted without
+ * naming itself, which is every version before the stamp existed; `fromSource`
+ * is one run straight from the repository, which cannot be behind anything.
+ */
+export interface BridgeStatus {
+  version: string | null;
+  build: string | null;
+  tooOld: boolean;
+  fromSource: boolean;
+  stale: boolean;
+  current: { version: string | null; build: string };
+}
+
 export interface RoomState {
   orderIsSet: boolean;
   mySeat: number | null;
@@ -650,6 +667,8 @@ export interface RoomState {
    * own schedule, so this is the only thing that says the answer has changed.
    */
   pricesBoard: boolean;
+  /** Which userscript is feeding the room. Null until something has posted. */
+  bridge: BridgeStatus | null;
 }
 
 /**
