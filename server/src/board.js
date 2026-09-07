@@ -257,6 +257,22 @@ export async function buildBoard({
   const projections = projectionMap(sleeper.rows, format);
   const byKey = new Map();
 
+  /*
+   * A bye is the team's week off, not a fact about one player, and only Fantasy
+   * Football Calculator sends one. Reading it off the team carries it to the
+   * rows FFC does not cover: 339 of the 399 that had none on the live 12 team
+   * half-PPR board. Without it a bench full of players who all sit in week 7
+   * shows an empty bye column, no clash highlight and no clash in the grade,
+   * which reads as a well-covered roster rather than as a missing field.
+   *
+   * All 32 teams are covered and none of them disagrees with itself, so the
+   * first row for a team settles it.
+   */
+  const byeByTeam = new Map();
+  for (const p of ffc.players) {
+    if (p.team && p.bye && !byeByTeam.has(p.team)) byeByTeam.set(p.team, p.bye);
+  }
+
   // Start from the market board. These are the players humans actually draft.
   let matched = 0;
   for (const p of ffc.players) {
@@ -295,7 +311,7 @@ export async function buildBoard({
       name: proj.name,
       position: proj.position,
       team: proj.team,
-      bye: null,
+      bye: byeByTeam.get(proj.team) ?? null,
       ffcAdp: null,
       sleeperAdp: proj.sleeperAdp,
       sleeperAdpFrom: proj.sleeperAdpFrom,

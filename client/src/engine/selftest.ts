@@ -146,6 +146,22 @@ async function main() {
     check('every id is still unique', new Set(board.players.map((p) => p.id)).size
       === board.players.length);
 
+    /*
+     * A bye is the team's week off. Only Fantasy Football Calculator sends one,
+     * so every row it does not cover used to carry none -- 399 of 626 on this
+     * board -- and a roster whose starters all sit in the same week showed an
+     * empty bye column, no clash highlight and no clash in the grade. That
+     * reads as a well-covered roster rather than as a missing field.
+     *
+     * A player with no team has no bye to know, which is the only reason a row
+     * may still be without one.
+     */
+    const noBye = board.players.filter((p) => p.bye == null && p.team);
+    check('every player on a team has that team\'s bye week',
+      noBye.length === 0,
+      noBye.length + ' without one, e.g. ' + noBye.slice(0, 3)
+        .map((p) => p.name + ' ' + p.team).join(', '));
+
     /* Whoever is drafted, every count stays a number. */
     let e = createDraft(league(), DEFAULT_CPU, board.players, null);
     const spread = board.players.filter((_, i) => i % 37 === 0).slice(0, 12);
