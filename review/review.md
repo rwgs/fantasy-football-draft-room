@@ -4,7 +4,7 @@ Reviewed: 2026-09-07. Branch: `yahoo-platform`.
 HEAD at review time: `d4d71f7fbd053594ad2e2560d0b7537b5b9e6c42`.
 The working tree was clean before this review.
 
-**Status, updated 2026-09-07 after the first pass of fixes.** Seven findings are
+**Status, updated 2026-09-07 after two passes of fixes.** Seven findings are
 fixed and committed: R8, R7, R4, R5, R3, R9 and R2. Those were the findings that
 are defects with one right answer, so none of them needed a product decision
 first. See "What has been fixed" below for what changed and what each fix is
@@ -14,6 +14,12 @@ because it is what the defect was; the FIXED note says what it is now. Every
 finding carries its state in the Status column below and, where it is fixed, in
 its own heading, so a scan of this report does not read finished work as work
 waiting.
+
+The second pass took the two remaining pieces that were defects rather than
+decisions: R2's missing projection, which was blocked only on a fact the feed
+itself holds, and M5's bye coverage, where the board dropped a week it already
+knew. Both are recorded in their own sections. What is left of M5 is the grade,
+and it stays open with the other seven.
 
 ## Assessment
 
@@ -43,23 +49,26 @@ The ranking is an engineering judgment about likely breadth and size of improvem
 | 6 | R4 - Wrong survivor value | **Fixed** | **IN SCOPE.** Yahoo uses this forecast. | None. |
 | 7 | R5 - Zero survival fallback | **Fixed** | **IN SCOPE.** Yahoo targets and pool odds use these consumers. | None. |
 | 8 | M2 - Projections and personal ranks | Open | **IN SCOPE.** These limitations affect Yahoo player assessment. | Changes solely to how mock opponents follow uploaded rankings can wait; preserve checks on any shared forecast behavior. |
-| 9 | R2 - Duplicate player identity | **Fixed**, bar the projection | **IN SCOPE.** Yahoo resolves its picks against this same board. | None: the invalid position and unmatched projection are shared data defects. |
+| 9 | R2 - Duplicate player identity | **Fixed** | **IN SCOPE.** Yahoo resolves its picks against this same board. | None: the invalid position and unmatched projection are shared data defects. |
 | 10 | R9 - Corrected live picks | **Fixed** | **IN SCOPE.** Yahoo uses the same polling guard. | Sleeper-specific end-to-end coverage can wait; the shared correction needs a Yahoo check. |
 | 11 | R8 - Numerical survival tail | **Fixed** | **IN SCOPE.** Yahoo uses the generic fallback, including on-clock advice under R3. | None. |
 | 12 | M4 - Calibration | Open | **IN SCOPE.** Calibrate the Yahoo assistant's forecasts and advice. | **DEFERRABLE:** Sleeper-specific calibration and standalone mock-room realism, controls, or pacing. Shared forecast behavior remains in scope. |
 | 13 | R10 - Feed degradation | Open | **IN SCOPE.** Yahoo depends on the shared board builder and feeds. | None for the board sources; these are not Sleeper league-import requests. |
-| 14 | M5 - Grade and byes | Open | **IN SCOPE, lower priority than live picks.** The assistant also opens the results screen when the draft ends. | Not mock-only. A richer post-draft grade can follow the live-advice repairs. |
+| 14 | M5 - Grade and byes | Open; bye coverage fixed | **IN SCOPE, lower priority than live picks.** The assistant also opens the results screen when the draft ends. | Not mock-only. A richer post-draft grade can follow the live-advice repairs. |
 | Conditional / deferrable | M3 - Dynasty context | Open | **CONDITIONAL.** Applies if the Yahoo league is dynasty or the dynasty board is selected. | **DEFERRABLE if the Yahoo draft is redraft.** The league's dynasty status has not been established in this review. |
 
 **DEFERRABLE validation:** populating Sleeper league fixtures and completing the two skipped Sleeper real-league suites is not a blocker for this Yahoo-focused review. Checks dedicated solely to the standalone Mock draft option can also wait. Shared engine tests, synthetic forecast fixtures, board-source checks, and Yahoo bridge/assistant checks remain relevant even when they use simulated inputs. Preserve the existing broader gate results recorded below; they were already run during the initial audit.
 
 ## What has been fixed
 
-Seven findings, in the order the report ranks them, each its own commit. 31 new
-checks in `npm run engine:test`. Typecheck, lint, `engine:test`, `server:test`,
-`bridge:test`, build and `shots` clean, no console errors, lint warnings
-unchanged at 43 against a stashed baseline. One pre-existing `engine:test`
-failure is unrelated to these fixes and is described under "Still outstanding".
+Seven findings in the first pass, in the order the report ranks them, each its
+own commit. 31 new checks in `npm run engine:test`. Then two more pieces in a
+second pass: R2's missing projection and M5's bye coverage, adding one check to
+`engine:test` and four to `server:test`. Typecheck, lint, `engine:test`,
+`server:test`, `bridge:test`, build and `shots` clean, no console errors, lint
+warnings unchanged at 43 against a stashed baseline. One pre-existing
+`engine:test` failure is unrelated to any of it and is described under "Still
+outstanding".
 
 | Finding | What changed | Checked by |
 | --- | --- | --- |
@@ -70,12 +79,15 @@ failure is unrelated to these fixes and is described under "Still outstanding".
 | R8 | `logNormalTail` joins `normalCdf`, and the conditional survival is a ratio taken in logs. Above two standard deviations the tail comes from the Mills ratio as a continued fraction, which has relative accuracy where Abramowitz and Stegun has only a fixed absolute error. | The ADP 10, sd 1 case reads 0.21% rather than 100%; the odds fall as the wait runs; an extreme tail stays a probability and never climbs. |
 | R9 | `sameLivePicks` compares by slot and player, sorted, rather than by count. Overlapping poll answers are numbered and a stale one is dropped. | `[A, B]` then `[A, C]` puts B back and takes C without waiting for a third pick; the same picks reordered are not mistaken for a change. |
 | R2 | `DRAFTABLE` names the six positions a roster slot can hold, and both boundaries that build a board row are checked against it. `normPos` keeps its pass-through, which is what a diagnostic wants. | Every board position is one a roster can hold; nobody appears twice under two ids; every count stays finite. These two fail against the pre-fix service and pass against the fixed one. |
+| R2, second pass | `projectionMap` reads the first `fantasy_positions` entry a roster can hold when the position a player is filed at is not one, so a two-way player's projection reaches the row the market already put on the board rather than being dropped with the record. | Hunter's WR row carries 83.1 in half-PPR on one row, not two. Four checks on hand-written records rather than this season's example: the fantasy position is read, a player with no draftable fantasy position is still dropped, the filed position still wins when a roster can hold it, and a record naming no position is not keyed empty. |
+| M5, byes | `buildBoard` reads a team's bye off the team, since it is the team's week off and only Fantasy Football Calculator sends one. Every row FFC does not cover had none. | 339 of the 399 rows without a bye gained it, and the 60 left are exactly the rows with no team. Fails against the pre-fix service, naming three of the 339. |
 
-Two of the new checks were confirmed by failing rather than assumed. The R2
-board checks were run against both a pre-fix and a post-fix service. The
-extreme-tail check caught a genuine underflow boundary while being written: past
-about eighty standard deviations the probability really is zero to double
-precision, so the assertion was corrected rather than the code.
+Several of the new checks were confirmed by failing rather than assumed. The R2
+board checks were run against both a pre-fix and a post-fix service, as were the
+bye check and the fantasy-position check in the second pass. The extreme-tail
+check caught a genuine underflow boundary while being written: past about eighty
+standard deviations the probability really is zero to double precision, so the
+assertion was corrected rather than the code.
 
 The board went from 626 rows to 625, carries only the six supported positions,
 and holds no duplicate name. On the live 12 team half-PPR board R7 changed the
@@ -84,13 +96,13 @@ been inflating RB and WR worth against QB and TE for every player on it.
 
 ### Still outstanding from the fixed findings
 
-- **R2, the missing projection.** Travis Hunter's WR row still has no projected
-  points. The report asks that the DB record not simply be discarded leaving the
-  WR projection missing, and that half is not done, deliberately: attaching
-  Sleeper's 83.1 points filed under DB would assert it is a receiving projection
-  rather than an IDP one, and if it is IDP then attaching it silently corrupts
-  his worth -- worse than the missing value the board already shows honestly.
-  That is a question about what the feed means, not about this code.
+- **R2, the missing projection: now fixed.** It was held back on the grounds
+  that attaching Sleeper's 83.1 points filed under DB would assert a receiving
+  projection where an IDP one silently corrupts his worth. The payload settles
+  it -- see R2 below for the three points columns 17.5 apart -- so the record is
+  read at the fantasy position rather than the filed one, and his WR row carries
+  its projection. Reading the feed was the whole of the work; nothing about it
+  needed a decision.
 - **One pre-existing check fails against today's feeds.** `engine:test` reports
   "an ordinary room reads as no lean" with WR at 1.9 against a threshold of 1.5.
   This is not from the fixes: the pre-fix commit run in a worktree against the
@@ -104,8 +116,9 @@ been inflating RB and WR worth against QB and TE for every player on it.
 
 ## What is still open, and why
 
-Eight findings are untouched. They fall into two groups, and neither is blocked
-on the work above.
+Eight findings are still open, seven of them untouched and M5 now open only in
+its grade half. They fall into two groups, and neither is blocked on the work
+above.
 
 **Needs a fact this repository does not hold.** R1, the league's scoring inputs,
 is the report's own first priority and is conditional on the actual Yahoo rules:
@@ -115,8 +128,10 @@ settings as the user set them, so nothing in the tree answers it.
 
 **Changes an accepted product decision.** M1 (the team-building objective), the
 bench-valuation half of R6, M2 (personal ranks and projection sources), M4
-(calibration), M5 (grade and byes) and M3 (dynasty context) all revise what the
-app is deciding rather than fix a defect in how it decides it. M1 and R6 are
+(calibration), the grade half of M5 and M3 (dynasty context) all revise what the
+app is deciding rather than fix a defect in how it decides it. What a letter
+should mean, and whether a static season total is the right thing to rank at
+all, is the whole of what is left in M5; its byes were a defect and are fixed. M1 and R6 are
 constrained by the 2026-09-05 recommendation entry in `DECISIONS.md`, which the
 report notes should be reconsidered explicitly before being changed. R10 (feed
 degradation) is a reliability change whose scope -- what counts as degraded
@@ -277,9 +292,11 @@ Recommended direction: keep **market availability** and **player assessment** se
 
 The [FantasyPros decision](../DECISIONS.md), under "2026-09-05 FantasyPros is not a source on the free tier", records a tested row limit and explicitly defers integration without suitable paid access. This review does not propose working around that limit or making a paid service mandatory.
 
-### R2 - P1: the current feed creates two draftable versions of Travis Hunter (FIXED, except the projection)
+### R2 - P1: the current feed creates two draftable versions of Travis Hunter (FIXED)
 
-**FIXED, except the projection.** `DRAFTABLE` in `server/src/names.js` names the six positions a roster slot can hold, and both boundaries that build a board row check against it, so the DB record no longer reaches the board: 625 rows, six positions, no duplicate name, no `NaN` count. `normPos` keeps its pass-through, and PK/DST/dual-eligibility mapping is unchanged. **Still open:** Hunter's WR row has no projection, and attaching Sleeper's DB total would assert it is a receiving projection rather than an IDP one -- if it is IDP that silently corrupts his worth, which is worse than the honest gap. Left for a decision. Four checks in `engine:test`, confirmed by failing against a pre-fix service.
+**FIXED.** `DRAFTABLE` in `server/src/names.js` names the six positions a roster slot can hold, and both boundaries that build a board row check against it, so the DB record no longer reaches the board: six positions, no duplicate name, no `NaN` count. `normPos` keeps its pass-through, and PK/DST/dual-eligibility mapping is unchanged. Four checks in `engine:test`, confirmed by failing against a pre-fix service.
+
+**The projection followed, once the feed was read rather than reasoned about.** Whether Sleeper's 83.1 points filed under DB is a receiving projection or an IDP one is a fact the payload holds: his three points columns are 65.6 standard, 83.1 half-PPR and 100.6 PPR, each exactly 17.5 apart, which is his 35 projected catches at half a point. An IDP total is the same number in all three, and 83.1 reconciles to his receiving line -- 415 yards, 3 touchdowns, 21 rushing yards -- and not to his 31 tackles. `fantasy_positions` is `["DB", "WR"]`; only `player.position` says DB. So `projectionMap` now reads the first fantasy position a roster can hold when the filed one is not, and Hunter's single WR row carries 83.1 in half-PPR. He is the only record in the 2026 feed this reaches, because `normPos` already maps FB to RB. Four checks in `server:test` against hand-written records rather than this season's example, one of which fails against the pre-fix source.
 
 Evidence: [position normalization and identity](../server/src/names.js), `normPos` and `joinKey`; [projection normalization](../server/src/sources/sleeper.js), lines 94-98; [board join](../server/src/board.js), lines 260-310.
 
@@ -359,7 +376,9 @@ Recommendation: validate position coverage, projection coverage, finite values, 
 
 Acceptance check: empty or malformed-success responses preserve a usable prior snapshot or fail clearly; a hung optional source does not block draft availability; stale selected sources remain visible during the draft.
 
-### M5 - Medium priority: the grade and bye indicators omit substantial parts of a team's usefulness
+### M5 - Medium priority: the grade and bye indicators omit substantial parts of a team's usefulness (bye coverage FIXED)
+
+**The bye half is FIXED**, which is the part of this finding that is a defect rather than a judgment about what a grade should measure. A bye is the team's week off, and the board dropped it for every row Fantasy Football Calculator does not cover. `buildBoard` now reads it off the team: on the live 12-team half-PPR board 339 of the 399 rows without one gained it, and the 60 that remain are the rows with no team, who have no bye to know. One check in `engine:test`, which fails against the pre-fix service naming three of the 339. The rest of this finding is untouched: what the letter grade means, what coverage it exposes, and whether a weekly evaluation replaces the static season total are decisions, not defects.
 
 **Yahoo-relevant, lower priority:** [the draft screen](../client/src/components/DraftScreen.tsx) calls `onFinish` when either mode completes, so these results are not confined to Mock draft. Improve live advice first; treat richer post-draft evaluation as later work.
 
@@ -369,7 +388,7 @@ The grade ranks a static season-total lineup, then spreads letters from A+ throu
 
 The inspected half-PPR board had 399 of 626 rows without a bye, because only FFC supplies that field in the current join. `countByeClashes` skips missing byes, so a low displayed clash count can mean missing information rather than a well-covered roster.
 
-Recommended direction: label the existing grade as projected starting-lineup rank, expose missing-data coverage, and avoid implying a season win probability. Complete team bye mapping if retaining the clash indicator. Add weekly roster evaluation only as part of a defined, validated objective; do not over-prioritize avoiding bye overlaps at the expense of substantially better players.
+Recommended direction: label the existing grade as projected starting-lineup rank, expose missing-data coverage, and avoid implying a season win probability. Complete team bye mapping if retaining the clash indicator -- **done**, as above. Add weekly roster evaluation only as part of a defined, validated objective; do not over-prioritize avoiding bye overlaps at the expense of substantially better players.
 
 ## Source assessment
 
@@ -420,12 +439,12 @@ Scope update validation: rechecked the Yahoo board-building path, assistant fore
 6. **Measure the best survivor consistently (R4).** Remove false scarcity caused by comparing the points leader now with the ADP leader later. **FIXED.**
 7. **Honor zero simulated survival (R5).** Stop recycling players the forecast always loses into reachable targets with generic odds. **FIXED.**
 8. **Make the chosen player research influence advice (M2).** Define the role of personal ranks/projections and separate player assessment from market prices. Source accuracy must be evaluated rather than assumed.
-9. **Repair duplicate identity and eligibility (R2).** Restore correct valuation and removal of affected players, including the reproduced Hunter case. Narrower coverage does not make the duplicate acceptable. **FIXED, except the projection.**
+9. **Repair duplicate identity and eligibility (R2).** Restore correct valuation and removal of affected players, including the reproduced Hunter case. Narrower coverage does not make the duplicate acceptable. **FIXED.**
 10. **Apply corrected Yahoo picks immediately (R9).** Keep availability and rosters correct when pick contents change without a change in count. **FIXED.**
 11. **Fix extreme-tail odds (R8).** Remove false certainty for unusually overdue players; this is a narrower probability defect. **FIXED.**
 12. **Measure real Yahoo effectiveness (M4).** Calibrate forecasts and evaluate strategies against held-out drafts/outcomes. This can change the estimated ranking above; it is required before claiming a winning advantage.
 13. **Harden feed degradation and freshness (R10).** Preserve useful advice through bad or delayed source responses. This is primarily a reliability improvement when feeds misbehave.
-14. **Improve result interpretation and bye coverage (M5).** Address misleading grade confidence and missing byes after the live selection issues. The assistant also displays these results.
+14. **Improve result interpretation and bye coverage (M5).** Address misleading grade confidence and missing byes after the live selection issues. The assistant also displays these results. **Byes FIXED**; the grade is untouched.
 
 For use before those changes, treat the app as a draft board and research aid. Verify league settings and player eligibility, use the Mine view to consult the rankings you trust, and manually assess recommendations and queue contents. Fixing the correctness issues is a higher priority than adding another ADP provider.
 

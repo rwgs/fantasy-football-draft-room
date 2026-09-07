@@ -449,6 +449,53 @@ Phase 4: prove the platform seam against real leagues.
     product decisions.
   - Dependencies or blockers: none.
 
+- [x] Take the last two audit findings that are defects rather than decisions.
+  - Scope: R2's missing projection and M5's bye coverage. `projectionMap` reads
+    the first `fantasy_positions` entry a roster can hold when the position a
+    player is filed at is not one, so a two-way player's projection reaches the
+    board row the market already holds. `buildBoard` reads a bye off the team,
+    because that is whose week off it is, and carries it to every row Fantasy
+    Football Calculator does not cover.
+  - Why: both were left in the first pass, and neither needed a decision after
+    all. R2's projection was held back on the grounds that attaching 83.1 points
+    filed under DB might assert a receiving projection where an IDP one would
+    silently corrupt his worth. The payload answers it: the three points columns
+    are 65.6, 83.1 and 100.6, each exactly 17.5 apart, which is 35 catches at
+    half a point. An IDP total is the same number in all three, and 83.1
+    reconciles to 415 receiving yards and 3 touchdowns rather than to 31
+    tackles. `fantasy_positions` is `["DB", "WR"]`; only `player.position` says
+    DB. M5's byes were never a judgment about grades: 399 of 626 rows carried no
+    bye while the board already knew all 32 teams' weeks, so a roster of
+    starters who all sit in week 7 showed an empty column, no clash highlight
+    and no clash in the grade -- a missing field reading as a covered roster.
+  - Acceptance criteria: Hunter's projection lands on one WR row rather than
+    creating a second person, and every board position stays one a roster can
+    hold; a record with no draftable fantasy position is still dropped; every
+    row on a team has that team's bye, and the rows left without one are exactly
+    the rows with no team. All met. Row count, duplicate names and unsupported
+    positions are unchanged at 626, none and none.
+  - Automated validation: four checks in `npm run server:test` on hand-written
+    records, because the rule is what needs checking and not this season's
+    example -- next year's feed may file Hunter anywhere. One check in
+    `npm run engine:test` for the byes. Both confirmed by failing: the fantasy
+    position check fails against a stashed pre-fix source, and the bye check
+    fails against the service on 5178 before the restart, naming three of the
+    339 rows. Typecheck, lint unchanged at 43 warnings, `server:test` 18/18,
+    `bridge:test` 7/7, `engine:test` 348 passing, build and `shots` clean, no
+    console errors.
+  - Manual validation: **done.** Photographed in a real browser: Oronde Gadsden,
+    a Sleeper-only row, reads "LAC - BYE 7"; the Indianapolis Colts defence,
+    which joins on team rather than name, reads "IND - BYE 13"; and Travis
+    Hunter appears once as a WR with a worth rather than a blank. No console
+    errors on any of the three.
+  - Found while measuring: `normPos` already maps FB to RB, so the two fullbacks
+    that first looked affected never were. Travis Hunter is the only record in
+    the 2026 feed the position fix reaches.
+  - Not acted on: the rest of M5. What the letter grade means, what coverage it
+    exposes, and whether a static season total is the right thing to rank are
+    decisions, and they stay open with the other seven findings.
+  - Dependencies or blockers: none.
+
 ## Blocked
 
 - [ ] Yahoo's own Fantasy Sports API, if the application is ever approved.
