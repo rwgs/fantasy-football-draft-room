@@ -20,7 +20,7 @@ import {
 import { boardCsv } from './exportBoard';
 import { NO_FIXTURES, loadFixtures } from './fixtures';
 import { biggestSteals, gradeDraft } from './grade';
-import { mergePresets } from './live';
+import { mergePresets, sameLivePicks } from './live';
 import {
   keeperPicksIn, pickOrder, picksForTeam, picksInRound, roundOrder, seatOf,
 } from './order';
@@ -243,6 +243,40 @@ async function main() {
       resumed.state.picks.find((p) => p.overall === 40)?.playerId === ids[2]);
     check('nobody appears twice',
       new Set(resumed.state.picks.map((p) => p.playerId)).size === resumed.state.picks.length);
+
+    /*
+     * A CORRECTED PICK IS STILL A CHANGE
+     *
+     * The assistant decided whether to rebuild by comparing how many picks the
+     * room had reported. A commissioner who undoes a pick and replaces it sends
+     * back a list of the same length with a different player in it, so the
+     * board kept the old player unavailable and the new one draftable -- and
+     * the advice, and any queue written from it, ran against a room that had
+     * moved on -- until some later pick changed the count.
+     */
+    const one = (overall: number, playerId: string) => ({ overall, playerId, source: 'live' as const });
+    const ab = [one(1, ids[0]), one(2, ids[1])];
+    check('the same two picks read as the same room',
+      sameLivePicks(ab, [one(1, ids[0]), one(2, ids[1])]));
+    check('the same two picks in the other order still do',
+      sameLivePicks(ab, [one(2, ids[1]), one(1, ids[0])]));
+    check('but B replaced by C is a different room, at the same length',
+      !sameLivePicks(ab, [one(1, ids[0]), one(2, ids[2])]));
+    check('and so is the same player moved to another slot',
+      !sameLivePicks(ab, [one(1, ids[0]), one(3, ids[1])]));
+    check('a pick added is a different room too',
+      !sameLivePicks(ab, [...ab, one(3, ids[2])]));
+
+    /* And the board that follows: B comes back, C goes, without a third pick. */
+    const built = (picks: typeof ab) => runPresetsOnly(
+      createDraft(lg, DEFAULT_CPU, board.players, null, picks),
+    );
+    const withC = built([one(1, ids[0]), one(2, ids[2])]);
+    check('the replacement is on the board and the replaced is back on it',
+      withC.state.picks.some((p) => p.playerId === ids[2])
+        && !withC.state.picks.some((p) => p.playerId === ids[1])
+        && withC.state.availableIds.includes(ids[1]),
+      withC.state.picks.map((p) => p.playerId).join(','));
   }
 
   console.log('\nRoster maths');

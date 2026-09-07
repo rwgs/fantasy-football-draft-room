@@ -16,7 +16,7 @@ import type { DraftEngine } from '../engine/draft';
 import { fetchDraftPicks, postRoomAdvice, postRoomQueue } from '../api';
 import { maskTeam } from '../anon';
 import { pickLabel, pickLabelWithOverall } from '../picks';
-import { livePresets, offBoardPlayer } from '../engine/live';
+import { livePresets, offBoardPlayer, sameLivePicks } from '../engine/live';
 import { replacementPoints } from '../engine/value';
 import { emptyCounts, handcuffsFor } from '../engine/roster';
 import AdpSourcePicker from './AdpSourcePicker';
@@ -200,8 +200,15 @@ export default function DraftScreen(props: Props) {
   useEffect(() => {
     if (!assistant || !draftId || paused || manual) return undefined;
     let alive = true;
+    // Two polls can be in flight at once whenever a request takes longer than
+    // the interval, and a slow answer landing after a fast one would rebuild
+    // the board from the older reading. Each request is numbered and an answer
+    // older than one already applied is dropped.
+    let issued = 0;
+    let applied = 0;
 
     const poll = async () => {
+      const seq = (issued += 1);
       try {
         const live = await fetchDraftPicks(platform, draftId, {
           scoring: state.league.scoring,
@@ -212,7 +219,8 @@ export default function DraftScreen(props: Props) {
           adpSource: board.meta.adpSource,
           year: state.league.year,
         });
-        if (!alive) return;
+        if (!alive || seq <= applied) return;
+        applied = seq;
 
         const presets = livePresets(live.picks);
         const extras = live.picks.filter((p) => p.offBoard).map(offBoardPlayer);
@@ -225,8 +233,12 @@ export default function DraftScreen(props: Props) {
         setLiveError(null);
         setLiveAt(Date.now());
 
+        // What the room says now against what it said last time, by slot and
+        // player rather than by how many. Only the live claims are compared,
+        // because those are the ones this poll owns.
         const current = engineRef.current;
-        if (current.state.picks.length === presets.length) return;
+        const held = [...current.presets.values()].filter((p) => p.source === 'live');
+        if (sameLivePicks(held, presets)) return;
 
         onEngine(runPresetsOnly(createDraft(
           { ...current.state.league, adpSource: board.meta.adpSource },

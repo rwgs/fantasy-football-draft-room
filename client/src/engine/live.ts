@@ -39,6 +39,30 @@ export function livePresets(picks: LivePick[]): PresetPick[] {
 }
 
 /**
+ * Whether two readings of a room are the same reading.
+ *
+ * The assistant used to decide whether to rebuild by comparing how many picks
+ * the room had reported, which is a different question. A commissioner who
+ * undoes a pick and replaces it, or a feed that corrects a resolved identity,
+ * sends back a list of the same length with a different player in it. The board
+ * then kept the old player unavailable and the new one draftable -- so advice
+ * and any written queue ran against a board the room had already left -- until
+ * some later pick changed the count and forced a rebuild.
+ *
+ * By slot and player, because those are the two things a correction changes.
+ * Sorted, so a feed that returns the same picks in a different order is not
+ * mistaken for a room that has moved.
+ */
+export function sameLivePicks(a: PresetPick[], b: PresetPick[]): boolean {
+  if (a.length !== b.length) return false;
+  const key = (picks: PresetPick[]) => picks
+    .map((p) => p.overall + ':' + p.playerId)
+    .sort()
+    .join('|');
+  return key(a) === key(b);
+}
+
+/**
  * Keepers and real picks, merged into one set of claims.
  *
  * A draft that has started has already recorded its keepers as picks, so the
