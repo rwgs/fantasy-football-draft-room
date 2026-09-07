@@ -929,11 +929,18 @@ export default function App() {
           * which is the whole lesson of 2026-09-07.
           */}
         {bridgeSeen && (
-          <span className="hint">
-            {'bridge '}
-            {bridgeSeen.version ?? 'unknown'}
-            {bridgeSeen.fromSource ? ' · from source'
-              : bridgeSeen.build ? ` · ${bridgeSeen.build}` : ''}
+          <span className="hint" style={bridgeSeen.stale ? { color: 'var(--te)' } : undefined}>
+            {/*
+              * "unknown" was the first wording and it said nothing worth
+              * reading. A copy too old to name itself is not an unknown
+              * version: it is a known state with a name, and saying which is
+              * the difference between a readout and a shrug.
+              */}
+            {bridgeSeen.tooOld
+              ? 'bridge too old to say'
+              : `bridge ${bridgeSeen.version ?? 'unversioned'}${
+                bridgeSeen.fromSource ? ' · from source'
+                  : bridgeSeen.build ? ` · ${bridgeSeen.build}` : ''}`}
           </span>
         )}
 
