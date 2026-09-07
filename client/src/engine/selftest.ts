@@ -833,14 +833,43 @@ async function main() {
 
   console.log('\nReading the room');
   {
-    const play = (cpu: CpuConfig, n: number) => {
-      let e = createDraft(league(), cpu, board.players, null);
+    const play = (cpu: CpuConfig, n: number, over: Partial<LeagueConfig> = {}) => {
+      let e = createDraft(league(over), cpu, board.players, null);
       while (e.state.picks.length < n && !e.state.done) e = runCpuPick(e);
       return e;
     };
+
+    /*
+     * Eight rooms, averaged, because one room is not a reading.
+     *
+     * A lean is what a room took minus what a no-lean room would have taken,
+     * and `baseline` already averages three runs for its half of that
+     * subtraction. The played half was a single run, so every reading carried a
+     * whole sample of noise -- and for the market preset it was nothing else,
+     * because its dials are zero and its model is the very one `baseline`
+     * rebuilds to subtract. The expected value of that reading is zero, so
+     * asserting one sample of it lands inside a band is a coin toss that the
+     * board's own drift re-flips: over sixteen seeds every position averaged
+     * within 0.33 of zero, and the only reading anywhere outside the band was
+     * WR 1.9 on seed 12345 -- the seed this file happened to fix, which was
+     * therefore red on a true statement. No tolerance repairs that, and
+     * widening one would only move the coin. An average does repair it, and it
+     * is the quantity the check's name claims to begin with.
+     *
+     * The dialled rooms are averaged the same way, so every comparison below is
+     * between two means. Every margin widens slightly for it, and all five
+     * readings together cost under a second.
+     */
+    const LEAN_SEEDS = [12345, 1, 2, 3, 4, 5, 6, 7];
+
     const leanOf = (id: string, picks = 36) => {
       const preset = PRESETS.find((p) => p.id === id)!;
-      return observedLean(play(preset.cpu, picks));
+      const mean = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 } as Record<Position, number>;
+      for (const seed of LEAN_SEEDS) {
+        const lean = observedLean(play(preset.cpu, picks, { seed }));
+        for (const pos of POSITIONS) mean[pos] += lean[pos] / LEAN_SEEDS.length;
+      }
+      return mean;
     };
 
     /*
@@ -859,6 +888,11 @@ async function main() {
      * from the first pick, so the sample is there from the start. This is a
      * fact about scarce positions rather than a weakness in the reading, and it
      * is the same reason `observedLean` says nothing at all before a full round.
+     *
+     * Those eight seeds were read one at a time when this was written. They are
+     * averaged now, which is a second answer to the same one-in-eight, but not
+     * a replacement for the depth: averaging steadies a reading and cannot put
+     * quarterbacks on the board that three rounds never took.
      */
     const QB_PICKS = 48;
 
@@ -868,8 +902,10 @@ async function main() {
     const marketDeep = leanOf('market', QB_PICKS);
     const earlyQb = leanOf('early-qb', QB_PICKS);
 
-    console.log('        market ' + POSITIONS.map((p) => p + ' ' + market[p].toFixed(1)).join(' '));
-    console.log('        zero RB ' + POSITIONS.map((p) => p + ' ' + zero[p].toFixed(1)).join(' '));
+    console.log('        market, mean of ' + LEAN_SEEDS.length + ' rooms  '
+      + POSITIONS.map((p) => p + ' ' + market[p].toFixed(1)).join(' '));
+    console.log('        zero RB, mean of ' + LEAN_SEEDS.length + ' rooms '
+      + POSITIONS.map((p) => p + ' ' + zero[p].toFixed(1)).join(' '));
 
     /*
      * The baseline is a simulated room with its dials at zero, not the ADP

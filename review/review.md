@@ -66,9 +66,10 @@ own commit. 31 new checks in `npm run engine:test`. Then two more pieces in a
 second pass: R2's missing projection and M5's bye coverage, adding one check to
 `engine:test` and four to `server:test`. Typecheck, lint, `engine:test`,
 `server:test`, `bridge:test`, build and `shots` clean, no console errors, lint
-warnings unchanged at 43 against a stashed baseline. One pre-existing
-`engine:test` failure is unrelated to any of it and is described under "Still
-outstanding".
+warnings unchanged at 43 against a stashed baseline. The one pre-existing
+`engine:test` failure was unrelated to any of it, and is now fixed in the check
+rather than in the engine; see "Still outstanding" for what it turned out to
+be. The whole suite is green.
 
 | Finding | What changed | Checked by |
 | --- | --- | --- |
@@ -103,14 +104,23 @@ been inflating RB and WR worth against QB and TE for every player on it.
   read at the fantasy position rather than the filed one, and his WR row carries
   its projection. Reading the feed was the whole of the work; nothing about it
   needed a decision.
-- **One pre-existing check fails against today's feeds.** `engine:test` reports
-  "an ordinary room reads as no lean" with WR at 1.9 against a threshold of 1.5.
-  This is not from the fixes: the pre-fix commit run in a worktree against the
-  same board fails with the same four numbers, `observedLean` computes
-  bit-identical readings on both versions, and it depends on no code these fixes
-  touched. The lean tolerance is calibrated against upstream ADP that moves
-  daily, so the check is data-sensitive by construction. Reported rather than
-  retuned, since retuning a tolerance to make a run go green is not a fix.
+- **The one pre-existing check failure: now fixed, in the check.** `engine:test`
+  reported "an ordinary room reads as no lean" with WR at 1.9 against a
+  threshold of 1.5. It was never from any of these fixes -- the pre-fix commit
+  run in a worktree against the same board failed with the same four numbers --
+  and it was reported rather than retuned, because widening a tolerance to make
+  a run go green is not a fix. Measuring it settled what it actually was. The
+  `market` preset carries zero position bias, and `baseline` in `forecast.ts`
+  rebuilds that identical model to subtract, so the reading is pure sampling
+  noise with an expected value of zero. `baseline` averages three runs for its
+  half of the subtraction; the played half was one run. Over sixteen seeds every
+  position averaged within 0.33 of zero, and the single reading anywhere outside
+  the band was WR 1.9 on seed 12345, the seed the file happened to fix. So the
+  check was red on a true statement, and no tolerance repairs that. The played
+  room is now averaged over eight seeds the way the baseline already is, which
+  is the quantity the check's name claims; the dialled rooms are averaged too,
+  so every comparison is between two means, and all five margins widen. Whole
+  suite green, 349 checks, at a cost under a second.
 - **`nextUserPick` and `picksUntilUserTurn`** now have no production caller.
   Left as pre-existing surface rather than widened into these changes.
 

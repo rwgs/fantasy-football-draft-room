@@ -481,8 +481,8 @@ Phase 4: prove the platform seam against real leagues.
     position check fails against a stashed pre-fix source, and the bye check
     fails against the service on 5178 before the restart, naming three of the
     339 rows. Typecheck, lint unchanged at 43 warnings, `server:test` 18/18,
-    `bridge:test` 7/7, `engine:test` 348 passing, build and `shots` clean, no
-    console errors.
+    `bridge:test` 7/7, `engine:test` 348 passing against its one pre-existing
+    failure, build and `shots` clean, no console errors.
   - Manual validation: **done.** Photographed in a real browser: Oronde Gadsden,
     a Sleeper-only row, reads "LAC - BYE 7"; the Indianapolis Colts defence,
     which joins on team rather than name, reads "IND - BYE 13"; and Travis
@@ -494,6 +494,45 @@ Phase 4: prove the platform seam against real leagues.
   - Not acted on: the rest of M5. What the letter grade means, what coverage it
     exposes, and whether a static season total is the right thing to rank are
     decisions, and they stay open with the other seven findings.
+  - Dependencies or blockers: none.
+
+- [x] Read the lean check on an average, since one room was never a reading.
+  - Scope: `engine:test`'s "Reading the room" block plays each CPU preset over
+    eight seeds and reads `observedLean` on the mean rather than on one room.
+    `play` takes league overrides so the seed can vary; `leanOf` averages. The
+    dialled rooms are averaged too, so every comparison in the block is between
+    two means.
+  - Why: "an ordinary room reads as no lean" had been failing for two sessions,
+    correctly diagnosed both times as not caused by the work in hand and left
+    alone rather than retuned. Measuring it said why. The `market` preset has
+    zero position bias, and `baseline` in `forecast.ts` rebuilds that identical
+    model to subtract, so the reading is sampling noise whose expected value is
+    zero -- and `baseline` already averages three runs for its half of the
+    subtraction while the played half was a single run. Over sixteen seeds every
+    position averaged within 0.33 of zero, and the only reading anywhere outside
+    the 1.5 band was WR 1.9 on seed 12345, the seed the file fixes. The check
+    was red on a true statement, so no tolerance would have repaired it: any
+    band is a coin toss the board's own drift re-flips. This is not the retune
+    that was refused; it changes what the check measures to the quantity its own
+    name claims.
+  - Acceptance criteria: the suite is green on its merits, not by widening a
+    band -- the 1.5 threshold is untouched and every other margin in the block
+    holds or improves. Met: forcing backs 4.7 (was 4.2), fading backs -3.8 (was
+    -4.2), the two rooms 8.5 apart (was 8.4), a receiver room 2.9 clear of
+    market (was 2.5), the quarterback run 2.9 clear (was 2.5), and the no-lean
+    reading worst at WR 0.6 against the same 1.5. The band still discriminates:
+    the same `leanOf` reads a dialled room at 3.5 and -3.8.
+  - Automated validation: `engine:test` all 349 checks passing, no failures, in
+    5.8s -- the averaging costs under a second for all five readings. Typecheck,
+    lint unchanged at 43 warnings, `server:test` 18/18, `bridge:test` 7/7, build
+    and `shots` clean, no console errors.
+  - Manual validation: not applicable; no product code changed. The block now
+    prints its readings labelled "mean of 8 rooms" so a run says what the
+    numbers are.
+  - Not acted on: `QB_PICKS` stays at 48. Averaging is a second answer to the
+    one-seed-in-eight the comment there records, but not a replacement for the
+    depth -- it steadies a reading and cannot put quarterbacks on the board that
+    three rounds never took. The comment says so now.
   - Dependencies or blockers: none.
 
 ## Blocked
