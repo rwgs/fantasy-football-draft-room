@@ -475,10 +475,10 @@ export function pricedPositions(
  *
  * Removing him is what makes the list worth having. It is not the leaders at
  * the other positions, which is what the cost of waiting panel already lists
- * beside this. Take the best back off the board and the next back inherits
- * both the position's urgency and the leader's slot, so he can come second
- * ahead of every other position — which is the answer a run at one position
- * actually has.
+ * beside this. Take the best back off the board and the next back inherits both
+ * the leader's slot and what his position is expected to leave behind, so he
+ * can come second ahead of every other position — which is the answer a run at
+ * one position actually has.
  *
  * Your roster does not move as it walks. He is being taken by somebody else,
  * not by you, so what you still have to start is the same at every step.
@@ -534,7 +534,7 @@ export function recommendChain(
  * `recommendChain` above answers "and if he goes". Every entry in it is a
  * substitute for the same pick, priced against the roster as it stands, so the
  * same position can be the right answer twice over and usually is: take the
- * best defense away and the next defense inherits the slot and the urgency.
+ * best defense away and the next defense inherits the slot behind him.
  *
  * A Yahoo queue is read the other way round. The room takes the next entry on
  * each expiry, so that same list becomes a plan, and a plan that spends two

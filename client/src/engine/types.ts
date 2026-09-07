@@ -719,8 +719,8 @@ export interface RoomAdvice {
     position: string;
     /** Points over a replacement starter at his own position. */
     worth: number;
-    /** How much of that goes if you wait a turn, when the wait is yours. */
-    urgency: number;
+    /** What your next turn is still expected to bring once he is taken. */
+    nextTurn: number;
     /** Whether he fills a starting slot you have still to fill. */
     fillsStarter: boolean;
   } | null;

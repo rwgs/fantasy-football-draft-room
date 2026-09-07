@@ -21,6 +21,18 @@ itself holds, and M5's bye coverage, where the board dropped a week it already
 knew. Both are recorded in their own sections. What is left of M5 is the grade,
 and it stays open with the other seven.
 
+The third pass took the advice model, R6 and M1, with the user's agreement to
+reopen the 2026-09-05 recommendation decision. R6's two structural halves were
+never really decisions: `chooseCpuPick` had followed both rules since it was
+written, so the app was holding its opponents to a standard it did not hold its
+own advice to. M1's scoring was a counterexample the audit had already worked
+out inside the app's own numbers. Both are recorded in their own sections and in
+a 2026-09-07 entry in `DECISIONS.md` amending the 2026-09-05 one. What is left
+of both is bench valuation, which needs the model M1 describes and the
+calibration M4 asks for rather than the coefficient the 2026-09-05 entry
+rejected. Six findings are now fully open, and three -- M1, R6 and M5 -- are open
+only in the half that needs a model.
+
 ## Assessment
 
 The app has useful foundations: a fast local draft engine, transparent player values, imported rankings, several market feeds, and awareness of roster needs. However, I would not yet rely on its recommended pick or automatic queue as the primary decision maker for building a winning team. There are reproducible defects in scoring, player identity, and forecasting, followed by limitations in what the recommendation formula optimizes.
@@ -43,8 +55,8 @@ The ranking is an engineering judgment about likely breadth and size of improvem
 | --- | --- | --- | --- | --- |
 | 1 | R1 - Scoring and eligibility | Open | **IN SCOPE, conditional on the actual Yahoo rules.** Format-only projections and limited eligibility also affect Yahoo. | **DEFERRABLE:** Sleeper's automatic reception-format selection, dedicated-2QB detection, import warnings, and `WRRB_FLEX`/`REC_FLEX` mapping. |
 | 2 | R7 - Replacement allocation | **Fixed** | **IN SCOPE.** Yahoo WORTH and recommendations use this baseline. | None. |
-| 3 | M1 - Team-building objective | Open | **IN SCOPE.** The Yahoo recommendation and queue use this scoring model. | Standalone mock-mode polish is outside this work. |
-| 4 | R6 - Roster completion and queue | Open | **IN SCOPE.** Advice is affected; automatic queue behavior matters when enabled. | Queue-specific work is conditional on using the automatic queue, not a Sleeper/mock-only issue. |
+| 3 | M1 - Team-building objective | Open; scoring fixed | **IN SCOPE.** The Yahoo recommendation and queue use this scoring model. | Standalone mock-mode polish is outside this work. |
+| 4 | R6 - Roster completion and queue | Open; structure fixed | **IN SCOPE.** Advice is affected; automatic queue behavior matters when enabled. | Queue-specific work is conditional on using the automatic queue, not a Sleeper/mock-only issue. |
 | 5 | R3 - Forecast horizon | **Fixed** | **IN SCOPE.** The room forecast disappearing on the user's turn directly affects Yahoo advice. | **DEFERRABLE:** the future-keeper-preset horizon extension; the current Yahoo import supplies no future keeper presets. |
 | 6 | R4 - Wrong survivor value | **Fixed** | **IN SCOPE.** Yahoo uses this forecast. | None. |
 | 7 | R5 - Zero survival fallback | **Fixed** | **IN SCOPE.** Yahoo targets and pool odds use these consumers. | None. |
@@ -82,6 +94,8 @@ be. The whole suite is green.
 | R2 | `DRAFTABLE` names the six positions a roster slot can hold, and both boundaries that build a board row are checked against it. `normPos` keeps its pass-through, which is what a diagnostic wants. | Every board position is one a roster can hold; nobody appears twice under two ids; every count stays finite. These two fail against the pre-fix service and pass against the fixed one. |
 | R2, second pass | `projectionMap` reads the first `fantasy_positions` entry a roster can hold when the position a player is filed at is not one, so a two-way player's projection reaches the row the market already put on the board rather than being dropped with the record. | Hunter's WR row carries 83.1 in half-PPR on one row, not two. Four checks on hand-written records rather than this season's example: the fantasy position is read, a player with no draftable fantasy position is still dropped, the filed position still wins when a roster can hold it, and a record naming no position is not keyed empty. |
 | M5, byes | `buildBoard` reads a team's bye off the team, since it is the team's week off and only Fantasy Football Calculator sends one. Every row FFC does not cover had none. | 339 of the 399 rows without a bye gained it, and the 60 left are exactly the rows with no team. Fails against the pre-fix service, naming three of the 339. |
+| R6, third pass | `rankCandidates` takes `picksLeft` and follows the two rules `chooseCpuPick` already did: once your picks left equal your open starting slots only a candidate that fills a starter is weighed, and beating a replacement starter orders the list rather than qualifying for it. | The last picks that can fill a lineup are not spent on a backup, and the backup is allowed back with a bench still to come; thirty sub-replacement backs return a queue four picks deep, led by the one man worth having. Three of the five fail against the unchanged engine. |
+| M1, third pass | A pick is scored on what two turns come to -- his worth, plus the best expected value at another position you would still have to start -- rather than on `2 * now - later`. `Recommendation.urgency` becomes `nextTurn`, in the payload and both panels, so the two numbers shown are the two the pick was chosen on. | The audit's own table names the receiver for 170 rather than the back for 150, and the two turns are the score; the scarce position is still the one to spend on; a full lineup is decided on worth alone. The payload check fails against the service still running the old whitelist. |
 
 Several of the new checks were confirmed by failing rather than assumed. The R2
 board checks were run against both a pre-fix and a post-fix service, as were the
@@ -126,9 +140,9 @@ been inflating RB and WR worth against QB and TE for every player on it.
 
 ## What is still open, and why
 
-Eight findings are still open, seven of them untouched and M5 now open only in
-its grade half. They fall into two groups, and neither is blocked on the work
-above.
+Six findings are still open, four of them untouched, and three more -- M1, R6
+and M5 -- are open only in the half that needs a model rather than a repair.
+They fall into three groups, and none is blocked on the work above.
 
 **Needs a fact this repository does not hold.** R1, the league's scoring inputs,
 is the report's own first priority and is conditional on the actual Yahoo rules:
@@ -136,23 +150,29 @@ the report says to check those first and skip the unsupported-scoring work if
 the existing preset is already right. Yahoo's import leaves scoring and roster
 settings as the user set them, so nothing in the tree answers it.
 
-**Changes an accepted product decision.** M1 (the team-building objective), the
-bench-valuation half of R6, M2 (personal ranks and projection sources), M4
-(calibration), the grade half of M5 and M3 (dynasty context) all revise what the
-app is deciding rather than fix a defect in how it decides it. What a letter
-should mean, and whether a static season total is the right thing to rank at
-all, is the whole of what is left in M5; its byes were a defect and are fixed. M1 and R6 are
-constrained by the 2026-09-05 recommendation entry in `DECISIONS.md`, which the
-report notes should be reconsidered explicitly before being changed. R10 (feed
-degradation) is a reliability change whose scope -- what counts as degraded
-operation, and whether a bad response may replace a usable cache -- is a
-judgment about how the service should behave, not a single right answer.
+**Needs a bench model, and one arbitrary coefficient would not be it.** What is
+left of M1 and R6 is the same thing: a player's contribution is value over a
+replacement starter, which overstates a backup behind a better starter and
+cannot see an upgrade to a filled lineup. The 2026-09-05 entry rejected a bench
+multiplier as a fudge nobody could justify, the 2026-09-07 entry that amends it
+rejected it again, and the honest version needs expected usable weeks,
+replacement access and the calibration M4 asks for. The scoring and the two
+structural rules those findings also named are fixed.
 
-R6 has a defect half that could be taken without settling anything: the
-automatic queue returning an empty list when no positive-worth player remains,
-which the report reproduces with 30 available RBs below replacement. Filling
-that gap still needs a policy for what a legal selection is when nothing has
-positive worth, which is why it is grouped here.
+**Needs a judgment about what the app should decide.** M2 (personal ranks and
+projection sources), M4 (calibration), the grade half of M5 and M3 (dynasty
+context) revise what the app is deciding rather than fix a defect in how it
+decides it. What a letter should mean, and whether a static season total is the
+right thing to rank at all, is the whole of what is left in M5; its byes were a
+defect and are fixed. R10 (feed degradation) is a reliability change whose
+scope -- what counts as degraded operation, and whether a bad response may
+replace a usable cache -- was a judgment rather than a single right answer, and
+**the user settled it on 2026-09-07**: a response that parses but carries no
+players, or none at an expected position, is treated as a failed fetch so
+`cached` keeps the prior snapshot and marks it stale, with a per-feed timeout,
+ESPN not awaited when it is not the selected feed, and per-source age surfaced
+where the draft is being made. That is the shape to build; nothing of it is
+built yet.
 
 
 ## How the current advice works
@@ -163,7 +183,7 @@ positive worth, which is why it is grouped here.
 | What will the player score? | One Sleeper season projection, attributed by the repository to RotoWire. The selected ADP sources do not change the projection provider. |
 | What is WORTH? | Season projected points minus a positional replacement starter's projected points. |
 | What does waiting cost? | Current positional leader's worth minus expected worth remaining at the next pick. |
-| Who is recommended? | The points leader at each position is scored by worth plus waiting cost; waiting cost counts only if the position fills an open starting slot. Nonpositive worth is excluded. |
+| Who is recommended? | The points leader at each position is scored by what two turns come to: his worth, plus the best expected value at another position you would still have to start. Nonpositive worth orders the list rather than excluding a player from it, and once your picks left equal your open starting slots only a candidate that fills a starter is weighed. |
 | What changes when I upload rankings? | The Mine sort and, optionally, CPU selections. The recommendation and projected points do not use those ranks. |
 | What does the letter grade mean? | Rank within this particular room by the projected season totals of each team's best static starting lineup. |
 
@@ -211,7 +231,32 @@ Recommendation: allocate required starters and eligible flex slots within the ac
 
 Acceptance check: allocated starter counts sum to the actual league total and satisfy eligibility. A no-flex, one-QB league cannot allocate 24 starting QBs across 12 teams.
 
-### M1 - High priority: worth plus waiting cost is not an optimizer for the resulting team
+### M1 - High priority: worth plus waiting cost is not an optimizer for the resulting team (SCORING FIXED)
+
+**The scoring is FIXED**, which is the half of this finding the counterexample
+below actually demonstrates. `rankCandidates` scores a pick by what two turns
+come to together -- what he is worth now, plus what your next turn is still
+expected to bring once he is taken -- rather than by `2 * now - later`. On the
+table below that is WR 170 against RB 150, so the 20 points are no longer given
+away. Recorded as a decision on 2026-09-07 in `DECISIONS.md`, amending the
+2026-09-05 entry. Five checks in `engine:test`.
+
+**What is still open is the bench**, which is the part that needs a model rather
+than an arithmetic repair: a player's contribution is still value over a
+replacement starter, so a backup behind a better starter is still overstated,
+and the binary starter/bench treatment below still misses an upgrade to a
+filled lineup. That needs expected usable weeks, replacement access and the
+calibration M4 asks for. It is also where the 2026-09-05 entry's rejection of an
+arbitrary bench multiplier still binds.
+
+Measured consequence: over seat 5's fifteen turns in a played 12 team half-PPR
+draft the board now names a pick at twelve of them, against fifteen before. The
+three it declines are margins of 0.2, 1.5 and 1.8 points across two turns, so
+the three point naming gate is firing on genuine ties rather than being
+mis-scaled -- the old score cleared that gate at pick 20 by 0.9 points, so its
+confidence there was already a coin toss. The chain of alternatives keeps what it
+was built for: it reaches the same position twice at twelve of those twelve
+turns and never comes out as the position leaders in order.
 
 The score for an open starter is `now + (now - later)`, or `2 * now - later`. That is a heuristic. It does not compare the total lineup obtainable by taking one player now and another later.
 
@@ -230,7 +275,23 @@ Recommended direction: evaluate the change in the best legal lineup when a candi
 
 Validation: deterministic two-pick cases such as the table above, followed by comparisons against simpler draft strategies under the same settings and opponent simulations. Ultimately use held-out real outcomes as described in M4.
 
-### R6 - P1: recommendations and automatic queues can neglect the starting lineup or stop before the roster is filled
+### R6 - P1: recommendations and automatic queues can neglect the starting lineup or stop before the roster is filled (STRUCTURE FIXED)
+
+**Both structural halves are FIXED**, and both had precedent in this repository:
+`chooseCpuPick` has followed the same two rules since it was written, so the app
+was holding its own opponents to a standard it did not hold its own advice to.
+A remaining-picks constraint, so once your picks left equal your open starting
+slots only a candidate that fills a starter is considered -- the advice had no
+remaining-picks constraint of any kind. And a legal fallback, so beating a
+replacement starter orders the list rather than qualifying for it: the thirty
+sub-replacement backs below now return a queue four deep instead of an empty
+one. Five checks in `engine:test`, three confirmed by failing first. Both of
+this finding's own acceptance checks are met.
+
+**What is still open is bench valuation**, as the finding itself says: outside
+the compulsory case a backup with more value over a replacement starter can
+still outrank a player filling an empty slot. See M1 above for why that is a
+model and not a repair.
 
 Evidence: [candidate scoring](../client/src/engine/value.ts), lines 219-227; [queue sequence](../client/src/engine/forecast.ts), lines 511-527; compare [CPU starter constraint](../client/src/engine/cpu.ts), lines 179-199.
 

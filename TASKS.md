@@ -535,6 +535,96 @@ Phase 4: prove the platform seam against real leagues.
     three rounds never took. The comment says so now.
   - Dependencies or blockers: none.
 
+- [x] Take the advice model: the audit's R6 and the scoring half of M1.
+  - Scope: two commits. `rankCandidates` takes `picksLeft` and follows the two
+    rules `chooseCpuPick` already did -- once your picks left equal your open
+    starting slots only a candidate that fills a starter is weighed, and beating
+    a replacement starter orders the list rather than qualifying for it. Then
+    the score itself: what two turns come to together, his worth plus the best
+    expected value at another position you would still have to start, in place
+    of `now + (now - later)`. `Recommendation.urgency` becomes `nextTurn`
+    through the payload and both panels, because the two numbers a panel prints
+    have to be the two the pick was chosen on.
+  - Why: the user chose this finding and agreed to reopen the 2026-09-05
+    recommendation decision, which is what M1 needed. R6 turned out to need no
+    decision at all: both rules were already in `cpu.ts`, described there as
+    hard rules, so the app was holding its own opponents to a standard it did
+    not hold its own advice to. It named a backup quarterback worth 100 over the
+    receiver worth 30 who would have filled the last empty slot, and returned no
+    queue at all from a pool of thirty sub-replacement backs. M1 was a
+    counterexample the audit had already worked out in the app's own numbers:
+    `2 * now - later` counts what a player is worth twice and what you would do
+    instead not at all, and gave up 20 measured points on the audit's table.
+  - Acceptance criteria: both of R6's own acceptance checks, and M1's. The last
+    picks that can fill a lineup are not spent on a backup, and the backup is
+    allowed back with a bench still to come; a queue keeps legal depth when
+    every remaining worth is nonpositive, led by the one man worth having; the
+    audit's table names the receiver for 170 rather than the back for 150; the
+    scarce position is still the one to spend on; a full lineup is decided on
+    worth alone. All met.
+  - Automated validation: ten checks in `npm run engine:test`, 359 passing.
+    Seven confirmed by failing first rather than assumed. Against the unchanged
+    engine: the backup named on the last useful pick, the barren queue coming
+    back empty, that same queue stopping at one entry, the audit's table taking
+    the back for 150, the two turns not being the score, and a full lineup still
+    carrying a second term. Against the service still running the old
+    whitelist: the pick reaching the panel, which read `urgency: 0`. Typecheck
+    clean, lint unchanged at 43 warnings, `server:test` 18/18, `bridge:test`
+    7/7, build and `shots` clean, no console errors. Recorded as a 2026-09-07
+    entry in `DECISIONS.md`, amending the 2026-09-05 one.
+  - Manual validation: **done.** Photographed in a real browser, dark and light:
+    the take line reads "+126 over a replacement WR, and 87 more at your next
+    turn. You still have to start one", and those two numbers are the score.
+    The live chain repeats both WR and RB rather than listing one leader per
+    position, which is the behaviour the chain exists for.
+  - Found while measuring, and it changed the work: two fixtures in
+    `engine:test` were asserting data coincidences rather than code. The chain
+    block read its advice off `byAdp.slice(19)`, a pool no draft produces --
+    the first nineteen by ADP and nobody else, so the best tight end on the
+    board is still sitting there -- and on the live board that state is a
+    genuine tie. The old score cleared the three point gate there by 0.9 points,
+    so the check was already one ADP refresh from red, exactly the trap the lean
+    check was caught in twice. It now plays a room and stops at the first of
+    your turns with a pick to name, asserting that precondition rather than
+    assuming it. The one-slot fixture priced a pool of kickers and defences at
+    pick 20, where neither will be taken and either order comes to the same two
+    turns; it now prices them at the last-rounds turns such a pool occurs at.
+  - Measured consequence, reported rather than hidden: over seat 5's fifteen
+    turns in a played 12 team half-PPR draft the board names a pick at twelve of
+    them, against fifteen before. The three it declines are margins of 0.2, 1.5
+    and 1.8 points across two turns. The gate did not move and should not --
+    three points is three projected points, and the new score states them in
+    those units where the old one roughly doubled them.
+  - Not acted on: bench valuation, which is what is left of both findings. A
+    backup still carries his full value over a replacement starter, so outside
+    the compulsory case he can still outrank a player filling an empty slot.
+    That needs expected usable weeks, replacement access and M4's calibration,
+    not the coefficient two decision entries have now rejected. Also raised: the
+    service on 5178 is stale against this change and needs a restart before it
+    is trusted; the payload check was run against a second service on 5179
+    instead, and fails against 5178 with `urgency: 0`, which is what confirmed
+    the rename.
+  - Dependencies or blockers: none.
+
+- [ ] Repair feed degradation, the audit's R10, to the policy the user chose.
+  - Scope, settled 2026-09-07: a response that parses cleanly but carries no
+    players, or none at a position the board expects, is treated as a failed
+    fetch, so `cached` keeps the prior disk snapshot and marks it stale rather
+    than overwriting it with an empty one. Plus a per-feed `AbortSignal`
+    timeout, ESPN not awaited when it is not the selected feed, and per-source
+    age surfaced where the draft is being made rather than only in setup.
+  - Why: measured, not assumed. There is no timeout anywhere in `server/src`,
+    so a hung ESPN can hold the whole board behind `Promise.all`; ESPN's
+    `stale` is left out of the combined flag; and Sleeper's `fetchedAt` is a
+    `Math.max` across positions, so a stale position hides behind a fresh one.
+    `cached` already falls back to a stale disk copy when a fetch throws -- the
+    gap is that a valid-but-empty response does not throw.
+  - Acceptance criteria: the finding's own. Empty or malformed-success responses
+    preserve a usable prior snapshot or fail clearly; a hung optional source
+    does not block draft availability; stale selected sources stay visible
+    during the draft.
+  - Dependencies or blockers: none.
+
 ## Blocked
 
 - [ ] Yahoo's own Fantasy Sports API, if the application is ever approved.

@@ -536,9 +536,10 @@ export default function PlayerPool(props: Props) {
                       starter, which by the last rounds is usual. */}
                   {(pick.worth > 0 ? '+' : '') + Math.round(pick.worth)
                     + ' over a replacement ' + player.position}
-                  {pick.urgency >= 1
-                    ? ', and ' + Math.round(pick.urgency) + ' of that goes '
-                      + (yourTurn ? 'if you wait' : 'before your turn')
+                  {/* The two numbers added together are the score he was
+                      chosen on, so the verdict can be checked and overruled. */}
+                  {pick.nextTurn >= 1
+                    ? ', and ' + Math.round(pick.nextTurn) + ' more at your next turn'
                     : ''}
                   {pick.fillsStarter
                     ? '. You still have to start one.'

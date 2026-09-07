@@ -628,9 +628,19 @@ async function main() {
       recommendPick(rows, mine, r, picksLeft(mine));
     const priced = positionValues(after(19), all, 12, r, 20, 29);
 
-    const empty = pickFor(priced, counts({}));
-    check('an empty roster gets a recommendation', empty != null,
-      empty ? empty.player.name + ' ' + empty.player.position : 'none');
+    /*
+     * The pipeline, from a clean slate. Whether today's board presents a clear
+     * enough decision to name is a fact about the feed and not about this
+     * code -- `recommendPick` withholds a name inside `WORTH_NAMING`, and on
+     * this pool the top two turns came to 116.7 and 115.5 -- so what is
+     * asserted here is the ranking, which is this code's own product. The gate
+     * is checked below, on margins that are built rather than fetched.
+     */
+    const ranked = rankCandidates(priced, counts({}), r, picksLeft(counts({})));
+    const empty = ranked[0] ?? null;
+    check('an empty roster gets a ranked list of candidates', ranked.length > 0,
+      empty ? empty.player.name + ' ' + empty.player.position
+        + ' by ' + empty.margin.toFixed(1) : 'none');
     check('and it is somebody still available',
       !empty || after(19).some((p) => p.id === empty.player.id));
     check('and it is the leader at his own position',
@@ -650,13 +660,13 @@ async function main() {
       stuffed ? stuffed.player.position : 'none');
 
     /*
-     * Urgency is only yours while you still have to start one. Filling every
-     * starting slot can only take urgency away, so the score cannot rise.
+     * With every starting slot filled there is no next turn left to price, so
+     * the second term is zero for everybody and worth alone decides.
      */
     const full = counts({ QB: 3, RB: 6, WR: 6, TE: 3, K: 2, DEF: 2 });
     const late = pickFor(priced, full);
-    check('a full lineup adds no urgency to anybody',
-      !late || late.urgency === 0, late ? String(late.urgency) : 'none');
+    check('a full lineup is decided on worth alone',
+      !late || late.nextTurn === 0, late ? String(late.nextTurn) : 'none');
 
     /*
      * THE LAST PICK THAT COULD FILL A LINEUP IS NOT SPENT ON A BACKUP
@@ -692,6 +702,37 @@ async function main() {
     check('but with the bench still to come the backup is allowed back',
       recommendPick(backupOrStarter, nearlyFull, r, 8)?.player.position === 'QB');
 
+    /*
+     * WORTH PLUS WAITING COST IS NOT THE TOTAL OF TWO PICKS
+     *
+     * The score was `now + (now - later)`, or `2 * now - later`, which counts
+     * what he is worth twice and what you would do instead not at all. The
+     * audit supplied the counterexample and this is it: two open slots, a
+     * receiver worth 100 now and nothing at all later, a back worth 150 now and
+     * 70 later. The old score read RB 230 to WR 200 and took the back, which by
+     * its own numbers ends the two turns on 150 -- the back now, the receiver
+     * later -- against 170 for the receiver now and the back later. It gave up
+     * 20 points inside its own value model, so this is a counterexample to
+     * optimality and not an estimate of what a real draft loses.
+     */
+    const twoOpen = [rowFor('WR', 100, 0), rowFor('RB', 150, 70)];
+    const pair = recommendPick(twoOpen, counts({}), r, 15);
+    check('the pick is the better of two turns and not the better of one',
+      pair?.player.position === 'WR',
+      pair ? pair.player.position + ' for ' + (pair.worth + pair.nextTurn) : 'none');
+    check('and the two turns are what it is scored on',
+      pair?.worth === 100 && pair.nextTurn === 70,
+      pair ? pair.worth + ' now, ' + pair.nextTurn + ' next' : 'none');
+
+    /*
+     * And the scarce position is still the one to spend on, which is what the
+     * old heuristic was reaching for and got right most of the time. A receiver
+     * who will still be nearly as good next turn is the one to wait on.
+     */
+    const scarce = [rowFor('WR', 100, 90), rowFor('RB', 80, 20)];
+    check('the position that will not keep is still the one to spend on',
+      recommendPick(scarce, counts({}), r, 15)?.player.position === 'RB');
+
     check('nothing is recommended out of an empty pool',
       pickFor([], counts({})) === null);
 
@@ -699,7 +740,9 @@ async function main() {
      * Saying nothing is a real answer. Two positions within a field goal of
      * each other is not a decision, and naming one would invent it.
      */
-    const tied = priced.slice(0, 2).map((v, i) => ({ ...v, now: 50, cost: i === 0 ? 1 : 0.5 }));
+    const tied = priced.slice(0, 2).map((v, i) => ({
+      ...v, now: 50, later: i === 0 ? 49 : 49.5, cost: i === 0 ? 1 : 0.5,
+    }));
     check('a tie close enough to be noise is left unnamed',
       pickFor(tied, counts({})) === null);
 
@@ -720,10 +763,60 @@ async function main() {
     const counts = (held: Partial<Record<Position, number>>) => ({ ...emptyCounts(), ...held });
     const picksLeft = (mine: Record<Position, number>) =>
       rosterSize(r) - POSITIONS.reduce((n, pos) => n + mine[pos], 0);
-    const chainAt = (mine: Record<Position, number>, depth = 4) =>
-      recommendChain(after(19), all, 12, r, 20, 29, null, mine, picksLeft(mine), depth);
+    /*
+     * A ROOM THAT PLAYED, AT THE FIRST TURN WITH A DECISION IN IT
+     *
+     * Two things were wrong with reading this off `byAdp.slice(19)` at a fixed
+     * pick 20. It is not a pool any draft produces -- the first nineteen
+     * players by ADP and nobody else, so the best tight end on the whole board
+     * is still sitting there -- and, more to the point, whether any fixed state
+     * has a decision to report is a fact about today's feed rather than about
+     * this code. `recommendChain` returns nothing when the leader is inside
+     * `WORTH_NAMING` of the runner-up, which is right, and the old fixture was
+     * clearing that gate by 0.9 points before the score was ever changed. One
+     * ADP refresh either way and every check below it would have gone red on a
+     * true statement, which is the trap the lean check was already caught in.
+     *
+     * So the state is chosen by a rule instead of by a constant: play the room
+     * and stop at the first of your own turns where there is a pick to name.
+     * The pool is one a room would really leave, the horizon is the one that
+     * turn really has, and the precondition is asserted rather than assumed --
+     * if no turn in a whole draft names a pick, that is what goes red, and it
+     * says so rather than leaving five mechanics checks to fail obscurely.
+     */
+    let played = createDraft(league(), DEFAULT_CPU, board.players, null);
+    let room: Player[] = [];
+    let mineNow = counts({});
+    let at = 0;
+    let away = 0;
+    while (!played.state.done) {
+      if (currentTeam(played.state)?.isUser) {
+        const hold = counts({});
+        for (const id of played.state.teams.find((t) => t.isUser)!.playerIds) {
+          hold[played.byId.get(id)!.position] += 1;
+        }
+        const pool = availablePlayers(played);
+        const from = currentPick(played.state);
+        const to = decisionHorizon(played);
+        if (to != null && recommendPick(
+          positionValues(pool, all, 12, r, from, to), hold, r, picksLeft(hold),
+        )) {
+          room = pool;
+          mineNow = hold;
+          at = from;
+          away = to;
+          break;
+        }
+      }
+      played = runCpuPick(played);
+    }
+    check('a played room reaches a turn with a pick to name, or nothing below reads',
+      room.length > 0, 'pick ' + at + ' to ' + away);
 
-    const chain = chainAt(counts({}));
+    const chainAt = (mine: Record<Position, number>, depth = 4) =>
+      recommendChain(room, all, 12, r, at, away, null, mine, picksLeft(mine), depth);
+
+    const chain = chainAt(mineNow);
     console.log('        ' + chain.map((c, i) =>
       (i ? ORDINAL_LOG[i] + ' ' : 'take ') + c.player.name + ' ' + c.player.position).join(', '));
 
@@ -731,23 +824,36 @@ async function main() {
       String(chain.length));
     check('and the first of them is the pick on its own',
       chain[0]?.player.id === recommendPick(
-        positionValues(after(19), all, 12, r, 20, 29), counts({}), r, picksLeft(counts({})),
+        positionValues(room, all, 12, r, at, away), mineNow, r, picksLeft(mineNow),
       )?.player.id);
     check('every fallback is a different player',
       new Set(chain.map((c) => c.player.id)).size === chain.length);
     check('and every one of them is still available',
-      chain.every((c) => after(19).some((p) => p.id === c.player.id)));
+      chain.every((c) => room.some((p) => p.id === c.player.id)));
     check('and worth more than a replacement', chain.every((c) => c.worth > 0));
 
     /*
      * The whole reason the board is priced again rather than read off the
-     * leaders at the other positions. Take the best back away and the next
-     * back inherits both the slot and the position's urgency, so a chain from
-     * an empty roster reaches the same position twice before it reaches six.
+     * leaders at the other positions. Take the best back away and the next back
+     * inherits both his slot and what the position is expected to leave behind,
+     * so a chain reaches the same position twice before it reaches six.
      */
     const positions = chain.map((c) => c.player.position);
     check('a fallback can be the next man at the same position',
       new Set(positions).size < positions.length,
+      positions.join(' '));
+
+    /*
+     * And it is not the list beside it. The cost of waiting panel already ranks
+     * one leader per position, so a chain coming out as those leaders in order
+     * would be a second copy of that panel rather than an answer to "and if he
+     * goes". Over all fifteen of seat 5's turns it never once is.
+     */
+    const leaders = rankCandidates(
+      positionValues(room, all, 12, r, at, away), mineNow, r, picksLeft(mineNow),
+    ).slice(0, chain.length).map((c) => c.player.id);
+    check('and the chain is not the position leaders read in order',
+      chain.some((c, i) => c.player.id !== leaders[i]),
       positions.join(' '));
 
     check('a position filled to its cap is in none of them',
@@ -768,16 +874,21 @@ async function main() {
      * left worth having are the ones with a single slot.
      */
     const oneSlotOnly = after(19).filter((p) => p.position === 'K' || p.position === 'DEF');
+    // Seat 5's round 12 and round 13 turns, because a pool holding nothing but
+    // kickers and defences is a last-rounds pool. Priced at pick 20 it is
+    // exactly symmetric -- the room takes neither, so `later` equals `now` for
+    // both and either order comes to the same two turns, which is a tie the
+    // board is right to say nothing about and no use for reading a chain.
     const substitutes = recommendChain(
-      oneSlotOnly, all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4,
+      oneSlotOnly, all, 12, r, 140, 149, null, counts({}), picksLeft(counts({})), 4,
     );
-    check('four substitutes drawn from two one-slot positions repeat both',
+    check('four substitutes off a pool of one-slot positions repeat one',
       substitutes.length === 4
-        && new Set(substitutes.map((c) => c.player.position)).size === 2,
+        && new Set(substitutes.map((c) => c.player.position)).size < substitutes.length,
       substitutes.map((c) => c.player.position).join(' '));
 
     const plan = recommendSequence(
-      oneSlotOnly, all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4,
+      oneSlotOnly, all, 12, r, 140, 149, null, counts({}), picksLeft(counts({})), 4,
     );
     check('but a queue off the same board takes each of them once and stops',
       plan.length === 2 && new Set(plan.map((c) => c.player.position)).size === 2,
@@ -2610,7 +2721,7 @@ async function yahooRoom() {
     pickLabel: '2.07 #19',
     lean: 'The room is leaning on backs.',
     pick: {
-      name: 'A Back', position: 'RB', worth: 117.2, urgency: 18.4, fillsStarter: true,
+      name: 'A Back', position: 'RB', worth: 117.2, nextTurn: 18.4, fillsStarter: true,
     },
     source: { kind: 'room', sims: 400 },
     rows: [{
@@ -2646,7 +2757,7 @@ async function yahooRoom() {
     read.advice.pick?.name === 'A Back'
       && read.advice.pick.position === 'RB'
       && Math.round(read.advice.pick.worth) === 117
-      && Math.round(read.advice.pick.urgency) === 18
+      && Math.round(read.advice.pick.nextTurn) === 18
       && read.advice.pick.fillsStarter === true,
     JSON.stringify(read.advice.pick));
   check('and so do the names to fall back on when he goes first',

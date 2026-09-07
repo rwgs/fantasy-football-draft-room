@@ -239,16 +239,16 @@ export function positionValues(
  * says which of those you actually have to start. Reading across all three,
  * every turn, is the work this does.
  *
- * Only the leader at each position is weighed. Cost of waiting is measured
- * against the best man left, so it is his number and nobody else's: the fourth
- * receiver does not inherit the urgency of the first.
+ * Only the leader at each position is weighed. What a position is expected to
+ * leave behind is measured against the best man left, so it is his number and
+ * nobody else's: the fourth receiver does not inherit the first's.
  */
 export interface Recommendation {
   player: Player;
   /** What he is worth over a replacement starter at his position. */
   worth: number;
-  /** What waiting one turn costs at his position, when that cost is yours. */
-  urgency: number;
+  /** What your next turn is still expected to bring once he is taken. */
+  nextTurn: number;
   /** Whether he fills a starting slot you have still to fill. */
   fillsStarter: boolean;
   /** How far clear of the next position's leader he came. */
@@ -267,10 +267,33 @@ const WORTH_NAMING = 3;
 /**
  * Every position's leader, in the order this pick is worth spending on them.
  *
- * Urgency only counts where it is yours. A position you can no longer start
- * contributes none of it, because waiting a turn for a bench player costs you
- * nothing this turn. That leaves worth alone to decide, which is the right
- * answer once the lineup is full.
+ * A pick is scored by what two turns come to together: what he is worth now,
+ * plus what your next turn is still expected to bring once he is taken. Taking
+ * the best man at the one position that would still be nearly as good next turn
+ * is what that arithmetic refuses, because it is the pick that leaves the least
+ * behind.
+ *
+ * It used to be `now + (now - later)`, or `2 * now - later`, which counts what
+ * he is worth twice and what you would do instead not at all. That is a
+ * heuristic for scarcity and it reaches the right answer most of the time, but
+ * it is not an optimizer, and the audit found a counterexample inside its own
+ * numbers: with both slots open, a receiver worth 100 now and nothing later
+ * against a back worth 150 now and 70 later, it scored RB 230 to WR 200 and
+ * took the back. The back now and the receiver later comes to 150; the receiver
+ * now and the back later comes to 170. It gave up 20 points it had measured
+ * itself.
+ *
+ * A position you can no longer start contributes nothing to the second term,
+ * because a turn spent on a bench player was never going to fill a slot. With
+ * the lineup full nothing does, the term is zero for everybody, and worth alone
+ * decides -- which is the right answer there and the answer this has always
+ * given.
+ *
+ * Two turns and not the whole draft. The continuation this prices is one pick
+ * deep, so it is a better comparison than the heuristic it replaces rather than
+ * a solved draft. What a bench player adds to a team is still measured as value
+ * over a replacement starter, which overstates him, and `review/review.md`
+ * keeps that open under M1 and R6.
  *
  * No margin gate here. That gate belongs to naming a single pick, where a tie
  * means there is no decision to report; a ranked list of options is exactly
@@ -319,19 +342,32 @@ export function rankCandidates(
    * the board rather than stalling the draft.
    */
   const worthy = playable.filter((row) => row.now > 0);
+  const candidates = worthy.length ? worthy : playable;
 
-  const scored = (worthy.length ? worthy : playable)
+  const scored = candidates
     .map((row) => {
       const starter = fillsStarter(mine, roster, row.position);
-      const urgency = starter ? row.cost : 0;
-      return { row, starter, urgency, score: row.now + urgency };
+      /*
+       * The roster advances before the next turn is priced, because a slot he
+       * fills is a slot the turn after him no longer has to. His own position
+       * is left out of it: this is what you would do instead of him, and doing
+       * the same thing one turn later is not an alternative to doing it now.
+       */
+      const after = { ...mine, [row.position]: mine[row.position] + 1 };
+      let nextTurn = 0;
+      for (const other of candidates) {
+        if (other.position === row.position) continue;
+        if (!fillsStarter(after, roster, other.position)) continue;
+        if (other.later > nextTurn) nextTurn = other.later;
+      }
+      return { row, starter, nextTurn, score: row.now + nextTurn };
     })
     .sort((a, b) => b.score - a.score);
 
   return scored.map((entry, i) => ({
     player: entry.row.best!,
     worth: entry.row.now,
-    urgency: entry.urgency,
+    nextTurn: entry.nextTurn,
     fillsStarter: entry.starter,
     margin: i + 1 < scored.length ? entry.score - scored[i + 1].score : entry.score,
   }));

@@ -272,7 +272,9 @@ export function setAdvice(leagueId, advice) {
       name: text(pick.name),
       position: text(pick.position),
       worth: Number(pick.worth) || 0,
-      urgency: Number(pick.urgency) || 0,
+      // What his next turn is still expected to bring once he is taken. The
+      // two added together are what the pick was chosen on.
+      nextTurn: Number(pick.nextTurn) || 0,
       fillsStarter: !!pick.fillsStarter,
     } : null,
     // Who the pick is instead, once the name above has gone. Kept beside it

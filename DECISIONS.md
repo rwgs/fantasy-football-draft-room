@@ -9,6 +9,89 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-07 A pick is scored on what two turns come to, not on worth counted twice
+
+Status: Accepted. Amends the 2026-09-05 entry "The board names a pick, and
+says nothing when there is nothing to say", which stands in every other
+respect.
+
+### Decision
+
+`rankCandidates` scores each position's leader by what he is worth over a
+replacement starter, plus what your next turn is still expected to bring once he
+is taken -- the best expected value at another position you would still have to
+start. The score was `now + (now - later)`.
+
+Nothing else about the 2026-09-05 entry moves. Only position leaders are
+weighed, a position at its cap is still not a pick, the three point naming gate
+still withholds a verdict when there is no decision to report, and the
+recommendation still shows its arithmetic so it can be overruled. The field the
+panel draws beside worth is now `nextTurn` rather than `urgency`, because the
+two numbers it prints have to be the two the pick was chosen on.
+
+### Why
+
+`2 * now - later` counts what a player is worth twice and counts what you would
+do instead not at all, so it is a heuristic for scarcity rather than a
+comparison of outcomes. The audit in `review/review.md` found a counterexample
+inside its own numbers, as finding M1: with both slots open, a receiver worth 100
+now and nothing later against a back worth 150 now and 70 later scored RB 230 to
+WR 200 and took the back. The back now and the receiver later comes to 150. The
+receiver now and the back later comes to 170. It gave up 20 points it had already
+measured.
+
+The replacement is the smallest thing that is actually a comparison: the two
+turns added up. It agrees with the old heuristic in the ordinary case, because
+the position that will not keep is still the one to spend a pick on. It
+disagrees exactly where the double count was doing the work.
+
+It also degenerates correctly, which is the strongest argument for it. With
+every starting slot filled there is no next turn to price, the second term is
+zero for everybody, and worth alone decides -- which is what the 2026-09-05
+entry already said was right there, reached now by construction rather than by a
+clause. With a pool the room will not touch, `later` equals `now` at every
+position and either order comes to the same total, so the board says nothing,
+which is true: the order does not matter.
+
+### What was rejected with it
+
+- **Weighting a bench position's contribution by a fraction.** Rejected again,
+  for the reason the 2026-09-05 entry rejected it: the coefficient would be a
+  fudge nobody could justify. This is why the finding is not fully closed.
+- **Scoring the change in your best legal lineup instead of worth over a
+  replacement.** It is the more faithful reading of M1 and it fixes the case
+  above on its own, but lineup points are not comparable across positions -- an
+  empty roster would take a quarterback first every time -- and correcting for
+  that reduces to value over replacement again. What is left of it needs the
+  bench model below.
+- **A deeper continuation than one pick.** The honest version of M1 compares
+  candidate-conditioned continuations several picks out. That needs the
+  calibration M4 asks for before anybody could say it was better, and a
+  one-pick continuation is already a comparison where there was none.
+
+### Consequences
+
+- **The board says nothing more often, and means it.** Over seat 5's fifteen
+  turns in a played 12 team half-PPR draft it names a pick at twelve of them,
+  where the old score named one at all fifteen. The three it declines are
+  margins of 0.2, 1.5 and 1.8 points across two turns. The gate did not move and
+  should not: three points is three projected points, and the new score states
+  them in those units where the old one roughly doubled them. The old score
+  cleared the gate at pick 20 by 0.9 points, so its confidence there was already
+  a coin toss.
+- The chain of alternatives keeps the behaviour it was built for. It reaches the
+  same position twice at twelve of those twelve turns, and never once comes out
+  as the position leaders in order, which would make it a second copy of the
+  cost of waiting panel beside it.
+- `PositionValue.cost` is still what the cost of waiting panel draws and still
+  what sorts it. It no longer feeds the recommendation's score.
+- **What a bench player is worth is still overstated**, and this does not
+  address it. A backup quarterback still carries his full value over a
+  replacement starter, so outside the compulsory case in `rankCandidates` he can
+  still outrank a receiver filling an empty slot. `review/review.md` keeps that
+  open under M1 and R6, and it needs expected usable weeks, replacement access
+  and the calibration in M4 rather than a coefficient.
+
 ## 2026-09-07 The running bridge reports its own build, and the app says so
 
 Status: Accepted.

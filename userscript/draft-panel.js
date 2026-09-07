@@ -190,9 +190,8 @@
 
     const why = (p.worth > 0 ? '+' : '') + Math.round(p.worth)
       + ' over a replacement ' + (p.position || '')
-      + (p.urgency >= 1
-        ? ', and ' + Math.round(p.urgency) + ' of that goes '
-          + (onClock ? 'if you wait' : 'before your turn')
+      + (p.nextTurn >= 1
+        ? ', and ' + Math.round(p.nextTurn) + ' more at your next turn'
         : '')
       + (p.fillsStarter
         ? '. You still have to start one.'

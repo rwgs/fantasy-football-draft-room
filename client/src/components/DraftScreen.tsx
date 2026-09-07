@@ -444,7 +444,7 @@ export default function DraftScreen(props: Props) {
         name: take.player.name,
         position: take.player.position,
         worth: take.worth,
-        urgency: take.urgency,
+        nextTurn: take.nextTurn,
         fillsStarter: take.fillsStarter,
       } : null,
       // Who to take instead when he goes first, which out of turn is the part
