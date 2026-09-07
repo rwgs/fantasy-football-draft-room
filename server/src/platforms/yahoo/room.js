@@ -321,13 +321,24 @@ export function setWanted(leagueId, wanted) {
  *
  * `first` used to be a refusal, on the reasoning that `S|` replaces the whole
  * list and a write made in ignorance of it is a deletion. That reasoning was
- * sound and the conclusion was still wrong. Nothing can read a Yahoo queue —
- * no frame reports one unprompted, `6|` answers `6|` rather than `Q|`, and no
- * REST endpoint carries it — so "wait until the room reports" resolves only
- * when the user goes and queues someone by hand, which is the work they turned
- * this on to avoid. Worse, an empty queue appears to drop a seat straight into
- * autodraft, so the refusal held its fire exactly when firing was the point.
- * See `docs/yahoo-draft-protocol.md` and `DECISIONS.md`.
+ * sound and the conclusion was still wrong, though not for the reason recorded
+ * here at the time, which was that nothing can read a Yahoo queue. That is
+ * false: the connect burst carries one, arriving bare when the queue is empty,
+ * observed twice on 2026-09-07 in league `10893050` by a recorder attached
+ * before the room loaded. Every capture that missed it began after the socket
+ * was already open. See `docs/yahoo-draft-protocol.md` and `DECISIONS.md`.
+ *
+ * So `first` should be rare, and means the bridge attached late rather than
+ * that the queue is unknowable. It was not rare in testing because the browser
+ * was running bridge 1.0.0, whose filter is `/^(?:0|H|R|P)(?:\||$)/` and drops
+ * every `Q` before it leaves the page. Nothing here needs changing for that,
+ * but whether `first` should still write in ignorance is worth revisiting now
+ * that it is a narrow case rather than the ordinary one.
+ *
+ * Also recorded at the time: an empty queue appears to drop a seat straight
+ * into autodraft. Nothing since supports it. Every drop watched has followed a
+ * clock expiring unpicked, which accounts for all of them without the queue
+ * coming into it at all.
  *
  * What survives of the caution: an empty list is never the answer here, so a
  * queue is never replaced by nothing. Turning the setting on with nothing

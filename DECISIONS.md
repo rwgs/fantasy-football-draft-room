@@ -46,6 +46,28 @@ algorithm from the first pick. A rule that withholds the write until the user
 acts withholds it for the whole draft, and does so most firmly in the rooms
 where it was most wanted.
 
+**Corrected 2026-09-07.** Two of the premises above do not survive, and the decision
+still stands.
+
+The first bullet is false: Yahoo does report a queue unprompted. The connect
+burst carries a `Q`, arriving bare when the queue is empty, observed twice in
+league `10893050` by a recorder attached before the room loaded. Every capture
+behind the original finding began after the socket was already open, which is
+why none of them held one. So `first` should mean "the bridge attached late"
+rather than "the queue is unknowable" — and the `10888301` run above, where the
+queue was never written, was running bridge 1.0.0, whose filter drops every `Q`
+before it leaves the page.
+
+The autodraft premise is unsupported rather than false. Nothing observed since
+shows an empty queue putting a seat into autodraft; every drop watched has
+followed a clock expiring unpicked, which accounts for all of them without the
+queue coming into it.
+
+What is unchanged is the cost the decision weighed: the first write still
+replaces a queue it has not seen. What has changed is how often that arises,
+and whether `first` should still write in ignorance now that it is the narrow
+case rather than the ordinary one is worth reopening.
+
 ### What it costs, and what still holds
 
 A queue built before the bridge attached is replaced, once. That is a real cost

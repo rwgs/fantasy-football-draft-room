@@ -108,12 +108,16 @@ Phase 4: prove the platform seam against real leagues.
     the two new `useState(saved.…)` lines, the pattern every other setting in
     `App.tsx` already uses.
   - Manual validation: **still not done — no real queue has ever been written.**
-    The live run above proved the reading half and disproved the writing rule;
-    it never got as far as an `S|` leaving the browser. Also unconfirmed
-    throughout: which bridge version was actually installed in that tab, which
-    matters because 1.2.0 has no write path and drops `Q` exactly as observed.
-    Next mock: check the version the bridge logs on load, turn the setting on,
-    star a player, and confirm the room's own queue changes.
+    Two more mocks on 2026-09-07 got no further, and the reason is now confirmed
+    rather than suspected: the browser was running bridge **1.0.0** throughout.
+    It logs no version banner, its filter is `/^(?:0|H|R|P)(?:\||$)/` so every
+    `Q` is dropped before it leaves the page, and it has no write path at all.
+    That accounts for all three symptoms seen, and for the `10888301` run above.
+    The manager's own stored source reads 1.3.0, so what is saved and what is
+    injected disagree: it is a real reinstall that is untested, not the code.
+    Next mock: confirm `v1.3.0 loading` in the room's console **first**, and only
+    then turn the setting on, star a player, and watch for the `S|` and the `Q|`
+    that answers it.
   - Dependencies or blockers: none.
   - Still unverified, and cheap to settle in the same mock:
     - Whether Yahoo's own draft room redraws its queue from a `Q|` it did not

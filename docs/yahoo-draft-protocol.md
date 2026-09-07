@@ -341,8 +341,13 @@ a shorter list, which `capture-mock2.log` shows directly at lines 581-584: the
 list goes to `40962|33998`, then back to `40962`. So a write is a replacement,
 and a client that sends a list missing an entry has deleted that entry.
 
-**Observed: `Q|` only ever answers an `S|`.** Every one of the 32 in the
-captures sits on the line after a write. Nothing else provokes one.
+**Observed: mid-draft, `Q|` only ever answers an `S|`.** Every one of the 32 in
+the `capture-mock*` logs sits on the line after a write, and nothing else
+provokes one once a draft is running. The connect burst is the exception, and it
+was missed for as long as no capture began before a room loaded: `Q` is sent
+there unprompted, bare when the queue is empty. So a client that joins with the
+room is told what its queue holds, and only one that attaches later has to
+wonder.
 
 **Observed: Yahoo does not tell you it pruned a drafted player.** In
 `capture-mock2.log` a nine-deep queue is set at line 393, and all nine players
