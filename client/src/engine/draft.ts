@@ -372,6 +372,27 @@ export function hasChoicesLeft(engine: DraftEngine): boolean {
   return nextUserChoice(engine) != null;
 }
 
+/**
+ * The pick every piece of advice is measured against.
+ *
+ * Always "the next turn I choose at, after this one". Off the clock that is
+ * simply your next choice; on it, the pick after the one you are making, since
+ * pointing the horizon at the pick in your hand would read as 100 per cent for
+ * everybody and cost nothing to wait for.
+ *
+ * One function because the screen and the forecast both need it and used to
+ * work it out separately -- the screen from `nextUserChoice`, the forecast from
+ * `nextUserPick`. They disagreed twice over. On your own turn the forecast's
+ * target came back as the current pick, so it refused to run at all and the
+ * advice fell back to generic ADP exactly when the pick had to be made; and a
+ * keeper on a future pick moved one horizon without moving the other.
+ */
+export function decisionHorizon(engine: DraftEngine): number | null {
+  const from = currentPick(engine.state);
+  const next = nextUserChoice(engine);
+  return next === from ? nextUserChoice(engine, from + 1) : next;
+}
+
 export function playersOf(engine: DraftEngine, team: TeamState): Player[] {
   return team.playerIds
     .map((id) => engine.byId.get(id))

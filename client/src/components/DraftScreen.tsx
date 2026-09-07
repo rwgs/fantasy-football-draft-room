@@ -8,8 +8,8 @@ import {
 } from '../engine/forecast';
 import RosterPanel from './RosterPanel';
 import {
-  autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
-  nextUserChoice, playersOf, presetFor, runCpuPick, runPresetsOnly, runToUserTurn,
+  autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, decisionHorizon,
+  draftPlayer, playersOf, presetFor, runCpuPick, runPresetsOnly, runToUserTurn,
   undoPick, undoToMyLastPick,
 } from '../engine/draft';
 import type { DraftEngine } from '../engine/draft';
@@ -149,12 +149,13 @@ export default function DraftScreen(props: Props) {
   const yourTurn = !!onClock?.isUser && !settledNow;
   /** In manual entry every pick is yours to record, not just your own. */
   const canPick = (yourTurn || (assistant && manual)) && !state.done;
-  const myNext = nextUserChoice(engine);
 
   // The survival bar always answers "will this player last until the next time
   // I pick". On your own turn that is the pick after this one, not this one,
   // and pointing it at the current pick would read 100 per cent for everybody.
-  const oddsTarget = yourTurn ? nextUserChoice(engine, pick + 1) : myNext;
+  // `decisionHorizon` is that same reading, and the forecast now takes it from
+  // there too rather than working it out again from `nextUserPick`.
+  const oddsTarget = decisionHorizon(engine);
 
   // The clock reads the same pick the bar is measured against. On your turn
   // "your next pick" used to repeat the pick you were making, which on a phone

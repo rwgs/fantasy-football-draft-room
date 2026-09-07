@@ -1,5 +1,5 @@
 import { biasLever, chooseCpuPick } from './cpu';
-import { availablePlayers, currentPick, currentTeam, nextUserPick, presetFor } from './draft';
+import { availablePlayers, currentPick, currentTeam, decisionHorizon, presetFor } from './draft';
 import { mulberry32 } from './random';
 import { CERTAINLY_GONE, survivalOdds } from './survival';
 import { positionValues, rankCandidates, recommendPick, replacementPoints } from './value';
@@ -224,7 +224,7 @@ export function forecast(
   prior: Record<Position, number> | null = null,
 ): Forecast | null {
   const { state } = engine;
-  const target = nextUserPick(state);
+  const target = decisionHorizon(engine);
   const from = currentPick(state);
   if (target == null || target <= from || state.done) return null;
 
@@ -262,6 +262,17 @@ export function forecast(
       if (!team) break;
 
       const promised = presetFor(live, overall);
+      // Your own turn inside the window is stepped over rather than played.
+      // Because `target` is your next choice, the only pick this can be is the
+      // one in your hand right now, and the question being asked is "if I do
+      // not take him now, is he there next time" -- so the honest board leaves
+      // everybody on it for a pick you have not made. Letting the CPU choose
+      // for you would let the simulation draft the very player you are asking
+      // about, and then report he never survives.
+      if (!promised && team.isUser) {
+        live = skipPick(live);
+        continue;
+      }
       const player = promised ?? chooseCpuPick(availablePlayers(live), {
         league: live.state.league,
         cpu,
@@ -315,6 +326,35 @@ export function forecast(
 
   return {
     sims, targetPick: target, survival, taken, expected: bestLeft, lean,
+  };
+}
+
+/**
+ * Advance past a pick without drafting anybody.
+ *
+ * For your own turn while you are on the clock, where the whole point is that
+ * nobody has been taken yet. The record carries no player, which `countAt`
+ * reads back as nobody at any position and no roster change, because that is
+ * what it was: a pick stepped over rather than made.
+ */
+function skipPick(engine: DraftEngine): DraftEngine {
+  const { state } = engine;
+  const overall = currentPick(state);
+  return {
+    ...engine,
+    state: {
+      ...state,
+      picks: [...state.picks, {
+        overall,
+        round: Math.floor((overall - 1) / state.league.teams) + 1,
+        slotInRound: ((overall - 1) % state.league.teams) + 1,
+        teamIndex: state.order[overall - 1],
+        playerId: '',
+        auto: true,
+        preset: null,
+      }],
+      done: state.picks.length + 1 >= state.order.length,
+    },
   };
 }
 

@@ -13,8 +13,9 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { PRESETS, DEFAULT_CPU, applyBias, biasLever } from './cpu';
 import {
-  autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, draftPlayer,
-  nextUserChoice, nextUserPick, presetFor, runCpuPick, runPresetsOnly, runToUserTurn, undoPick,
+  autoDraftRest, availablePlayers, createDraft, currentPick, currentTeam, decisionHorizon,
+  draftPlayer,
+  nextUserChoice, presetFor, runCpuPick, runPresetsOnly, runToUserTurn, undoPick,
 } from './draft';
 import { boardCsv } from './exportBoard';
 import { NO_FIXTURES, loadFixtures } from './fixtures';
@@ -810,7 +811,7 @@ async function main() {
     while (e.state.picks.length < 36 && !e.state.done) e = runCpuPick(e);
 
     const from = currentPick(e.state);
-    const target = nextUserPick(e.state)!;
+    const target = decisionHorizon(e)!;
     const f = forecast(e, 120)!;
 
     check('a forecast is made', !!f && f.targetPick === target, String(f?.targetPick));
@@ -898,6 +899,43 @@ async function main() {
     check('and what is expected to be left is never worth more than what is there',
       priced.every((v) => v.later <= v.now + 1e-6),
       priced.map((v) => v.position + ' ' + v.now.toFixed(0) + '/' + v.later.toFixed(0)).join(' '));
+
+    /*
+     * THE ROOM IS STILL READ WHEN THE PICK IS ACTUALLY BEING MADE
+     *
+     * The screen measures its horizon with `nextUserChoice` and the forecast
+     * used to measure its own with `nextUserPick`, which returns the current
+     * pick when you are on the clock. `target <= from` then refused the whole
+     * forecast, so every measurement of this room -- the lean, the rosters, the
+     * survival -- was dropped for generic ADP at the one moment the pick had to
+     * be made. Both now read `decisionHorizon`.
+     */
+    let clock = createDraft(league({ mySlot: 5 }), DEFAULT_CPU, board.players, null);
+    while (clock.state.picks.length < 4 && !clock.state.done) clock = runCpuPick(clock);
+    const at5 = currentPick(clock.state);
+    check('seat five is on the clock after four picks, or this proves nothing',
+      !!currentTeam(clock.state)?.isUser && at5 === 5, String(at5));
+    check('and the horizon is the next turn you choose at, not the one in hand',
+      decisionHorizon(clock) === 20, String(decisionHorizon(clock)));
+    const cf = forecast(clock, 120);
+    check('the room is still forecast while you are on the clock',
+      !!cf && cf.targetPick === 20, cf ? String(cf.targetPick) : 'no forecast');
+
+    /*
+     * Your own pick is stepped over rather than played. Letting the CPU choose
+     * for you would let the simulation draft the very player you are weighing
+     * and then report that he never survives, so the 15 picks from 5 to 19 are
+     * 14 picks by the room and one that has not happened yet.
+     */
+    check('your own turn takes nobody off the board',
+      Math.abs(POSITIONS.reduce((n, p) => n + cf!.taken[p], 0) - 14) < 1e-6,
+      POSITIONS.reduce((n, p) => n + cf!.taken[p], 0).toFixed(1) + ' of 14');
+
+    check('the screen and the forecast never disagree about the horizon',
+      [clock, long, e].every((g) => {
+        const h = decisionHorizon(g);
+        return forecast(g, 8)?.targetPick === h && h !== currentPick(g.state);
+      }));
   }
 
   console.log('\nWhat the room says before it drafts');
