@@ -134,8 +134,22 @@ each case waits out the bridge's own idle beat — and it forces its own exit,
 because a bridge that stopped rescheduling itself would be the bug.
 
 What it cannot see is the browser: the userscript manager, whether the installed
-copy is the current one, and Chrome's loopback permission. Those still need a
-mock draft, and the version the bridge logs on load is how to tell.
+copy is the current one, and Chrome's loopback permission. The app now answers
+the middle one — the service stamps a build into the copy it serves and the
+running bridge reports it back, so the masthead names the version and a banner
+says when it is behind. Check that before a draft rather than reading captures
+after one.
+
+**"Allow user scripts" is a separate gate from the `userScripts` permission,**
+and 2026-09-07 went to it. On Chromium the permission can be granted — it is in
+the manifest and `chrome.permissions.contains` says yes — while the API stays
+undefined until the user turns on the per-extension control, which on Edge lives
+on the extension's own details page and is not the global developer-mode switch.
+With it off Tampermonkey registers nothing and injects nothing, and says so
+nowhere: its dashboard shows no warning, its stored copy is correct, its update
+checks pass, and the served file is right. Every account agrees except the page.
+`window.WebSocket` still being unpatched in the draft room is the one-line
+check, and a bridge that logs no version banner has not run at all.
 
 `npm run engine:test` fetches a real board from `http://localhost:5178`, so the
 data service has to be running or every check fails at the first fetch. Bring

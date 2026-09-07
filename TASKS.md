@@ -32,16 +32,17 @@ Phase 4: prove the platform seam against real leagues.
     and `shots` clean, no console errors. `bridge:test` runs unstamped by
     construction and its log now says so, which exercises the escape hatch
     rather than asserting about it.
-  - Manual validation: **half done, and the half that matters worked.** The
-    banner appeared on its first outing, 2026-09-07, against league `10901687`:
-    a genuinely stale install, reported `tooOld`, named on screen. That is the
-    failure of the previous three drafts becoming visible in a second instead of
-    a session.
-    Still to see: the clean case. A current install should show
-    `bridge <version> · <build>` in the masthead with no banner, and that needs
-    an install that actually takes — see the version-bump note below, since a
-    manager that will not fetch is a separate problem from a body that will not
-    report.
+  - Manual validation: **done, both ways.** The banner appeared against a
+    genuinely stale install on 2026-09-07 (league `10901687`, reported
+    `tooOld`), and the clean case followed in `10902922`: the room's console
+    logged `v1.3.1 loading … build e7a163fa`, the service read
+    `stale: false`, and no banner appeared.
+    What the failure turned out to be is recorded in `AGENTS.md`: Chromium's
+    per-extension "Allow user scripts" control, off while the `userScripts`
+    permission itself was granted, so Tampermonkey injected nothing and every
+    other account of the script looked correct. The stamp is what made that
+    disagreement visible, and it flipped to `stale: false` on its own the
+    moment the control was turned on.
   - Also built, after the first outing showed it too narrow: the reading is held
     per service rather than per room and read from `/api/bridge/build`, so it is
     answered whenever Yahoo is the platform on any screen in either mode. It had
