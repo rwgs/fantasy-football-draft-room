@@ -1006,12 +1006,18 @@ export default function App() {
       </header>
 
       {/*
-        * Said once, where it cannot be missed, and only when it is true.
+        * Three states, said where each is worth reading.
         *
-        * A bridge that is behind still mirrors picks, which is exactly what
-        * makes it dangerous: the board looks right while the half that writes
-        * your queue is missing. On 2026-09-07 a copy three versions old ran a
-        * whole session that way, with the manager reporting it as current.
+        * A bridge that is behind still mirrors picks, which is what makes it
+        * dangerous: the board looks right while the half that writes your queue
+        * is missing. On 2026-09-07 a copy three versions old ran a whole
+        * session that way with its manager reporting it as current, and the
+        * silence when nothing was injected at all read as the app being broken
+        * rather than as nothing having spoken to it.
+        *
+        * So the warning shows on every screen, and the reassurance shows on
+        * setup only. A permanent row over the draft screen would be taking
+        * space from the pool to say nothing is wrong.
         */}
       {bridgeSeen?.stale && (
         <div className="banner is-bad" role="status" style={{ margin: '10px 18px 0' }}>
@@ -1031,7 +1037,38 @@ export default function App() {
             >
               the service
             </a>
-            {', then reload the draft room and check its console says the build above.'}
+            {', then reload the draft room. Its console should name the build above.'}
+          </span>
+        </div>
+      )}
+
+      {screen === 'setup' && watchBridge && bridgeSeen && !bridgeSeen.stale && (
+        <div className="banner is-good" role="status" style={{ margin: '10px 18px 0' }}>
+          <span>
+            <b>The Yahoo bridge is current.</b>
+            {` Version ${bridgeSeen.version ?? 'unversioned'}`}
+            {bridgeSeen.fromSource
+              ? ', run from the repository rather than installed.'
+              : `, build ${bridgeSeen.build}.`}
+            {' Picks will mirror and your queue can be written.'}
+          </span>
+        </div>
+      )}
+
+      {/*
+        * Nothing has spoken. Not an error — a draft room that has not been
+        * opened yet looks exactly like this — but saying so is the difference
+        * between "no bridge is talking to me" and "this app is broken", which
+        * is a distinction a whole evening turned on.
+        */}
+      {screen === 'setup' && watchBridge && !bridgeSeen && (
+        <div className="banner" role="status" style={{ margin: '10px 18px 0' }}>
+          <span>
+            <b>No Yahoo bridge has reported yet.</b>
+            {' Open your draft room with the userscript installed and this will'}
+            {' name the version it is running. If it stays empty once a room is'}
+            {' open, nothing is being injected: check that the browser allows'}
+            {' user scripts for your userscript manager.'}
           </span>
         </div>
       )}

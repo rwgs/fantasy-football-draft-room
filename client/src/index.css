@@ -1704,6 +1704,13 @@ input[type='range']::-moz-range-thumb {
 
 .banner.is-bad { border-color: var(--bad-line); background: color-mix(in srgb, var(--qb) 8%, transparent); }
 
+/* Green on the same pattern, off the position palette rather than a new colour,
+   so both themes get it without another pair of variables. */
+.banner.is-good {
+  border-color: color-mix(in srgb, var(--rb) 45%, transparent);
+  background: color-mix(in srgb, var(--rb) 8%, transparent);
+}
+
 .centred {
   display: grid;
   place-content: center;
