@@ -1,4 +1,4 @@
-import { normalCdf } from './random';
+import { logNormalTail } from './random';
 import type { Player } from './types';
 
 /**
@@ -17,12 +17,14 @@ import type { Player } from './types';
 export function survivalOdds(player: Player, currentPick: number, targetPick: number): number {
   if (targetPick <= currentPick) return 1;
   const sd = Math.max(0.8, player.adpStdev);
-  const survivesTo = (pick: number) => 1 - normalCdf((pick - 0.5 - player.adp) / sd);
+  const logSurvivesTo = (pick: number) => logNormalTail((pick - 0.5 - player.adp) / sd);
 
-  const now = survivesTo(currentPick);
-  const then = survivesTo(targetPick);
-  if (now <= 1e-6) return then > 0 ? 1 : 0;
-  return Math.max(0, Math.min(1, then / now));
+  // The ratio is taken in logs because both tails underflow for a player who
+  // has fallen far past his ADP, and dividing zero by zero used to read as
+  // certainty: the further he fell, the more sure the board became he would
+  // last. In logs the conditional probability stays finite and keeps falling as
+  // the target moves away, which is what conditioning on "still here" means.
+  return Math.max(0, Math.min(1, Math.exp(logSurvivesTo(targetPick) - logSurvivesTo(currentPick))));
 }
 
 /**

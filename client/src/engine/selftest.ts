@@ -440,6 +440,33 @@ async function main() {
       positionValues(after(19), all, 12, r, 20, null).every((v) => v.cost === 0));
 
     /*
+     * A PLAYER WHO HAS FALLEN OFF THE MODEL IS NOT A CERTAINTY
+     *
+     * Both tails underflow once a player is six standard deviations past his
+     * ADP, and dividing one zero by the other used to return exactly 1: the
+     * further he fell, the surer the board became he would last another pick.
+     * The conditional model says the opposite, so the check is that the odds
+     * stay under one, stay finite, and keep falling as the target moves away.
+     */
+    const overdue = { ...all[0], adp: 10, adpStdev: 1 };
+    const tail = [17, 18, 19, 26, 41, 81].map((t) => survivalOdds(overdue, t - 1, t));
+    check('a player long past his ADP is never certain to last',
+      tail.every((v) => v > 0 && v < 0.01), tail.map((v) => v.toExponential(1)).join(' '));
+    check('and the odds fall the further the wait runs',
+      tail.every((v, i) => i === 0 || v < tail[i - 1]));
+    /*
+     * Far enough out the answer really is zero to double precision, and that is
+     * the honest reading rather than a failure. What must not happen is a NaN,
+     * an answer above one, or an answer that climbs.
+     */
+    const far = [17, 18, 20, 30, 90].map((t) => survivalOdds(overdue, 16, t));
+    check('an extreme tail stays a probability rather than becoming a NaN',
+      far.every((v) => Number.isFinite(v) && v >= 0 && v < 1),
+      far.map((v) => v.toExponential(1)).join(' '));
+    check('and never climbs as the target moves further away',
+      far.every((v, i) => i === 0 || v <= far[i - 1]));
+
+    /*
      * A position emptied of everyone worth starting is left out rather than
      * priced at zero, which would read as "no drop off" and mean "nobody left".
      */
