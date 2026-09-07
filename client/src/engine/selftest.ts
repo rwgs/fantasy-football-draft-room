@@ -31,6 +31,7 @@ import {
 import {
   positionValues, rankCandidates, recommendPick, replacementPoints, startingAllocation,
 } from './value';
+import type { PositionValue } from './value';
 import {
   forecast, observedLean, pricedPositions, priorLean, reachablePlayers, recommendChain,
   recommendSequence,
@@ -620,9 +621,14 @@ async function main() {
     const byAdp = [...all].sort((a, b) => a.adp - b.adp);
     const after = (n: number) => byAdp.slice(n);
     const counts = (held: Partial<Record<Position, number>>) => ({ ...emptyCounts(), ...held });
+    /** What the draft has still to hand you: the rounds, less what you hold. */
+    const picksLeft = (mine: Record<Position, number>) =>
+      rosterSize(r) - POSITIONS.reduce((n, pos) => n + mine[pos], 0);
+    const pickFor = (rows: PositionValue[], mine: Record<Position, number>) =>
+      recommendPick(rows, mine, r, picksLeft(mine));
     const priced = positionValues(after(19), all, 12, r, 20, 29);
 
-    const empty = recommendPick(priced, counts({}), r);
+    const empty = pickFor(priced, counts({}));
     check('an empty roster gets a recommendation', empty != null,
       empty ? empty.player.name + ' ' + empty.player.position : 'none');
     check('and it is somebody still available',
@@ -638,7 +644,7 @@ async function main() {
      * The whole point of reading the roster. A position filled to its cap
      * cannot be the recommendation however much the best man left is worth.
      */
-    const stuffed = recommendPick(priced, counts({ QB: 9, TE: 9, K: 9, DEF: 9 }), r);
+    const stuffed = pickFor(priced, counts({ QB: 9, TE: 9, K: 9, DEF: 9 }));
     check('a position filled to its cap is never the pick',
       !stuffed || !['QB', 'TE', 'K', 'DEF'].includes(stuffed.player.position),
       stuffed ? stuffed.player.position : 'none');
@@ -648,12 +654,46 @@ async function main() {
      * starting slot can only take urgency away, so the score cannot rise.
      */
     const full = counts({ QB: 3, RB: 6, WR: 6, TE: 3, K: 2, DEF: 2 });
-    const late = recommendPick(priced, full, r);
+    const late = pickFor(priced, full);
     check('a full lineup adds no urgency to anybody',
       !late || late.urgency === 0, late ? String(late.urgency) : 'none');
 
+    /*
+     * THE LAST PICK THAT COULD FILL A LINEUP IS NOT SPENT ON A BACKUP
+     *
+     * The computer teams have followed this rule since they were written:
+     * `chooseCpuPick` stops taking depth once a team has exactly as many picks
+     * left as slots it cannot field a lineup without. The advice had no
+     * remaining-picks constraint at all, so a backup quarterback worth 100 over
+     * a replacement outscored the receiver worth 30 filling the last empty
+     * slot, and named him with `fillsStarter: false` on the final pick.
+     */
+    const rowFor = (pos: Position, now: number, later: number): PositionValue => ({
+      position: pos,
+      best: after(19).find((p) => p.position === pos && p.points != null)!,
+      now,
+      later,
+      cost: now - later,
+      odds: 1,
+      beforeCliff: 9,
+    });
+    // One receiving slot and the flex still open, and two picks to fill them.
+    const nearlyFull = counts({ QB: 1, RB: 2, WR: 1, TE: 1, K: 1, DEF: 1 });
+    const backupOrStarter = [rowFor('QB', 100, 100), rowFor('WR', 30, 20)];
+    const forced = recommendPick(backupOrStarter, nearlyFull, r, 2);
+    check('the last picks that can fill a lineup are not spent on a backup',
+      forced?.player.position === 'WR' && forced.fillsStarter,
+      forced ? forced.player.position + ' worth ' + forced.worth : 'none');
+
+    /*
+     * And it is a rule about compulsion and nothing else. With a bench still to
+     * draft the backup is a legitimate pick again, so the constraint lifts.
+     */
+    check('but with the bench still to come the backup is allowed back',
+      recommendPick(backupOrStarter, nearlyFull, r, 8)?.player.position === 'QB');
+
     check('nothing is recommended out of an empty pool',
-      recommendPick([], counts({}), r) === null);
+      pickFor([], counts({})) === null);
 
     /*
      * Saying nothing is a real answer. Two positions within a field goal of
@@ -661,14 +701,14 @@ async function main() {
      */
     const tied = priced.slice(0, 2).map((v, i) => ({ ...v, now: 50, cost: i === 0 ? 1 : 0.5 }));
     check('a tie close enough to be noise is left unnamed',
-      recommendPick(tied, counts({}), r) === null);
+      pickFor(tied, counts({})) === null);
 
     /*
      * A tie is no reason to withhold the alternatives. It is a reason to name
      * a pick carefully, and the gate on the first name is where that is done.
      */
     check('but a tie among the alternatives keeps them both',
-      rankCandidates(tied, counts({}), r).length === 2);
+      rankCandidates(tied, counts({}), r, picksLeft(counts({}))).length === 2);
   }
 
   console.log('\nAnd who to take instead');
@@ -678,8 +718,10 @@ async function main() {
     const byAdp = [...all].sort((a, b) => a.adp - b.adp);
     const after = (n: number) => byAdp.slice(n);
     const counts = (held: Partial<Record<Position, number>>) => ({ ...emptyCounts(), ...held });
+    const picksLeft = (mine: Record<Position, number>) =>
+      rosterSize(r) - POSITIONS.reduce((n, pos) => n + mine[pos], 0);
     const chainAt = (mine: Record<Position, number>, depth = 4) =>
-      recommendChain(after(19), all, 12, r, 20, 29, null, mine, depth);
+      recommendChain(after(19), all, 12, r, 20, 29, null, mine, picksLeft(mine), depth);
 
     const chain = chainAt(counts({}));
     console.log('        ' + chain.map((c, i) =>
@@ -689,7 +731,7 @@ async function main() {
       String(chain.length));
     check('and the first of them is the pick on its own',
       chain[0]?.player.id === recommendPick(
-        positionValues(after(19), all, 12, r, 20, 29), counts({}), r,
+        positionValues(after(19), all, 12, r, 20, 29), counts({}), r, picksLeft(counts({})),
       )?.player.id);
     check('every fallback is a different player',
       new Set(chain.map((c) => c.player.id)).size === chain.length);
@@ -726,19 +768,25 @@ async function main() {
      * left worth having are the ones with a single slot.
      */
     const oneSlotOnly = after(19).filter((p) => p.position === 'K' || p.position === 'DEF');
-    const substitutes = recommendChain(oneSlotOnly, all, 12, r, 20, 29, null, counts({}), 4);
+    const substitutes = recommendChain(
+      oneSlotOnly, all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4,
+    );
     check('four substitutes drawn from two one-slot positions repeat both',
       substitutes.length === 4
         && new Set(substitutes.map((c) => c.player.position)).size === 2,
       substitutes.map((c) => c.player.position).join(' '));
 
-    const plan = recommendSequence(oneSlotOnly, all, 12, r, 20, 29, null, counts({}), 4);
+    const plan = recommendSequence(
+      oneSlotOnly, all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4,
+    );
     check('but a queue off the same board takes each of them once and stops',
       plan.length === 2 && new Set(plan.map((c) => c.player.position)).size === 2,
       plan.map((c) => c.player.position).join(' '));
 
     const held = counts({});
-    for (const entry of recommendSequence(after(19), all, 12, r, 20, 29, null, held, 8)) {
+    for (const entry of recommendSequence(
+      after(19), all, 12, r, 20, 29, null, held, picksLeft(held), 8,
+    )) {
       held[entry.player.position] += 1;
     }
     check('and a queue fills no position past what the roster can play',
@@ -746,14 +794,55 @@ async function main() {
       POSITIONS.map((pos) => pos + held[pos]).join(' '));
 
     check('a queue counts what you already hold, not only what it adds',
-      recommendSequence(after(19), all, 12, r, 20, 29, null, counts({ K: 1 }), 8)
-        .every((c) => c.player.position !== 'K'));
+      recommendSequence(
+        after(19), all, 12, r, 20, 29, null, counts({ K: 1 }), picksLeft(counts({ K: 1 })), 8,
+      ).every((c) => c.player.position !== 'K'));
+
+    /*
+     * A QUEUE STILL HAS TO NAME SOMEBODY
+     *
+     * Beating a replacement starter used to be what qualified a position for
+     * the list rather than what ordered it, so a pool holding nobody worth
+     * starting produced no queue at all -- and by the last rounds of a real
+     * draft that is most of what is left. Worth still sorts them; it no longer
+     * decides whether a pick gets made. `chooseCpuPick` has always fallen back
+     * to the best man on the board rather than stalling the draft.
+     */
+    const replacement = replacementPoints(all, 12, r);
+    const belowReplacement = after(19)
+      .filter((p) => p.position === 'RB' && p.points != null && p.points < replacement.RB)
+      .slice(0, 30);
+    check('thirty backs below replacement, or the queue below proves nothing',
+      belowReplacement.length === 30
+        && positionValues(belowReplacement, all, 12, r, 20, 29).every((v) => v.now < 0),
+      belowReplacement.length + ' below ' + replacement.RB.toFixed(1));
+    const barren = recommendSequence(
+      belowReplacement, all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4,
+    );
+    check('and a queue off them is still four picks deep', barren.length === 4,
+      barren.map((c) => Math.round(c.worth)).join(' '));
+
+    /*
+     * The fallback is a floor and not a preference. Somebody worth having still
+     * leads, and the backs nobody wants fill in behind him.
+     */
+    const oneWorthHaving = [
+      after(19).find((p) => p.position === 'WR' && p.points != null)!,
+      ...belowReplacement,
+    ];
+    const led = recommendSequence(
+      oneWorthHaving, all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4,
+    );
+    check('and the man worth having still leads it',
+      led[0]?.player.position === 'WR' && led.length === 4,
+      led.map((c) => c.player.position).join(' '));
 
     check('asking for one gets the pick and nothing else',
       chainAt(counts({}), 1).length === 1);
 
     check('nothing to fall back on when there was no pick to make',
-      recommendChain([], all, 12, r, 20, 29, null, counts({}), 4).length === 0);
+      recommendChain([], all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4)
+        .length === 0);
 
     /*
      * THE ADVICE MUST NOT NAME SOMEBODY THE SAME SCREEN CALLS GONE
@@ -770,7 +859,9 @@ async function main() {
     check('and everyone kept has a real chance of lasting',
       canReach.every((p) => survivalOdds(p, 20, 29) > CERTAINLY_GONE));
 
-    const offClock = recommendChain(canReach, all, 12, r, 20, 29, null, counts({}), 4);
+    const offClock = recommendChain(
+      canReach, all, 12, r, 20, 29, null, counts({}), picksLeft(counts({})), 4,
+    );
     check('nobody named off the clock is already gone by your turn',
       offClock.every((c) => survivalOdds(c.player, 20, 29) > CERTAINLY_GONE),
       offClock.map((c) => c.player.name + ' '

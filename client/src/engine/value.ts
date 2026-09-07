@@ -1,6 +1,7 @@
 import { survivalOdds } from './survival';
 import {
   FLEX_POSITIONS, SUPERFLEX_POSITIONS, emptyCounts, fillsStarter, positionCap, starterCount,
+  startersFilled,
 } from './roster';
 import type { Player, Position, RosterSlots } from './types';
 import { POSITIONS } from './types';
@@ -274,16 +275,52 @@ const WORTH_NAMING = 3;
  * No margin gate here. That gate belongs to naming a single pick, where a tie
  * means there is no decision to report; a ranked list of options is exactly
  * what you want a tie to produce, both of them, in either order.
+ *
+ * `picksLeft` is how many the draft has still to hand you, and it is the other
+ * half of reading your roster. What you hold says which positions you can still
+ * play; what is left to come says whether you can still afford to.
  */
 export function rankCandidates(
   priced: PositionValue[],
   mine: Record<Position, number>,
   roster: RosterSlots,
+  picksLeft: number,
 ): Recommendation[] {
-  const scored = priced
-    .filter((row) => row.best != null && row.now > 0)
-    // Whatever it is worth, a position nobody can still play is not a pick.
-    .filter((row) => mine[row.position] < positionCap(roster, row.position))
+  // Whatever he is worth, a position nobody can still play is not a pick.
+  const legal = priced.filter((row) => row.best != null
+    && mine[row.position] < positionCap(roster, row.position));
+
+  /*
+   * The same hard rule the computer teams follow in `chooseCpuPick`: once a
+   * team has exactly as many picks left as slots it cannot field a lineup
+   * without, depth stops being a choice. The advice had no remaining-picks
+   * constraint of any kind, so on the last pick of a draft with a receiving
+   * slot still empty it would name a backup quarterback worth more over a
+   * replacement and say `fillsStarter: false` while doing it. A roster that
+   * cannot start a lineup is not a draft result anybody wants to read.
+   *
+   * It lifts the moment there is a bench to draft, because then the backup is
+   * a legitimate pick again. This is compulsion, not a preference.
+   */
+  const openStarters = Math.max(0, starterCount(roster) - startersFilled(mine, roster));
+  const compulsory = picksLeft <= openStarters
+    ? legal.filter((row) => fillsStarter(mine, roster, row.position))
+    : legal;
+  const playable = compulsory.length ? compulsory : legal;
+
+  /*
+   * Worth orders this list. It used to decide who was allowed on it as well,
+   * and a pool with nobody left worth starting therefore produced no advice and
+   * no queue at all -- thirty available backs below replacement returned an
+   * empty list -- which by the last rounds of a real draft is most of what is
+   * left. A pick still has to be made, and those backs are legitimate bench
+   * selections. So the filter applies only while somebody passes it, which is
+   * the shape `chooseCpuPick` already has when it falls back to the best man on
+   * the board rather than stalling the draft.
+   */
+  const worthy = playable.filter((row) => row.now > 0);
+
+  const scored = (worthy.length ? worthy : playable)
     .map((row) => {
       const starter = fillsStarter(mine, roster, row.position);
       const urgency = starter ? row.cost : 0;
@@ -305,7 +342,8 @@ export function recommendPick(
   priced: PositionValue[],
   mine: Record<Position, number>,
   roster: RosterSlots,
+  picksLeft: number,
 ): Recommendation | null {
-  const [top] = rankCandidates(priced, mine, roster);
+  const [top] = rankCandidates(priced, mine, roster, picksLeft);
   return top && top.margin >= WORTH_NAMING ? top : null;
 }

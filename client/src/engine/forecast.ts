@@ -497,10 +497,11 @@ export function recommendChain(
   targetPick: number | null,
   room: Forecast | null,
   mine: Record<Position, number>,
+  picksLeft: number,
   depth: number,
 ): Recommendation[] {
   const priced = pricedPositions(available, all, teams, roster, currentPick, targetPick, room);
-  const first = recommendPick(priced, mine, roster);
+  const first = recommendPick(priced, mine, roster, picksLeft);
   if (!first) return [];
 
   const out = [first];
@@ -519,6 +520,7 @@ export function recommendChain(
       pricedPositions(left, all, teams, roster, currentPick, targetPick, room),
       mine,
       roster,
+      picksLeft,
     )[0];
     if (!next) break;
     out.push(next);
@@ -562,16 +564,20 @@ export function recommendSequence(
   targetPick: number | null,
   room: Forecast | null,
   mine: Record<Position, number>,
+  picksLeft: number,
   depth: number,
 ): Recommendation[] {
   const out: Recommendation[] = [];
   const held = { ...mine };
   let left = available;
   while (out.length < depth) {
+    // The roster advances as the plan is built, so the picks left to spend on
+    // it have to advance with it. A plan four deep is four of them gone.
     const next = rankCandidates(
       pricedPositions(left, all, teams, roster, currentPick, targetPick, room),
       held,
       roster,
+      picksLeft - out.length,
     )[0];
     if (!next) break;
     out.push(next);

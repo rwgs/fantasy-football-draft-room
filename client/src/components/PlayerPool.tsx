@@ -532,7 +532,10 @@ export default function PlayerPool(props: Props) {
               {pick && (
                 <p className="pick-flag">
                   <span className="pick-flag-tag">{yourTurn ? 'Take' : 'Target'}</span>
-                  {'+' + Math.round(pick.worth) + ' over a replacement ' + player.position}
+                  {/* Worth is negative when nobody left beats a replacement
+                      starter, which by the last rounds is usual. */}
+                  {(pick.worth > 0 ? '+' : '') + Math.round(pick.worth)
+                    + ' over a replacement ' + player.position}
                   {pick.urgency >= 1
                     ? ', and ' + Math.round(pick.urgency) + ' of that goes '
                       + (yourTurn ? 'if you wait' : 'before your turn')

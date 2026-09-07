@@ -188,7 +188,8 @@
       el('span', 'take-pos', p.position || ''),
     );
 
-    const why = '+' + Math.round(p.worth) + ' over a replacement ' + (p.position || '')
+    const why = (p.worth > 0 ? '+' : '') + Math.round(p.worth)
+      + ' over a replacement ' + (p.position || '')
       + (p.urgency >= 1
         ? ', and ' + Math.round(p.urgency) + ' of that goes '
           + (onClock ? 'if you wait' : 'before your turn')

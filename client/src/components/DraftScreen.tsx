@@ -173,6 +173,15 @@ export default function DraftScreen(props: Props) {
     return counts;
   }, [myPlayers]);
 
+  /**
+   * How many picks the draft has still to hand you: the other half of it.
+   *
+   * What you hold says which positions you can still play. This says whether
+   * you can still afford to, and once the two are equal the advice stops
+   * offering depth over a starting slot you have left empty.
+   */
+  const myPicksLeft = state.league.rounds - myPlayers.length;
+
   const myRank = engine.rankOverride;
 
   // Which of your players you kept rather than drafted.
@@ -394,10 +403,10 @@ export default function DraftScreen(props: Props) {
     () => (state.done ? [] : recommendChain(
       choosable,
       board.players, teams, state.league.roster,
-      pick, oddsTarget, room, myCounts, PICKS_DEEP,
+      pick, oddsTarget, room, myCounts, myPicksLeft, PICKS_DEEP,
     )),
     [state.done, choosable, board.players, teams, state.league.roster,
-      pick, oddsTarget, room, myCounts],
+      pick, oddsTarget, room, myCounts, myPicksLeft],
   );
   const recommended = chain[0] ?? null;
   const alternates = chain.slice(1);
@@ -499,10 +508,12 @@ export default function DraftScreen(props: Props) {
     return recommendSequence(
       choosable.filter((p) => !starred.has(p.id)),
       board.players, teams, state.league.roster,
-      pick, oddsTarget, room, held, PICKS_DEEP,
+      // The starred players are picks already spent, the same way they are
+      // already counted into the roster the plan is priced against.
+      pick, oddsTarget, room, held, myPicksLeft - stars.length, PICKS_DEEP,
     );
   }, [queueWrite, state.done, queue, available, choosable, board.players, teams,
-    state.league.roster, pick, oddsTarget, room, myCounts]);
+    state.league.roster, pick, oddsTarget, room, myCounts, myPicksLeft]);
 
   const lastQueueSent = useRef<string | null>(null);
   useEffect(() => {
