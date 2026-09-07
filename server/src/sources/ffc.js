@@ -15,6 +15,15 @@ const BASE = 'https://fantasyfootballcalculator.com/api/v1/adp';
 const MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 /**
+ * How long one request may take before it is a hang rather than a slow feed.
+ *
+ * There was no bound at all, and a board is built behind these fetches: a
+ * connection that opens and never answers held every rebuild of a live draft
+ * for as long as the socket stayed up. The payload is forty kilobytes.
+ */
+const TIMEOUT_MS = 15_000;
+
+/**
  * The formats this app offers.
  *
  * The service also publishes a rookie board. It is not listed here: it drew 37
@@ -45,10 +54,25 @@ export async function fetchAdp({ format, teams, year, force = false }) {
 
   const entry = await cached(key, MAX_AGE_MS, async () => {
     const url = `${BASE}/${format}?teams=${size}&year=${year}`;
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    const res = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     if (!res.ok) throw new Error(`Fantasy Football Calculator returned ${res.status}`);
     const body = await res.json();
     if (body.status !== 'Success') throw new Error('Fantasy Football Calculator returned no data');
+    /*
+     * A SUCCESS THAT NAMES NOBODY IS A FAILED FETCH.
+     *
+     * Parsing cleanly was being read as having worked, so an empty players list
+     * was cached over a usable copy and the board came back with nothing on it
+     * and `stale: false` -- the one shape that says the numbers are current.
+     * Throwing hands the decision to `cached`, which keeps yesterday's copy and
+     * marks it stale, and only fails outright where there is no copy to keep.
+     */
+    if (!Array.isArray(body.players) || !body.players.length) {
+      throw new Error('Fantasy Football Calculator returned no players');
+    }
     return body;
   }, force);
 

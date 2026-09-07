@@ -23,6 +23,12 @@ const BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons';
 /** Rankings move day to day in season. Six hours matches the other feeds. */
 const MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * How long the request may take. Twice what the other two feeds get, because
+ * this is the whole player universe rather than a draft board. See ffc.js.
+ */
+const TIMEOUT_MS = 30_000;
+
 const POSITION_BY_ID = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DEF' };
 
 const TEAM_BY_ID = {
@@ -64,6 +70,7 @@ export async function fetchEspnRanks({ format, year, force = false }) {
     const res = await fetch(
       BASE + '/' + year + '/players?scoringPeriodId=0&view=kona_player_info',
       {
+        signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: {
           accept: 'application/json',
           // Ignored by ESPN, which answers with everything regardless. Sent
@@ -101,6 +108,9 @@ export async function fetchEspnRanks({ format, year, force = false }) {
         percentOwned: Number(p.ownership?.percentOwned) || null,
       });
     }
+    // Nobody ranked is a failed fetch rather than a desk with no opinions. See
+    // the note in ffc.js: this leaves the copy on disk in place.
+    if (!rows.length) throw new Error('ESPN rankings named no ranked players.');
     return rows;
   }, force);
 

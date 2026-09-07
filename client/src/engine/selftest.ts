@@ -173,6 +173,38 @@ async function main() {
         .some((pos) => !Number.isFinite(t.counts[pos])))?.counts ?? 'all finite'));
   }
 
+  console.log('\nHow old the numbers are');
+  {
+    /*
+     * The audit's R10. `stale` used to be one flag over two feeds, with ESPN's
+     * own left out of it, so a board could report itself current while a feed
+     * pricing it was working from yesterday -- and the draft screen had no
+     * reading at all, only setup did.
+     *
+     * Nothing here asserts that a feed IS fresh. That is a fact about upstream
+     * on the day, and a check reading it is red whenever a feed is down. What
+     * is checked is that the board's account of itself agrees with itself.
+     */
+    const feeds = board.meta.feeds ?? [];
+    check('every feed fetched reports its own age',
+      ['espn', 'ffc', 'sleeper'].every((s) => feeds.filter((f) => f.source === s).length === 1),
+      feeds.map((f) => f.source).join(', '));
+
+    check('an age is either in the past or absent, never now or ahead',
+      feeds.every((f) => f.fetchedAt === null || (f.fetchedAt > 0 && f.fetchedAt <= Date.now())),
+      feeds.map((f) => f.source + ' ' + f.fetchedAt).join(', '));
+
+    check('the two feeds behind every board count toward its age',
+      feeds.filter((f) => f.counts).map((f) => f.source).sort().join() === 'ffc,sleeper',
+      feeds.filter((f) => f.counts).map((f) => f.source).join(', '));
+
+    check('and the board is stale exactly when one of those is',
+      board.meta.stale === feeds.some((f) => f.counts && f.stale),
+      'board ' + board.meta.stale + ', feeds '
+        + feeds.map((f) => f.source + (f.stale ? ' stale' : ' fresh')
+          + (f.counts ? '' : ' (not counted)')).join(', '));
+  }
+
   console.log('\nPick order');
   {
     const snake = pickOrder('snake', 12, 3);
@@ -354,6 +386,14 @@ async function main() {
     const m = con.meta as unknown as Record<string, number>;
 
     check('ESPN ranked most of the board', (m.espnRanked ?? 0) > 400, String(m.espnRanked));
+
+    // The other half of the reading above: asked to price a board, ESPN's own
+    // age is that board's age too. Its being left out was the defect.
+    const espnFeed = con.meta.feeds?.find((f) => f.source === 'espn');
+    check('and its age counts, where it is one of the feeds pricing the board',
+      espnFeed?.counts === true && con.meta.stale === (con.meta.feeds ?? [])
+        .some((f) => f.counts && f.stale),
+      'counts ' + espnFeed?.counts + ', board stale ' + con.meta.stale);
     check('some players carry all three opinions', (m.consensusOfThree ?? 0) > 100,
       String(m.consensusOfThree));
     console.log('        ' + m.espnRanked + ' ranked by ESPN, ' + m.consensusOfThree

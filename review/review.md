@@ -164,15 +164,15 @@ projection sources), M4 (calibration), the grade half of M5 and M3 (dynasty
 context) revise what the app is deciding rather than fix a defect in how it
 decides it. What a letter should mean, and whether a static season total is the
 right thing to rank at all, is the whole of what is left in M5; its byes were a
-defect and are fixed. R10 (feed degradation) is a reliability change whose
+defect and are fixed. R10 (feed degradation) was a reliability change whose
 scope -- what counts as degraded operation, and whether a bad response may
 replace a usable cache -- was a judgment rather than a single right answer, and
 **the user settled it on 2026-09-07**: a response that parses but carries no
 players, or none at an expected position, is treated as a failed fetch so
 `cached` keeps the prior snapshot and marks it stale, with a per-feed timeout,
 ESPN not awaited when it is not the selected feed, and per-source age surfaced
-where the draft is being made. That is the shape to build; nothing of it is
-built yet.
+where the draft is being made. **All four are now built and checked**, which
+leaves R10 open only in the parts nobody settled: see the finding below.
 
 
 ## How the current advice works
@@ -433,7 +433,11 @@ Recommended validation:
 
 Until this exists, describe percentages as estimates from the model and grades as projection-based comparisons. There is no measured winning advantage to report from this review.
 
-### R10 - P2: upstream feed degradation can silently produce unusable advice or hold up the board
+### R10 - P2: upstream feed degradation can silently produce unusable advice or hold up the board (FIXED, to the settled policy)
+
+**Fixed 2026-09-07**, to the four things the user settled rather than to the whole recommendation below. A response that parses and carries nobody -- or, for Sleeper, a position with nothing projected in it -- now throws, so `cached` keeps the prior disk snapshot and marks it stale instead of writing an empty one over it, and fails outright only where there is no copy to keep. All three feeds bound their own request. ESPN is awaited only where it prices the board; everywhere else it gets a bounded extra wait after the feeds that do have answered, and a build that gives up reports `pending` rather than a rank of nothing. `meta.feeds` carries one age per feed and whether that age is the board's own, Sleeper's reading is the oldest of its six positions rather than the newest, and the draft screen prints the lot. Eight checks in `server/src/degradation.test.js` and five in `engine:test`.
+
+**Not fixed, and not settled:** an uncached FFC failure still rejects the whole board where Sleeper could have priced it, and the coverage, format-borrowing and failed-refresh readings the recommendation also asks for are not shown -- only age is.
 
 Evidence: [parallel source requests](../server/src/board.js), lines 244-254; [Sleeper payload handling](../server/src/sources/sleeper.js), lines 67-76 and 94; [FFC response handling](../server/src/sources/ffc.js), `fetchAdp`; [board stale flag](../server/src/board.js), line 420.
 
@@ -514,7 +518,7 @@ Scope update validation: rechecked the Yahoo board-building path, assistant fore
 10. **Apply corrected Yahoo picks immediately (R9).** Keep availability and rosters correct when pick contents change without a change in count. **FIXED.**
 11. **Fix extreme-tail odds (R8).** Remove false certainty for unusually overdue players; this is a narrower probability defect. **FIXED.**
 12. **Measure real Yahoo effectiveness (M4).** Calibrate forecasts and evaluate strategies against held-out drafts/outcomes. This can change the estimated ranking above; it is required before claiming a winning advantage.
-13. **Harden feed degradation and freshness (R10).** Preserve useful advice through bad or delayed source responses. This is primarily a reliability improvement when feeds misbehave.
+13. **Harden feed degradation and freshness (R10).** Preserve useful advice through bad or delayed source responses. This is primarily a reliability improvement when feeds misbehave. **FIXED**, to the policy the user settled; the wider coverage reporting is not.
 14. **Improve result interpretation and bye coverage (M5).** Address misleading grade confidence and missing byes after the live selection issues. The assistant also displays these results. **Byes FIXED**; the grade is untouched.
 
 For use before those changes, treat the app as a draft board and research aid. Verify league settings and player eligibility, use the Mine view to consult the rankings you trust, and manually assess recommendations and queue contents. Fixing the correctness issues is a higher priority than adding another ADP provider.

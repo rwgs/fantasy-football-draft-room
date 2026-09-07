@@ -21,8 +21,9 @@ import { replacementPoints } from '../engine/value';
 import { emptyCounts, handcuffsFor } from '../engine/roster';
 import AdpSourcePicker from './AdpSourcePicker';
 import QueueWriter from './QueueWriter';
+import { ADP_FEEDS } from '../engine/types';
 import type {
-  AppMode, Board, Platform, Player, QueuePriority, QueueWrite, SortKey,
+  AppMode, Board, FeedAge, Platform, Player, QueuePriority, QueueWrite, SortKey,
 } from '../engine/types';
 
 /** How often the assistant asks a pulled platform for new picks. */
@@ -39,6 +40,45 @@ const POLL_MS = 8000;
  * already answered is the whole of the lag on a Yahoo draft.
  */
 const PUSHED_POLL_MS = 2000;
+
+/** One feed's age, short enough to sit three to a line. */
+function feedAge(at: number | null): string {
+  if (!at) return 'no answer';
+  const mins = (Date.now() - at) / 60000;
+  if (mins < 60) return Math.max(1, Math.round(mins)) + 'm';
+  const hours = mins / 60;
+  return hours < 24 ? Math.round(hours) + 'h' : Math.round(hours / 24) + 'd';
+}
+
+/**
+ * How old the numbers on this screen are, one reading per feed.
+ *
+ * Here and not only in setup, which is where the whole of the answer used to
+ * be: a board built from yesterday's ADP is a fact about the pick being made
+ * now, and setup is a screen you leave. A feed whose age is not the board's --
+ * ESPN, wherever nothing asked it to price -- is greyed rather than dropped,
+ * because "ESPN 9h" is the answer to why its column reads oddly.
+ */
+function FeedAges({ feeds }: { feeds: FeedAge[] }) {
+  if (!feeds?.length) return null;
+  return (
+    <p className="hint" style={{ padding: '0 12px 6px' }}>
+      {feeds.map((feed, i) => {
+        const named = ADP_FEEDS.find((f) => f.id === feed.source);
+        const old = feed.counts && feed.stale;
+        return (
+          <span
+            key={feed.source}
+            style={old ? { color: 'var(--te)' } : feed.counts ? undefined : { opacity: 0.55 }}
+          >
+            {(i ? ' · ' : '') + (named?.short || named?.label || feed.source)
+              + ' ' + feedAge(feed.fetchedAt) + (feed.stale ? ', stale' : '')}
+          </span>
+        );
+      })}
+    </p>
+  );
+}
 
 /**
  * How many times the room is played out to read the odds off it.
@@ -759,6 +799,8 @@ export default function DraftScreen(props: Props) {
                 : ''}
             </span>
           </div>
+
+          <FeedAges feeds={board.meta.feeds} />
 
           {/* Nothing is simulated here, so the ADP is only a lens on a real
               room and can be changed without making any pick incoherent. A mock

@@ -192,6 +192,31 @@ function consensusOf(votes) {
  */
 const MAX_MEASURED_STDEV = 42;
 
+/**
+ * How much longer than the feeds that price the board this waits for ESPN.
+ *
+ * ESPN answers in about a third of a second, so this is four times the fetch
+ * and inside the two seconds a followed Yahoo room rebuilds the board on. What
+ * it bounds is not a slow feed but a hang: nothing here had a timeout at all,
+ * so a socket that opened and never answered held the board behind
+ * `Promise.all` for as long as it stayed up, over a feed that in most choices
+ * decorates the board rather than pricing it.
+ */
+const OPTIONAL_WAIT_MS = 1500;
+
+/**
+ * `work`, or `fallback` if it has not answered within `ms`.
+ *
+ * The work is not cancelled, and that is the point: `cached` shares a fetch
+ * already in flight, so the copy this build gave up waiting for is the copy the
+ * next build gets, without a second request for it.
+ */
+function within(work, ms, fallback) {
+  let timer;
+  const bound = new Promise((resolve) => { timer = setTimeout(resolve, ms, fallback); });
+  return Promise.race([work, bound]).finally(() => clearTimeout(timer));
+}
+
 function estimateStdev(adp) {
   return Math.min(MAX_MEASURED_STDEV, Math.max(1.5, adp * 0.11));
 }
@@ -242,17 +267,36 @@ export async function buildBoard({
 }) {
   const offered = Object.keys(ADP_FEEDS).filter((s) => s !== 'room' || roomAdp);
   const chosen = parseAdpSource(adpSource, offered);
-  const [ffc, sleeper, espn] = await Promise.all([
+
+  // A third opinion is worth having and never worth failing over. If ESPN is
+  // slow or down the board is built from the two feeds that answered, and the
+  // response says the consensus is short a source rather than pretending.
+  const espnWork = fetchEspnRanks({ format, year, force }).catch((err) => ({
+    byKey: new Map(),
+    meta: { source: 'ESPN', ranked: 0, error: String(err.message || err) },
+  }));
+
+  const [ffc, sleeper] = await Promise.all([
     fetchAdp({ format, teams, year, force }),
     fetchProjections({ year, force }),
-    // A third opinion is worth having and never worth failing over. If ESPN is
-    // slow or down the board is built from the two feeds that answered, and the
-    // response says the consensus is short a source rather than pretending.
-    fetchEspnRanks({ format, year, force }).catch((err) => ({
-      byKey: new Map(),
-      meta: { source: 'ESPN', ranked: 0, error: String(err.message || err) },
-    })),
   ]);
+
+  /*
+   * ESPN IS WAITED FOR ONLY WHERE IT PRICES THE BOARD.
+   *
+   * Everywhere else it is a column beside one, and a board should not be held
+   * up by a feed that is not deciding anything on it. The two feeds above have
+   * already answered by this line, so the bound is the extra wait rather than
+   * the whole of it, and a warm copy is read from disk inside a millisecond of
+   * it. A build that gives up says so: `pending` rather than a rank of nothing,
+   * which is what an abstention looks like.
+   */
+  const espn = chosen.sources.includes('espn')
+    ? await espnWork
+    : await within(espnWork, OPTIONAL_WAIT_MS, {
+      byKey: new Map(),
+      meta: { source: 'ESPN', ranked: 0, pending: true },
+    });
 
   const projections = projectionMap(sleeper.rows, format);
   const byKey = new Map();
@@ -407,6 +451,42 @@ export async function buildBoard({
   const counts = {};
   for (const p of players) counts[p.position] = (counts[p.position] || 0) + 1;
 
+  /*
+   * HOW OLD EACH FEED'S COPY IS, AND WHETHER ITS AGE IS THE BOARD'S.
+   *
+   * One reading per feed, so the answer reaches the draft screen rather than
+   * only the setup one: a board built from yesterday's ADP is a fact about the
+   * pick being made now, and `stale` alone said which without saying of what.
+   *
+   * Sleeper and Fantasy Football Calculator always count. Whatever prices the
+   * board, the projections, the standard deviations and the byes come from
+   * those two, and a player no chosen feed has a view about is priced by
+   * whoever does. ESPN counts only where it was asked to price, which is the
+   * flag that was missing: a stale ESPN inside a consensus board read as fresh.
+   */
+  const feeds = [
+    {
+      source: 'sleeper',
+      fetchedAt: sleeper.fetchedAt,
+      stale: sleeper.stale,
+      counts: true,
+    },
+    {
+      source: 'ffc',
+      fetchedAt: ffc.meta.fetchedAt,
+      stale: ffc.meta.stale,
+      counts: true,
+    },
+    {
+      source: 'espn',
+      // Null where it never answered, which is a pending wait or a failed
+      // fetch. Either way there is no age to report rather than an age of now.
+      fetchedAt: espn.meta.fetchedAt ?? null,
+      stale: !!espn.meta.stale,
+      counts: chosen.sources.includes('espn'),
+    },
+  ];
+
   return {
     players,
     meta: {
@@ -437,7 +517,9 @@ export async function buildBoard({
       consensusOfThree: players.filter((p) => p.consensusVotes >= 3).length,
       consensusOfTwo: players.filter((p) => p.consensusVotes === 2).length,
       sleeperFetchedAt: sleeper.fetchedAt,
-      stale: ffc.meta.stale || sleeper.stale,
+      /** How old each feed's copy is. Read where the pick is being made. */
+      feeds,
+      stale: feeds.some((f) => f.counts && f.stale),
     },
   };
 }

@@ -16,6 +16,9 @@ const BASE = 'https://api.sleeper.app/projections/nfl';
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
+/** How long one position's request may take. See the note in ffc.js. */
+const TIMEOUT_MS = 15_000;
+
 /** Which projected points column each scoring format reads. */
 const POINTS_FIELD = {
   standard: 'pts_std',
@@ -60,23 +63,46 @@ const FALLBACK_ORDER = ['half-ppr', 'ppr', 'standard', '2qb', 'dynasty'];
 
 export async function fetchProjections({ year, force = false }) {
   const rows = [];
-  let fetchedAt = 0;
+  const ages = [];
   let stale = false;
 
   for (const pos of POSITIONS) {
     const entry = await cached(`sleeper_${year}_${pos}`, MAX_AGE_MS, async () => {
       const url = `${BASE}/${year}?season_type=regular&position%5B%5D=${pos}&order_by=pts_half_ppr`;
-      const res = await fetch(url, { headers: { accept: 'application/json' } });
+      const res = await fetch(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
       if (!res.ok) throw new Error(`Sleeper returned ${res.status} for ${pos}`);
-      return res.json();
+      const body = await res.json();
+      /*
+       * One request per position, so an answer with nothing projected in it is
+       * a position the board expects and cannot fill -- which is a failed
+       * fetch, not a position nobody plays. Rows without `pts_half_ppr` are
+       * dropped downstream as players not projected to play, so a payload of
+       * only those would leave a whole position with market prices, no points,
+       * no worth and no part in a grade. See the note in ffc.js for what
+       * throwing buys.
+       */
+      if (!Array.isArray(body) || !body.some((rec) => rec?.stats?.pts_half_ppr != null)) {
+        throw new Error(`Sleeper projected no ${pos} at all`);
+      }
+      return body;
     }, force);
 
-    fetchedAt = Math.max(fetchedAt, entry.fetchedAt);
+    ages.push(entry.fetchedAt);
     stale = stale || !!entry.stale;
     for (const rec of entry.value || []) rows.push(rec);
   }
 
-  return { rows, fetchedAt, stale };
+  /*
+   * The oldest of the six, not the newest. Each position is its own cache key
+   * and its own fetch, so they expire apart: reading the newest let a fresh
+   * receiver list speak for a quarterback copy from yesterday, and the age
+   * shown beside the board was the one component that had nothing wrong with
+   * it. What the board is working from is the oldest thing in it.
+   */
+  return { rows, fetchedAt: Math.min(...ages), stale };
 }
 
 /**

@@ -200,7 +200,26 @@ export interface BoardMeta {
   /** How many the room being followed has an ADP for. Zero when none is. */
   roomRanked: number;
   fetchedAt: number;
+  /** True where a feed whose age counts is working from an old copy. */
   stale: boolean;
+  /** How old each fetched feed's copy is. Read where the pick is being made. */
+  feeds: FeedAge[];
+}
+
+/**
+ * One feed's freshness.
+ *
+ * `counts` is whether this feed's age is the board's own: Sleeper and Fantasy
+ * Football Calculator always are, since the projections, the deviations and the
+ * byes come from them whatever prices the board, and ESPN only where it was
+ * asked to price. A feed that never answered has no `fetchedAt` rather than an
+ * age of now.
+ */
+export interface FeedAge {
+  source: string;
+  fetchedAt: number | null;
+  stale: boolean;
+  counts: boolean;
 }
 
 export interface Board {

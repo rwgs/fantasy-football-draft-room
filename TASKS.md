@@ -606,23 +606,64 @@ Phase 4: prove the platform seam against real leagues.
     the rename.
   - Dependencies or blockers: none.
 
-- [ ] Repair feed degradation, the audit's R10, to the policy the user chose.
-  - Scope, settled 2026-09-07: a response that parses cleanly but carries no
-    players, or none at a position the board expects, is treated as a failed
-    fetch, so `cached` keeps the prior disk snapshot and marks it stale rather
-    than overwriting it with an empty one. Plus a per-feed `AbortSignal`
-    timeout, ESPN not awaited when it is not the selected feed, and per-source
-    age surfaced where the draft is being made rather than only in setup.
-  - Why: measured, not assumed. There is no timeout anywhere in `server/src`,
-    so a hung ESPN can hold the whole board behind `Promise.all`; ESPN's
-    `stale` is left out of the combined flag; and Sleeper's `fetchedAt` is a
-    `Math.max` across positions, so a stale position hides behind a fresh one.
-    `cached` already falls back to a stale disk copy when a fetch throws -- the
-    gap is that a valid-but-empty response does not throw.
+- [x] Repair feed degradation, the audit's R10, to the policy the user chose.
+  - Scope, settled 2026-09-07 and built: a response that parses cleanly but
+    carries no players, or none at a position the board expects, is treated as a
+    failed fetch, so `cached` keeps the prior disk snapshot and marks it stale
+    rather than overwriting it with an empty one. Plus a per-feed
+    `AbortSignal` timeout on all three feeds, ESPN awaited only where it prices
+    the board, and a per-feed age in `meta.feeds` that the draft screen prints.
+  - Why: measured, not assumed. There was no timeout anywhere in `server/src`,
+    so a hung ESPN could hold the whole board behind `Promise.all`; ESPN's
+    `stale` was left out of the combined flag; and Sleeper's `fetchedAt` was a
+    `Math.max` across positions, so a stale position hid behind a fresh one.
+    `cached` already fell back to a stale disk copy when a fetch threw -- the
+    gap was that a valid-but-empty response does not throw.
   - Acceptance criteria: the finding's own. Empty or malformed-success responses
     preserve a usable prior snapshot or fail clearly; a hung optional source
     does not block draft availability; stale selected sources stay visible
-    during the draft.
+    during the draft. All three met and all three checked.
+  - How each feed decides it has been answered badly, and why they differ: FFC
+    sends every position in one payload, so its rule is that the payload names
+    somebody. Sleeper is one request per position, so "none at a position the
+    board expects" lands there exactly -- a position with no projected player in
+    it is a failed fetch. **FFC is deliberately not held to position coverage:**
+    dynasty is cached nowhere here, so requiring six positions of it would be
+    asserting today's shape of a feed, which is the trap the lean check was
+    caught in twice.
+  - Automated validation: eight checks in the new `server/src/degradation.test.js`,
+    taking `npm run server:test` to 26. **All eight confirmed by failing**
+    against the pre-fix source, stashed and re-run: the empty market payload
+    overwrote the good copy, the unprojected positions reported themselves
+    fresh, no request carried a signal, the hung ESPN hit the test's own
+    fifteen second deadline, and the oldest-position reading and `meta.feeds`
+    did not exist. Five more in `npm run engine:test`, 364 passing, three of
+    them confirmed by failing against a pre-fix service on 5179; the other two
+    guard the shape and are vacuous on an absent reading, which the first check
+    in the same block catches. Typecheck clean, lint unchanged at 43 warnings,
+    `bridge:test` 7/7, build clean, `shots` clean with no console errors.
+  - What the new checks cost: 3.5 seconds, and it is unavoidable. Two of them
+    wait out a real bound -- one that the board gives up on a feed that is not
+    pricing it, one that it does not give up on a feed that is. The timeout
+    durations themselves are not exercised, and saying so is better than a stub
+    that ignores a signal and proves nothing.
+  - Manual validation: **done.** The per-feed line photographed in a real
+    browser, dark and light: "Sleeper 6h · FFC 6h · ESPN 6h", with ESPN greyed
+    where the choice is Sleeper then FFC, which is the reading for a feed whose
+    age is not the board's. Driven against an isolated pair -- a service on 5179
+    and a client on 5180 pointed at it -- rather than by restarting 5178, which
+    a live Yahoo draft was mirroring through at the time.
+  - Not photographed: a stale feed in red. Forcing one needs a feed that fails
+    while a copy sits on disk, which is a network to block rather than a fixture
+    to write. The path itself is covered by four of the server checks.
+  - Measured while building: ESPN answers in 0.36s with 0.7MB, against the
+    "about forty megabytes" its own file header claims. The bound was chosen
+    from the measurement; the header was left alone as an unrelated staleness.
+  - Not acted on, and not in the settled scope: the finding's other note, that
+    an uncached FFC failure rejects the whole board even where Sleeper could
+    price it. Also left: `ADP_FEEDS`'s labels are not sent in `meta.feeds`,
+    because the client already holds its own and two naming authorities for one
+    feed is how they drift apart.
   - Dependencies or blockers: none.
 
 ## Blocked
