@@ -11,12 +11,13 @@ because none covers it.
 
 **A mock here means a public mock, not a simulation.** The rooms held real
 people drafting in real time, about half the seats at a time: the `A|` frames
-captured from `10713845` read seven of fourteen seats live at the open and
-eight of fourteen ninety-one picks later. That is what makes these captures
-worth anything. Human pick timing, seats falling to autopick when someone
-stops acting, and the reconnect burst are all behaviour of a real room, not of
-a lobby full of bots. What a mock is not is a league that counts, and
-`Open questions` below says which parts of this document that leaves untested.
+captured from `10713845` name seven of fourteen seats as having a manager at the
+open and five of fourteen ninety-one picks later, one more reading `2`. That is
+what makes these captures worth anything. Human pick timing, seats falling to
+autopick when someone stops acting, and the reconnect burst are all behaviour of
+a real room, not of a lobby full of bots. What a mock is not is a league that
+counts, and `Open questions` below says which parts of this document that leaves
+untested.
 
 **None of this is promised by Yahoo.** It is the private protocol between their
 draft client and their draft server. It can change in any deploy, without
@@ -101,7 +102,7 @@ Frames are pipe-delimited text, one record per frame.
 | `H\|S\|30\|0\|0\|<started>` | Settings. `S` is snake and `30` the seconds per pick — both **inferred**, and both agree with the order and clock actually seen. The last field is **observed** to be `0` before a draft opens and `1` on reconnecting to one in progress. The middle two zeros are unknown |
 | `R\|<team>\|<team>\|…` | **The entire draft order**, one entry per pick, in pick order. **Observed** at exactly 210 entries for a 14-team, 15-round league, running `1..14, 14..1, …` |
 | `Q` | **Your queue**, which is empty on every connect watched, and so arrives bare. See `The queue` below |
-| `A\|14=0\|13=2\|12=0\|11=1\|…` | One value per seat. **Observed** taking `0`, `1` and `2`. `1` is **observed once** to mean autopick, and `2` is still unknown. See below |
+| `A\|14=1\|13=0\|12=1\|11=0\|…` | One value per seat. **Observed** taking `0`, `1` and `2`. `1` is a manager present at that seat, `0` is nobody, `2` is still unknown. See below |
 | `P\|<overall>=<player>,<team>,<cost>\|…` | **Every pick made so far.** Empty on a draft that has not started, which is why it first appeared as a bare `P`. See below |
 | `w\|3600\|20` | Unknown. `3600` looks like a limit in seconds |
 
@@ -110,24 +111,44 @@ Two of these carry the state a client needs to catch up, and both are
 
 #### What `A|` says, as far as it is known
 
-`1` is autopick. Read on 2026-09-05 by rejoining a 14-team mock from a seat
-already known to be in autopick, put there by Yahoo for inactivity, and reading
-that seat back out of the connect burst:
+`1` is a **manager present at that seat**, and `0` is nobody. Autopick is a
+separate axis, carried by `5|` and `6|` rather than by this frame, which is why
+a seat can read `1` while something else is picking for it.
 
-    A|14=1|13=1|12=1|11=1|10=0|9=1|8=1|7=1|6=0|5=0|4=1|3=1|2=1|1=1
-         ^ the seat known to be autopicking
+**Observed**, in `frames-2026-09-07T00-09-55-872Z.jsonl`, which holds two `A|`
+frames from one 14-team mock — one before the draft opened, one from a reconnect
+in round 7 — and every `J|` and `L|` in between. Read against those alone, all
+fourteen seats agree:
 
-Three seats read `0`, late in a room that had been filling with autopickers for
-an hour. That agrees with the seat counts at the top of this document, which
-read `0` as a manager still acting — seven of fourteen at one open, eight of
-fourteen ninety-one picks later, in rooms of real people. Counting zeros as live
-seats was an inference when it was written; `1` being autopick is now observed
-directly, and the two readings are the same reading.
+| flag | seats | what happened between the two frames |
+|---|---|---|
+| `1` to `0` | 2, 6, 7, 9, 13 | an `L\|` for each: the manager left |
+| `1` to `1` | 1, 3, 12, 14 | stayed, or left and came back on a `J\|` |
+| `0` to `0` | 4, 5, 8, 10, 11 | no `J\|` and no `L\|` ever: never a manager |
+
+Fourteen for fourteen. It settles `J|` and `L|` as a side effect: they were
+inferred from timing, and the flag moves exactly in step with them.
+
+**This does not overturn the 2026-09-05 reading, it explains it.** That seat
+reported `1` and was known to be autopicking, because it was a seat Yahoo had
+put onto autopick for inactivity — which leaves the manager sitting in it. So
+`1` was right, and autopick was the wrong axis to read it on. Seat 14 above says
+the same thing from the other end: it reported `1` throughout a draft it spent
+half of being picked for.
+
+**The pick timing agrees, over 210 picks:**
+
+| flag | picks | median | under 1s |
+|---|---|---|---|
+| `1` | 60 | 8.10s | 22% |
+| `0` | 150 | 0.88s | 94% |
+
+A seat with nobody in it answers in under a second because nothing is deciding.
+A seat with a manager takes eight, except when its clock runs out and autopick
+takes the pick for it, which is what the 22 per cent is.
 
 **`2` remains unknown.** It has appeared once across every capture taken, on a
-seat whose state nothing independent established. So this is a three-state field
-with two states identified, and the plain "autopick on or off" reading is still
-wrong.
+seat whose state nothing independent established.
 
 None of this reaches the board. The bridge forwards `0`, `H`, `R`, `P` and `Q`
 only, and a frame it drops cannot break it — which is why `A|` had to be read
@@ -157,8 +178,8 @@ it missed, so nothing has to be remembered across a crash.
 | `0\|<overall>\|<playerId>\|<team>\|<rosterSlot>\|<cost>` | **A pick.** The only frame the bridge needs. **Observed** |
 | `D\|<overall>\|<team>\|<seconds>` | The clock passing to a seat. **Observed** |
 | `C\|<seconds>` | Clock ticking down. **Observed** counting 30, 24, 18 |
-| `J\|<team>` | A manager connected. **Inferred** from timing |
-| `L\|<team>` | A manager disconnected. **Inferred** from timing |
+| `J\|<team>` | A manager connected. **Observed**: the `A\|` flag reads `1` for exactly the seats that have not sent an `L\|` since |
+| `L\|<team>` | A manager disconnected. **Observed**, the same way as `J\|` |
 | `G\|[…]` | Yahoo's own grade for a pick, as JSON: `letterGrade`, `score`, weighted components with explanations |
 | `g\|[…]` | Yahoo's own grade for each **team**, as JSON: `teamId`, `score`, `letterGrade`, `pickCount`, `basis`. Lowercase, and a different frame from `G\|` |
 | `5\|<seat>` | **Observed: that seat has gone onto autopick.** See `Autopick, announced` below |
@@ -216,12 +237,14 @@ arrive about every six seconds and 53 to 80 per cent of all picks land before
 the first one, so tick counting has no resolution in the window where nearly
 every pick happens.
 
-**The `A|` flag does not predict any of this.** Cross-referencing the two
-captures that carry it, the seats it marks `1` picked *slower* than the seats
-reading `0` — mean 1.74 ticks against 0.26 in `capture-mock3-reconnect`, where
-77 of 87 picks by `0` seats were instant. Either the connect-time snapshot goes
-stale within a round or two, or `1` does not mean what one reading of one seat
-suggested.
+**The `A|` flag predicts it almost perfectly**, once read as manager presence
+rather than autopick. Over the 210 picks of
+`frames-2026-09-07T00-09-55-872Z.jsonl`, seats flagged `0` picked at a median of
+0.88s with 94 per cent under a second, and seats flagged `1` at 8.10s with 22
+per cent. What stood here said the opposite — that the flag predicted nothing,
+because the seats it marked `1` picked *slower* than the seats reading `0`. The
+observation was right and only its premise was wrong: `1` is a manager, and
+managers are slow. See `What A| says` above.
 
 None of this reaches the board. The bridge forwards `0`, `H`, `R`, `P` and `Q`
 only, so it drops `D|`, and measuring any of it live would mean the bridge
@@ -229,10 +252,11 @@ timestamping picks itself.
 
 ## Autopick, announced
 
-`A|` gives every seat's autopick state in the connect burst and is never sent
-again, which left the obvious question of how a client learns that a seat has
-flipped since. **Inferred:** it learns from `5|` and `6|`, which announce the
-two directions.
+`A|` names the seats that have a manager and says nothing about autopick, so the
+connect burst carries no autopick state at all. `5|` and `6|` are the only
+source of it, and they give it as edges rather than as a snapshot: a client
+joining mid-draft learns who is present and not who is being picked for, and
+finds out the rest only as seats flip.
 
 **Observed**, across `capture-mock1.log` and `capture-mock2.log`, seven `5|`
 frames in total:
@@ -382,9 +406,11 @@ real leagues and real people:
 | `capture-mock2.log` | 96 picks from pick 3 |
 | `capture-mock3-handshake.log` | A connect sequence from `[ws-open]`, and a bare `P` before a draft opened |
 | `capture-mock3-reconnect.log` | A reconnect into a draft 91 picks deep: the `R\|` order and a populated `P\|` |
+| `dump/frames-2026-09-06T23-47-40-033Z.jsonl` | 87 picks from pick 3, timestamped: the `5\|` and `6\|` pairs that fixed the autopick direction |
+| `dump/frames-2026-09-07T00-09-55-872Z.jsonl` | A whole 210-pick draft, joined before it opened: two connect bursts, and the `J\|` and `L\|` that read `A\|` |
 
 These are enough to test a decoder offline, which matters because the
-alternative is testing it during a draft. `npm run engine:test` replays all four
+alternative is testing it during a draft. `npm run engine:test` replays the four logs
 when they are present, and falls back to synthetic frames when they are not.
 
 **The pool was never captured.** The watcher records response bodies, but no run
@@ -408,8 +434,11 @@ pool response would close that gap.
   had already drawn the change itself, so nothing shows what the client does
   with one it did not provoke. If it ignores them, a queue set from outside is
   held by the server and absent from the list on screen until a reload.
-- **What `A|` means**, now that it is known not to be a boolean, and now that
-  the seats it marks are also known not to behave like autopickers.
+- **What `A|`'s third state `2` means.** The frame itself is no longer a puzzle:
+  `1` is a manager present at that seat and `0` is nobody, read off two `A|`
+  frames from one draft and every `J|` and `L|` between them. `2` has appeared
+  once in every capture ever taken, on a seat nothing independent described. See
+  `What A| says` above.
 - **Whether a queue fires for a manager who is present.** Half answered: it does
   fire under autopick, observed once and directly — `5|13` then pick 44 taking
   the top of the queue that seat had just set. What is still open is whether it
