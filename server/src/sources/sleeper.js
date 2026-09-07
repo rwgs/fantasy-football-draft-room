@@ -80,6 +80,32 @@ export async function fetchProjections({ year, force = false }) {
 }
 
 /**
+ * The position a roster can hold this player at, or null if there is none.
+ *
+ * `position` is what a player is on the field and `fantasy_positions` is where
+ * he can be drafted, and for a two-way player the two disagree: Travis Hunter
+ * is filed as a DB with fantasy positions of DB and WR. Reading only the first
+ * dropped his record, which left the WR row Fantasy Football Calculator had
+ * already put on the board with no projected points at all.
+ *
+ * The points columns are the fantasy ones either way. His 65.6, 83.1 and 100.6
+ * are one receiving projection read at three reception values -- each 17.5
+ * apart, which is his 35 catches at half a point -- and not an IDP total, which
+ * would be the same number in all three and would reflect his 31 tackles.
+ *
+ * @param {object} player Sleeper's `player` record
+ */
+function draftablePosition(player) {
+  const primary = normPos(player.position);
+  if (DRAFTABLE.has(primary)) return primary;
+  for (const alt of player.fantasy_positions || []) {
+    const pos = normPos(alt);
+    if (DRAFTABLE.has(pos)) return pos;
+  }
+  return null;
+}
+
+/**
  * Turn the raw payload into one record per projected player, keyed for the join.
  * @param {object[]} rows
  * @param {string} format scoring format
@@ -94,10 +120,10 @@ export function projectionMap(rows, format) {
     if (s.pts_half_ppr == null) continue; // Not projected to play.
 
     const p = rec.player || {};
-    const position = normPos(p.position);
     // Not just "has a position": one the engine can put in a roster slot. A
     // DB row joins as a different person from the same player's WR row.
-    if (!DRAFTABLE.has(position)) continue;
+    const position = draftablePosition(p);
+    if (!position) continue;
 
     const team = normTeam(rec.team || p.team);
     const name = position === 'DEF'
