@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo draft bridge
 // @namespace    fantasy-football-draft-room
-// @version      1.3.0
+// @version      1.3.1
 // @description  Copy your own Yahoo draft room onto the draft board running on your machine, and set your queue from it when you ask. Never picks.
 // @match        https://football.fantasysports.yahoo.com/draftclient/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js
@@ -113,7 +113,7 @@
   const MAX_PENDING = 2000;
 
   /** Bumped with `@version` above. Logged so the running copy is never in doubt. */
-  const VERSION = '1.3.0';
+  const VERSION = '1.3.1';
 
   /**
    * Which copy this is, stamped in by the service on the way out.

@@ -28,7 +28,9 @@ test('the served copy carries a build where the mark was', () => {
   assert.ok(served.includes(current.build),
     'the copy handed out must carry the build the service would compare against');
   assert.match(current.build, /^[0-9a-f]{8}$/);
-  assert.equal(current.version, '1.3.0');
+  // Its shape, not its value. Pinning the number here would mean every version
+  // bump broke a test that has no opinion about which version is current.
+  assert.match(current.version, /^\d+\.\d+\.\d+$/);
 });
 
 test('both ends hash the same bytes', () => {
