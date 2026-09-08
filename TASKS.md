@@ -1205,7 +1205,7 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     are not. All of it is listed under "Still open" in the document rather than
     left implied.
 
-- [ ] Y7.3: Establish weekly and remaining-season analysis coverage.
+- [x] Y7.3: Establish weekly and remaining-season analysis coverage.
   - Scope: assess usable Yahoo, Sleeper and ESPN data independently of league
     integration, including raw stats versus point totals, scoring, player
     identity, injuries, byes, kickoff times, usage, freshness and access terms.
@@ -1216,6 +1216,75 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     verify week/season and scoring basis. Do not substitute draft rankings
     or annual projections for unobserved weekly data.
   - Dependency: Y7.2's actual league scoring and eligibility requirements.
+  - Progress, 2026-09-08, and the assessment is written up in
+    `docs/in-season-data-sources.md`. Read from a shell, no account and no key,
+    so all of it is reproducible: the document ends with the five commands and
+    each was re-run exactly as written. Fantasy Football Calculator was assessed
+    alongside the three the scope named, on the grounds that the project already
+    depends on it and omitting it would have read as a judgement.
+  - Sources and horizons: **weekly projections come from Sleeper or ESPN, and
+    from nowhere else.** Both cover the full regular season — Sleeper weeks 1
+    to 18 sampled at 1, 4, 8, 14 and 18; ESPN weeks 0 to 18, where 0 is the
+    season total and so answers rest-of-season directly. Neither projects the
+    playoffs: Sleeper returns week 19 records with no points in any of them,
+    ESPN stops at 18. Yahoo projects nothing at any public path. Fantasy
+    Football Calculator has nothing weekly at all — `weekly-rankings` and
+    `projections` are both 404 — so it stays a draft-ADP source, which is a
+    property of the feed rather than a preference.
+  - The structural finding, and it agrees with Y7.2 from the other direction:
+    **a custom league's points cannot be fetched from anywhere and have to be
+    computed.** Sleeper publishes `pts_std`, `pts_half_ppr` and `pts_ppr`; ESPN
+    publishes an `appliedTotal` under its own default league; a Yahoo league has
+    38 categories against 35 modifiers and no preset reproduces it. What makes
+    it workable is that both sources also publish the raw components underneath
+    — receptions, targets, rushing yards, touchdowns — so the join is components
+    from a source against modifiers from the league. A scoring join is therefore
+    unavoidable work rather than a later refinement.
+  - Only-source rows, which are the ones a design cannot trade away: a league's
+    scoring and roster slots come from Yahoo alone, and **kickoff times come from
+    ESPN alone**, to the minute with live clock and period. That also closes the
+    item Y7.2 left open as found at no scope — it was not in Yahoo, and
+    `game_weeks` is not a substitute, because it dates a week rather than a
+    kickoff. Sleeper's schedule carries a date with no time.
+  - Missing-data behaviour, all observed rather than reasoned: only 463 of 3304
+    Sleeper weekly records carry points, so an unprojected player must be
+    dropped rather than scored zero, as the season code already does. **A bye is
+    invisible in the projection feed** — 109 players on the four teams idle in
+    week 8, not one with a projection, which is the same absence as a player
+    nobody rated, so telling them apart needs the schedule. An absent injury
+    field means healthy on both Yahoo and ESPN. An absent weekly actual may be a
+    bye rather than a zero. The two injury vocabularies differ and need mapping.
+  - A negative result worth more than a positive one, because it stops a future
+    mistake: Sleeper's `/v1/players/nfl` carries `yahoo_id` on 6750 players and
+    `espn_id` on 6736, which looks exactly like the authoritative join the
+    2026-09-05 FantasyPros decision wished for. **It is legacy and inverted
+    against need.** Coverage by `years_exp` over active QB/RB/WR/TE/K runs 0 of
+    317 rookies, 13 of 726 at one year, 35% at two, ~100% at six and up.
+    Ja'Marr Chase, Jahmyr Gibbs, Bijan Robinson, Puka Nacua, Amon-Ra St. Brown
+    and De'Von Achane are all present, all active, all `yahoo_id: null`.
+    Matching Yahoo's top 300 by id found 75, all veterans. So that decision
+    stands with numbers behind it, and an attempt to fix `names.js` with these
+    ids would pass a spot check on a veteran and fail every rookie. The 75 that
+    did match yielded one useful thing: all four name disagreements were
+    generational suffixes, Yahoo's "Chris Godwin Jr." against Sleeper's "Chris
+    Godwin".
+  - Checked and found accurate rather than corrected: `espnRanks.js` says ESPN
+    ignores the filter. It does, on the path that file calls — 11617 players and
+    39.6 MB whether the limit is 3 or 1000. A different path,
+    `/segments/0/leaguedefaults/3`, honours it, though a limit alone is refused
+    with "Filter: Limit request must be accompanied by a sort". Recorded because
+    weekly projections need no forty megabyte download; nothing was changed.
+  - FantasyPros stayed excluded and nothing was purchased, per the acceptance.
+  - Automated validation: none, and none is appropriate — nothing was built. The
+    document's five commands were each re-run as written and all answered 200
+    with parseable JSON.
+  - Not done, and listed in the document rather than left implied: **every
+    actual stat value read was zero or empty**, because nothing had kicked off,
+    so actuals are observed for shape and not for content and no claim about
+    live scoring rests on this. Whether Sleeper's `{}` actuals path fills in
+    once games are played is untested. No source was compared against another,
+    so nothing here says which projection is better — only which exist. Rate
+    limits were not found, which is not the same as absent.
 
 - [ ] Y7.4: Close discovery with a concrete implementation design.
   - Scope: update PLAN.md with the observed reader approach, minimum snapshot

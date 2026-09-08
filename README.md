@@ -193,7 +193,9 @@ it changes nothing in your league.
 
 Nothing refreshes on its own — click it again when you want a fresh reading.
 What the reading covers, and what it does not, is in
-[docs/yahoo-in-season-data.md](docs/yahoo-in-season-data.md).
+[docs/yahoo-in-season-data.md](docs/yahoo-in-season-data.md). What the four
+upstream feeds publish for weekly advice, and which of them can support it, is
+in [docs/in-season-data-sources.md](docs/in-season-data-sources.md).
 
 ### If no picks appear
 
