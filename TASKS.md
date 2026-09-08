@@ -1345,27 +1345,75 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 
 ### Phase 8 tasks, in order
 
-Split from the contract in `PLAN.md`, "What discovery settled". **None is
-started, and none should be until Phase 8 is authorized.** Each is one
-reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
+Split from the contract in `PLAN.md`, "What discovery settled". **Phase 8 was
+authorized 2026-09-08 and Y8.1 is done; Y8.2 onward are unstarted.** Each is
+one reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
 league, and nothing in it recommends anything.
 
-- [ ] Y8.1: Fetch Yahoo's public game scope as an ordinary source module.
-  - Scope: a new `server/src/sources/yahooPlayers.js` reading
+- [x] Y8.1: Fetch Yahoo's public game scope as an ordinary source module.
+  - Scope: `server/src/sources/yahooPlayers.js` reads
     `/fantasy/v2/game/nfl/players` with `;out=percent_owned`, plus the three
-    reference lists — `stat_categories`, `roster_positions`, `game_weeks`.
-    Cached on disk through `server/src/cache.js` on the pattern the other three
-    feeds use. No browser, no cookie, no UI.
-  - Acceptance: the pool pages to the end and stops, injuries read as absent
-    rather than as a shape fault, and the stat and slot vocabularies are
-    available to join against a league's settings.
-  - Automated: `server:test`, on a synthetic fixture — the empty `[]` past the
-    end of a list, a short final page, a player with no `status`, and a refusal
-    when the envelope is not what it should be. The suite must fail if the
-    end-of-list check is reverted to reading `.count`.
-  - Manual: none required; nothing is visible yet.
-  - Dependencies: none. This is the first Phase 8 task precisely because it
-    needs no league and no browser.
+    reference lists — `stat_categories`, `roster_positions`, `game_weeks` —
+    each cached on disk through `server/src/cache.js` under its own key, on the
+    pattern the other three feeds use. No browser, no cookie, no UI.
+  - Extracted while building, because the second caller made it necessary
+    rather than tidy: the shape readers were private to
+    `platforms/yahoo/league.js`, and the game scope answers in the same dialect.
+    They are now `server/src/yahooJson.js`, moved byte-for-byte with nothing but
+    an `export` added — checked by diffing the extracted block against the same
+    lines at `HEAD`. `league.js` imports them and its own 18 checks pass
+    untouched, which is what makes the move provably behaviour-preserving.
+    A `sources/` module importing from `platforms/` would have inverted the
+    layers, so the dialect went to `server/src/` beside `names.js` and `cache.js`.
+  - Acceptance criteria: all three met. The pool pages to the end and stops; a
+    status absent reads as nothing reported rather than as a shape fault; the
+    stat and slot vocabularies are read and available to join a league's
+    settings against.
+  - Automated validation: 22 checks in `npm run server:test` under
+    `yahooPlayers.test.js`, on synthetic fixtures copying the shape and none of
+    the people. **The suite bites, and was checked by breaking it on purpose:**
+    reverting the end condition to read the list's own `count` fails exactly the
+    two past-the-end checks and no others. The short-final-page check still
+    passes under that revert, which is precisely why the empty-array case needed
+    a check of its own. `server:test` 70, up from 48.
+  - Verified live against the real feed, which no fixture can prove: the pool
+    came back **2888 players in six pages of 500** — matching the count Y7.2
+    recorded — with 2888 distinct `player_key`s, so the paging neither skipped
+    nor double-counted. A bye week on all 2888. `roster_positions` gave 21 slots
+    including the four composites `W/T W/R W/R/T Q/W/R/T`, `stat_categories` 108
+    stats with ids 0-107, and `game_weeks` 18 weeks with week 1 at 2026-09-09
+    and week 18 at 2027-01-05. All four cache files landed, the pool at 888 KB.
+  - **Found while building, and it would have been a real defect.** The reader
+    first carried an `injured` boolean derived from `status`. Across the whole
+    pool that is wrong for nearly half of it: nine codes appear and three are
+    nothing to do with fitness — `NA` "Inactive: Coach's Decision or Not on
+    Roster" on **1280 players, 44%**, plus `SUSP` and `CEL`. Y7.2 read 60 of 300
+    and saw seven codes, because the top 300 are the owned ones; `NFI-R` and
+    `SUSP` only appear deeper. The flag is gone rather than fixed: which codes
+    make a player unstartable is a question about a league's rules, so the code
+    is carried through and nothing is derived from it here. The vocabulary and
+    the counts are recorded next to the reader.
+  - A smaller one the checks caught: `status` used `??` while the flag tested
+    for `''` as well, so one player could read as both flagged and unflagged.
+    The three status fields now use `||`, since an empty string is the same
+    absence as a missing key.
+  - Corrected in `league.js`'s header, both now false and both about this
+    task's own boundary: "every Yahoo endpoint worth reading authenticates on
+    the browser's session cookie" — true of the league scope only — and "every
+    reading of it happens in this file", which the extraction ended.
+  - Manual validation: none required and none possible; nothing is visible yet,
+    so `shots` says nothing about this work beyond confirming no regression.
+  - Local gate: typecheck, `server:test` 70, `bridge:test` 7, `engine:test`,
+    build and `shots` all clean with no console error. Lint 43 warnings, every
+    one pre-existing in client files this task never opened — oxlint runs on
+    `client/` and this work is entirely under `server/`.
+  - Validation not run, and unchanged by this task: `engine:test` still skips
+    "Following a real draft", "Reading a real league" and one more for want of
+    `client/fixtures.local.json`. They are the only checks over
+    `server/src/platforms/`, so they say nothing about this module either way.
+  - Deliberately not built: no endpoint and no client code. Nothing calls this
+    module yet, which is Y8.2's job. Nothing was wired up to make it look used.
+  - Dependencies or blockers: none.
 
 - [ ] Y8.2: Join a league snapshot to the pool, keeping every eligibility.
   - Scope: match the players on a league snapshot to the pool through

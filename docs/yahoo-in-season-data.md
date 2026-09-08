@@ -238,31 +238,62 @@ three spare ones are the empty padding `league.js` documents. Scanned across
 | `eligible_positions_to_add`, `is_undroppable`, `is_keeper` | 300/300 | transaction legality |
 | `bye_weeks` | 300/300 | byes, for every player, free |
 | `status`, `status_full` | **60/300** | only when something is wrong |
-| `injury_note` | **58/300** | only when something is wrong |
+| `injury_note` | **58/300** in this sample, 549/2888 in the pool | only when there is a note to give |
 | `has_player_notes` | 298/300 | |
 | `player_notes_last_timestamp` | 204/300 | |
 | `has_recent_player_notes` | 31/300 | |
 | `linked_player` | 1/300 | rare enough to be a surprise later |
 
-**The injury fields are the trap.** They are absent on a healthy player, not
-present-and-empty, so a reader that indexes `status` and expects a value will
-see `undefined` for the 80% of the pool that is fine and cannot tell that from
-a shape change. Absence means healthy and has to be written down as meaning
-that. The codes seen in 300 players were `Q`, `O`, `IR`, `IR-R`, `PUP-R`, `NA`
-and `CEL`, with `status_full` spelling each one out.
+**The status fields are the trap.** They are absent when there is nothing to
+report, not present-and-empty, so a reader that indexes `status` and expects a
+value sees `undefined` and cannot tell that from a shape change. Absence has to
+be written down as meaning nothing is reported.
+
+**Corrected 2026-09-08, while building Y8.1, by reading all 2888 rather than
+the first 300.** The sample figures above are a top-300 artifact and the whole
+pool is a different picture — and, more importantly, `status` is **not** an
+injury field. Nine codes appear, and three are nothing to do with fitness:
+
+| Code | `status_full` | In the pool |
+| --- | --- | --- |
+| — | nothing reported | 1234 |
+| `NA` | Inactive: Coach's Decision or Not on Roster | **1280** |
+| `Q` | Questionable | 157 |
+| `IR` | Injured Reserve | 133 |
+| `IR-R` | Injured Reserve - Designated for Return | 39 |
+| `PUP-R` | Physically Unable to Perform (Regular Season) | 26 |
+| `SUSP` | Suspended | 7 |
+| `NFI-R` | Non-Football Injury (Reserve) | 5 |
+| `O` | Out | 4 |
+| `CEL` | Reserve: Commissioner Exempt List | 3 |
+
+`NA` alone is 44% of the pool and means unrostered, not hurt, so a reader that
+folds `status` into one "injured" flag is wrong for nearly half of it. `NFI-R`
+and `SUSP` were not in the top-300 sample at all. Among the 721 players owned
+in 1% of leagues or more the shape is the one the sample suggested — 544 carry
+nothing, 85 are `Q` — which is why sampling the top of the pool was misleading
+rather than merely incomplete. `injury_note` is on 549 of 2888, and a status
+does not imply a note: 1654 carry a status and only 549 a note.
+
+`percent_owned` is the other correction. It came back on 300 of 300 in the
+sample and on **721 of 2888** across the pool, so ownership is reported for
+roughly the rostered quarter and absent below it. Absent is not zero, and a
+reader has to keep the two apart.
 
 Three sub-resources hang off the same path via `;out=`, comma-separated for
 more than one:
 
 | `;out=` | Answers | Public? |
 | --- | --- | --- |
-| `percent_owned` | `{coverage_type: week, week: N}`, `value`, `delta` | yes, **300/300** |
+| `percent_owned` | `{coverage_type: week, week: N}`, `value`, `delta` | yes, **721/2888** — see the correction above |
 | `draft_analysis` | `average_pick`, `average_round`, `average_cost`, `percent_drafted`, and a `preseason_` variant of each | yes |
 | `ownership` | who holds the player **in a league** | no — `[]` at game scope |
 
-`percent_owned` is worth naming twice: it came back for every player scanned,
-it is scoped to a week, and it carries a `delta`. An ownership percentage that
-is moving is the signal waiver advice actually wants, and it costs no cookie.
+`percent_owned` is worth naming twice: it is scoped to a week and it carries a
+`delta`. An ownership percentage that is moving is the signal waiver advice
+actually wants, and it costs no cookie. It came back for every player in the
+top-300 sample and for 721 of the full 2888, so it covers the part of the pool
+anybody owns and goes quiet below that.
 `draft_analysis` is a second ADP source alongside Fantasy Football Calculator,
 mentioned because it exists and not because anything should switch to it.
 
@@ -387,7 +418,7 @@ game scope, which needs nothing.
 | Who owns a player | `;out=ownership` | L | **open — empty at game scope** |
 | Free agent against waiver | `players;status=A` and siblings | L | **open** |
 | Whether an add is legal now | `eligible_positions_to_add`, `is_undroppable`, `cant_cut_list` | L and G | fields observed, **rules unverified** |
-| Ownership trend | `;out=percent_owned`, with `delta`, per week | G | observed, every player |
+| Ownership trend | `;out=percent_owned`, with `delta`, per week | G | observed, 721 of 2888 — absent below the rostered end, and absent is not zero |
 | Pool depth | `players;start=;count=`, 2888 players | G | observed to the last page |
 
 ### Injuries, byes and availability to play
@@ -395,8 +426,8 @@ game scope, which needs nothing.
 | Needs | Source | Scope | State |
 | --- | --- | --- | --- |
 | Bye week | `bye_weeks` | L and G | observed, every player |
-| Injury status | `status`, `status_full` | G | observed — **present on 60 of 300, absent means healthy** |
-| Injury detail | `injury_note` | G | observed, 58 of 300 |
+| Injury status | `status`, `status_full` | G | observed, 1654 of 2888 — **but 1280 of those are `NA`, which is unrostered and not an injury** |
+| Injury detail | `injury_note` | G | observed, 549 of 2888; a status does not imply a note |
 | News | `has_player_notes`, `player_notes_last_timestamp`, `has_recent_player_notes` | G | observed; the notes themselves unread |
 
 ### Trades

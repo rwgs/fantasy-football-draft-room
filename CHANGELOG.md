@@ -103,6 +103,22 @@ run straight from the repository still works unmodified.
 reading is, so a stale one is visible during the draft rather than hidden behind
 a fresh one.
 
+**Yahoo's player data now arrives without a browser, though nothing shows it
+yet.** More in-season groundwork, and it makes the privacy boundary sharper
+rather than looser. Yahoo's API turns out to have two halves that do not
+authenticate alike: anything about *your league* needs your session cookie, and
+anything about *players in general* needs nothing at all. So the pool — all 2888
+of them, with injury status, bye weeks and an ownership percentage carrying a
+weekly delta — is now an ordinary feed the service fetches and caches for
+itself, alongside Fantasy Football Calculator, Sleeper and ESPN. Your league
+still never leaves your browser except as parsed data you asked it to send. The
+rule was "no credentials in the service"; it now reads "the service fetches what
+needs no credentials, and touches nothing that does".
+
+It also picks up the vocabularies a league's own settings have to be read
+against, which includes the full list of flex slots — something this project had
+written down as unknowable and which Yahoo publishes outright.
+
 ### Fixed
 
 **Un-starring a player takes him out of your Yahoo queue.** Reported live in
