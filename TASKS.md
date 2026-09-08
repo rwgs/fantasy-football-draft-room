@@ -1346,7 +1346,7 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 ### Phase 8 tasks, in order
 
 Split from the contract in `PLAN.md`, "What discovery settled". **Phase 8 was
-authorized 2026-09-08 and Y8.1 is done; Y8.2 onward are unstarted.** Each is
+authorized 2026-09-08; Y8.1 and Y8.2 are done, Y8.3 onward unstarted.** Each is
 one reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
 league, and nothing in it recommends anything.
 
@@ -1415,20 +1415,96 @@ league, and nothing in it recommends anything.
     module yet, which is Y8.2's job. Nothing was wired up to make it look used.
   - Dependencies or blockers: none.
 
-- [ ] Y8.2: Join a league snapshot to the pool, keeping every eligibility.
-  - Scope: match the players on a league snapshot to the pool through
-    `server/src/names.js`, preserving the **whole** `eligible_positions` list
-    rather than a primary position, and carrying the slot vocabulary through so
-    a composite slot resolves to the set it accepts.
-  - Acceptance: a player who matches nothing stays visible and is named as
-    unmatched rather than dropped or silently zeroed. A flex slot resolves from
-    the published vocabulary, not from parsing its name.
-  - Automated: `server:test` on synthetic fixtures, including a generational
-    suffix mismatch — "Chris Godwin Jr." against "Chris Godwin" — which is the
-    one mismatch class discovery actually observed, a defence joining on team
-    abbreviation, and a player eligible at two positions.
-  - Manual: compare the joined roster against Yahoo for the real league, every
-    player, and record the count that matched.
+- [x] Y8.2: Join a league snapshot to the pool, keeping every eligibility.
+  - Scope: new `server/src/platforms/yahoo/inSeason.js`, pure and reaching no
+    network. `slotAcceptance` reads what each published slot takes,
+    `resolveSlots` puts that against the league's own slot list, and
+    `joinLeague` joins the snapshot's roster twice — exactly to Yahoo's own pool
+    and, through `names.js`, to the cross-source board.
+  - **The task's premise was wrong and was corrected before building on it.**
+    It read as one join through `names.js`. All three Yahoo surfaces write a
+    player as `470.p.<id>` — the draft room, the league scope and the game scope
+    alike — so the Yahoo half needs no matching at all, and asking a fuzzy rule
+    to do an identifier's work could only lose. Raised with the user, who chose
+    both joins: the exact one for what Y8.3 shows, and the `names.js` one so
+    Phase 9 inherits it rather than writing it. `DECISIONS.md` carries it.
+  - Sharpened rather than corrected, and it is what makes the acceptance
+    criterion reachable: `/game/nfl/roster_positions` publishes the 21 slots and
+    **carries no eligible-set field**. Re-fetched to check — `position`,
+    `abbreviation`, `display_name`, `position_type`, nothing else. Four places
+    said the set "can be read from a list rather than parsed", which is true of
+    the outcome and silent on the mechanism, so a reader reaching for it would
+    look for a field that is not there. What is actually true: a composite's
+    display name is the singles' display names joined by a slash, so each part
+    is looked up in the same list and the vocabulary explains itself. No letter
+    table, and a composite Yahoo adds later resolves unedited. All four now say
+    which, and point at `slotAcceptance`.
+  - Acceptance criteria: both met. A player who matches nothing keeps his place
+    with `pool: null` or `board: null` and is *named* in `unmatched`, not
+    counted — the two joins are nested rather than spread precisely so that
+    "healthy" and "never found" cannot both read as `status: null`. And a flex
+    resolves from the vocabulary: `W/R/T` to `WR+RB+TE` and `Q/W/R/T` to
+    `QB+WR+RB+TE`.
+  - Found while building, and it would have been a silent defect: bench and IR
+    sit in the same 21 as the real positions, so a bench slot came out accepting
+    a position called `BN`. Yahoo separates them itself — a position carries a
+    `position_type` and `BN` and `IR` do not — so that is read rather than
+    special-cased. Bench takes anybody, which is a different answer from an
+    empty eligible set and now reads as one.
+  - Automated validation: 20 checks in `npm run server:test` under
+    `inSeason.test.js`, on synthetic fixtures copying the shapes and none of the
+    people, except where a real disagreement is the thing under test. All three
+    the task asked for are there: the suffix mismatch, a defence joining on team
+    abbreviation with a different name each side, and a player eligible at two
+    positions. `server:test` 90, up from 70.
+  - **The suite bites, and was checked by breaking four rules on purpose.**
+    Joining on the bare player id reddens the season guard and one more, and
+    nothing else; trying only the first eligibility reddens the dual-position
+    check alone; dropping the `position_type` test reddens the two bench checks;
+    and a letter table in place of the vocabulary reddens the `X/Y` check and
+    the no-display-name one. Each break hit exactly its intended checks.
+  - Manual validation: **measured against the real feeds at full scale, which is
+    more than the task asked for on the board half and less on the league
+    half.** The whole real Yahoo pool — 2888 players, 1195 of them eligible at a
+    position the board covers — put through the join against a real 12-team
+    half-PPR board of 626 rows:
+    - pool join **1195 of 1195**, exact, as it must be;
+    - board join **100% of every player owned in a tenth of leagues or more**
+      (221 of 221), 96.5% from one to ten percent, 33% below one percent, and
+      **not one miss at five percent ownership or above**;
+    - **all 32 defences** joined on their team abbreviation;
+    - the `W/R/T` slot accepted 967 players, the 8 dual-eligible among them;
+    - and the retry rule earned itself on real data: Riley Nowakowski is
+      `RB,TE` to Yahoo and a **TE** on the board, so a first-only join misses
+      him.
+    The 33% below one percent ownership is right rather than a fault: the board
+    holds only players Fantasy Football Calculator or Sleeper actually price, and
+    859 of the pool are rated by neither.
+  - **Not done, and it needs Y8.3 rather than more work here:** comparing a
+    real league's own roster player by player against Yahoo. That needs the
+    bookmarklet run in a signed-in browser and a screen to read it on, and there
+    is no such screen yet. What can be said without one is that the pool join is
+    exact by construction and a league can only roster players from Yahoo's own
+    pool, so a real roster joins fully unless the pool fetch was partial — which
+    is Y8.4's case, not this one.
+  - Recorded as a limit rather than fixed: the board covers six positions and
+    Yahoo's pool covers 21, so an `OFF` whole-offence entry or any individual
+    defensive player has no board row by construction. Every board miss above
+    five percent ownership is one of those. An IDP league will show its
+    defensive starters unmatched; their slots still resolve and their eligibility
+    still carries. Saying so on screen is Y8.4's.
+  - Local gate: typecheck clean, `server:test` 90, `bridge:test` 7,
+    `engine:test` green, build clean, `shots` clean with no console errors. Lint
+    43 warnings, unchanged and every one pre-existing in client files this task
+    never opened. `engine:test` was run against a **second service on 5179**
+    started from this code rather than restarting 5178, which had been up 46
+    minutes and could have been mirroring a draft; nothing here is reachable
+    through an endpoint, so the two services answer identically anyway.
+  - `engine:test` still skips "Sleeper leagues", "Following a real draft" and
+    "Reading a real league" for want of `client/fixtures.local.json`, unchanged
+    by this task and unaffected either way — nothing calls this module yet.
+  - Deliberately not built: no endpoint, no client code, no scoring and no
+    projection, on Y8.1's precedent. Nothing was wired up to make it look used.
   - Dependencies: Y8.1.
 
 - [ ] Y8.3: An in-season view that shows the league and how old it is.

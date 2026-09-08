@@ -57,9 +57,11 @@ function readScoring(settings) {
  * slots start. Reading that off the strings instead would mean deciding what
  * `W/R/T` and `Q/W/R/T` are for, which is a different question from whether
  * this league starts them. Those names are enumerable, all 21 of them, from
- * `/game/nfl/roster_positions` — see `docs/yahoo-in-season-data.md` — so a flex
- * slot's eligible set can be looked up when lineup advice needs it. What starts
- * still comes from the league.
+ * `/game/nfl/roster_positions` — see `docs/yahoo-in-season-data.md` — and
+ * `inSeason.js` turns a composite into the positions it accepts by looking each
+ * part of its display name up in that same list. The list carries no
+ * eligible-set field of its own; it explains itself. What starts still comes
+ * from the league.
  */
 function readSlots(settings) {
   return listOf(settings.roster_positions)

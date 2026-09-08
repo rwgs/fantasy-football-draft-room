@@ -9,6 +9,71 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-08 Two joins, because a Yahoo id and a name answer different questions
+
+Status: Accepted. Applies to `server/src/platforms/yahoo/inSeason.js`, and
+constrains Phase 9, which inherits the second join rather than writing one.
+
+### Decision
+
+A league snapshot is joined twice, and the two are not interchangeable.
+
+**To Yahoo's own player pool, exactly, on the whole `player_key`.** All three
+Yahoo surfaces this project reads write a player the same way: the draft room
+sends `470.p.7200`, the league scope answers `470.p.<id>` and the public game
+scope answers `470.p.40059`. So there is nothing to match, and `names.js` is not
+asked. The whole key is used and not the bare id, because the id is stable
+across seasons while the game code in front of it is not: joining on `40059`
+alone would match last season's record for the same person, with the wrong team
+and the wrong bye on it, and look like a success.
+
+**To the cross-source board, through `names.js`.** Fantasy Football Calculator,
+Sleeper and ESPN have never heard of a Yahoo player id, so a name, a position
+and a team is all there is. Every eligible position is tried rather than the
+first: a board row holds one position and the sources disagree about which,
+so a player Yahoo lists as `RB,TE` whom Sleeper calls a tight end is missed by
+a first-only join. That is not hypothetical -- it is Riley Nowakowski, measured.
+
+A composite slot such as `W/R/T` resolves from the published vocabulary, by
+looking each part of its `display_name` up against the single positions' own
+display names in the same list. Not from a letter table.
+
+### Why
+
+Because the alternative to each was measured and is worse.
+
+Using `names.js` for the Yahoo half would be choosing a fuzzy match over an
+exact identifier, which can only lose. Against the real feeds the id join is
+1195 of 1195 on every player eligible at a position the board covers; a name
+join cannot beat that and can put the wrong person on a roster.
+
+A letter table -- `W` is a receiver, `R` a back -- is this project deciding what
+Yahoo's slots mean. `/game/nfl/roster_positions` publishes all 21 slots and,
+measured, carries **no eligible-set field at all**: `position`,
+`abbreviation`, `display_name`, `position_type` and nothing else. But a
+composite's display name is exactly the singles' display names joined by a
+slash, so the list explains itself, and a composite Yahoo adds later resolves
+without this repository being edited. A composite whose parts do not all resolve
+is reported unresolved rather than half answered, because half a flex's eligible
+set would pass a player who cannot fill the slot.
+
+### What this does not decide, and the cost
+
+**The board covers six positions and Yahoo's pool covers twenty-one.** The
+board is a draft board -- `DRAFTABLE` is QB, RB, WR, TE, K, DEF -- and the pool
+carries `OFF` whole-offence entries and every individual defensive position
+besides. Measured against real feeds, the board join is 100% of every player
+owned in a tenth of leagues or more and 33% below one percent ownership, and
+every miss above five percent ownership is an `OFF` or IDP record. So a league
+with IDP slots will show its defensive starters as board-unmatched, honestly and
+by construction. Those slots still resolve, and the players still appear with
+their eligibility; what they have no cross-source row for is a projection. Y8.4
+owns saying so on screen, and Phase 9 owns whether such a league can be advised
+at all.
+
+Nothing here scores, projects or recommends anybody. The weekly calculation is a
+separate module in a later phase and should not grow out of this file.
+
 ## 2026-09-08 The service fetches Yahoo's public half; the browser keeps the league
 
 Status: Accepted. Narrows `The in-season reader is a bookmarklet, like the

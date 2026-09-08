@@ -186,7 +186,15 @@ export async function fetchPlayerPool({ force = false } = {}) {
   return { players: entry.value, meta: sourceMeta(entry) };
 }
 
-/** The 21 roster slots, composites included, so a flex resolves from a list. */
+/**
+ * The 21 roster slots, composites included.
+ *
+ * `displayName` is load-bearing rather than decoration: no entry carries an
+ * eligible-set field, and a composite's display name is the single positions'
+ * display names joined by a slash, which is how `platforms/yahoo/inSeason.js`
+ * resolves one without a letter table. `positionType` is what separates a slot
+ * holding a position from `BN` and `IR`, which carry none.
+ */
 export function readRosterPositions(body) {
   return listOf(gameResource(body, 'roster_positions'))
     .map((entry) => entry.roster_position ?? entry)

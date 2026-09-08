@@ -337,10 +337,21 @@ against:
 composites among them are `W/T`, `W/R`, `W/R/T` and `Q/W/R/T`. So a flex slot's
 eligible set can be read from a list rather than parsed out of a slash-separated
 string, which is what weekly lineup advice needs and what
-`server/src/platforms/yahoo/league.js` said was guesswork. Its own decision is
-unaffected and still right: it separates starters from bench on
-`is_starting_position` rather than on the position's name, which stays the
-sturdier reading whether or not the names are enumerable.
+`server/src/platforms/yahoo/league.js` said was guesswork.
+
+**How, since no entry carries an eligible-set field.** Every slot holds
+`position`, `abbreviation`, `display_name` and `position_type` and nothing else.
+A composite's display name is the single positions' display names joined by a
+slash — `W/R/T` is "Wide Receiver/Running Back/Tight End" — so each part is
+looked up in the same list, and the vocabulary explains itself without a letter
+table deciding that `W` means a receiver. `position_type` is the other
+load-bearing field: it is present on every position and absent on `BN` and `IR`,
+which is what stops a bench slot resolving to a position called `BN`.
+`server/src/platforms/yahoo/inSeason.js` does this reading.
+
+`league.js`'s own decision is unaffected and still right: it separates starters
+from bench on `is_starting_position` rather than on the position's name, which
+stays the sturdier reading whether or not the names are enumerable.
 
 `game_weeks` gives week 1 as 2026-09-09 to 2026-09-14, and week 18 as
 2027-01-05 to 2027-01-10. That is week *boundaries*, which is not the same as

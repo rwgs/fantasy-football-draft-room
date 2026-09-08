@@ -235,7 +235,10 @@ Two eligibility rules the draft path does not need. A Yahoo player's
 `eligible_positions` is a list and **all of it must be preserved** — taking the
 first is enough to draft a player and not enough to know what slot he may fill.
 And a flex slot's eligible set can be read rather than parsed: the 21-slot
-vocabulary is published, including `W/T`, `W/R`, `W/R/T` and `Q/W/R/T`.
+vocabulary is published, including `W/T`, `W/R`, `W/R/T` and `Q/W/R/T`. It
+carries no eligible-set field, so the set comes out of the list itself — a
+composite's display name is the singles' display names joined by a slash — which
+is what `platforms/yahoo/inSeason.js` reads.
 
 ### Source selection
 
