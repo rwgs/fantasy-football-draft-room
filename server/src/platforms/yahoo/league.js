@@ -112,14 +112,32 @@ function readPlayer(node) {
 }
 
 /**
+ * One team's roster, as `/team/<key>/roster` answers it.
+ *
+ * `week` matters as much as the players do: a roster is a lineup for a week,
+ * and one read for last week is a different answer from one read for this week
+ * rather than a staler version of the same answer.
+ */
+function readRoster(response) {
+  const teamNode = pick(response.fantasy_content ?? {}, 'team', 'the roster response');
+  const body = subResource(teamNode, 'roster');
+  return {
+    teamKey: flatten(teamNode[0]).team_key ?? null,
+    week: toNumber(body.week),
+    editable: body.is_editable === 1 || body.is_editable === '1',
+    players: listOf(body['0']?.players).map((entry) => entry.player).filter(Boolean).map(readPlayer),
+  };
+}
+
+/**
  * Turn what the browser read into one snapshot.
  *
  * Each part is optional except the settings, because the reader posts what it
- * managed to get and a league whose roster failed is still worth showing. What
+ * managed to get and a league whose rosters failed is still worth showing. What
  * is not optional is honesty about which parts arrived, so anything missing is
  * `null` rather than an empty object that reads like an answer.
  */
-export function readSnapshot({ settings, teams, roster, profile } = {}) {
+export function readSnapshot({ settings, teams, rosters, roster, profile } = {}) {
   if (!settings) throw new Error('A snapshot needs at least the league settings.');
 
   const leagueNode = pick(settings.fantasy_content ?? {}, 'league', 'the settings response');
@@ -146,17 +164,24 @@ export function readSnapshot({ settings, teams, roster, profile } = {}) {
     ? teamList.find((team) => team.managers.some((m) => m.guid === ownGuid))?.teamKey ?? null
     : null;
 
-  let rosterOut = null;
-  if (roster) {
-    const teamNode = pick(roster.fantasy_content ?? {}, 'team', 'the roster response');
-    const body = subResource(teamNode, 'roster');
-    rosterOut = {
-      teamKey: flatten(teamNode[0]).team_key ?? null,
-      week: toNumber(body.week),
-      editable: body.is_editable === 1 || body.is_editable === '1',
-      players: listOf(body['0']?.players).map((entry) => entry.player).filter(Boolean).map(readPlayer),
-    };
-  }
+  /*
+   * A READER TOO OLD TO SEND EVERY ROSTER SENDS ONE, UNDER THE OLDER NAME.
+   *
+   * That case is read rather than refused, and it is not hypothetical. A
+   * bookmarklet carries its whole source in its own address, so the copy on
+   * somebody's bookmarks bar is a photograph taken when it was dragged and
+   * cannot ever update itself — a stale reader is likelier here than a stale
+   * userscript, not less. Left unhandled, an old copy would post `roster` and
+   * this would report a league with no rosters in it at all, which looks like
+   * Yahoo having failed rather than like a bookmark to re-drag.
+   *
+   * The shape it posted is the staleness signal, and it is a better one than a
+   * build hash would be: it is the capability itself rather than a proxy for
+   * it. The bridge needs a hash because a userscript can go stale without its
+   * behaviour changing shape; if that ever becomes true here, this needs one too.
+   */
+  const posted = Array.isArray(rosters) ? rosters : (roster ? [roster] : []);
+  const rostersOut = posted.filter(Boolean).map(readRoster);
 
   return {
     leagueKey: pick(meta, 'league_key', 'the league'),
@@ -190,7 +215,11 @@ export function readSnapshot({ settings, teams, roster, profile } = {}) {
     ownGuid,
     ownTeamKey,
     teams: teamList,
-    roster: rosterOut,
+    rosters: rostersOut,
+    // Whether the copy of the reader that posted this can read every roster.
+    // A screen showing one roster out of eight should say why rather than let
+    // it read as a league with seven empty teams.
+    readerBehind: !Array.isArray(rosters) && !!roster,
   };
 }
 

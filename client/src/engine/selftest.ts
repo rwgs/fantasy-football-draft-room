@@ -2578,6 +2578,7 @@ async function main() {
 
   await yahooRoom();
   await yahooQueue();
+  await yahooSeason();
 
   console.log('');
   if (failures) {
@@ -3247,6 +3248,174 @@ async function yahooQueue() {
   });
   check('a platform with no room to write to is refused the queue',
     strayQueue.status === 404, String(strayQueue.status));
+}
+
+/*
+ * READING A YAHOO LEAGUE IN SEASON, THROUGH THE SERVICE.
+ *
+ * `server:test` checks the reading of Yahoo's shapes and the two joins as pure
+ * functions. This is the other half: what a caller actually gets back, which is
+ * where the real pool, the real slot vocabulary and the real board meet the
+ * snapshot a browser posted.
+ *
+ * The snapshot is synthetic — Yahoo's envelope, invented people — except for the
+ * names, which are taken off the live board so the cross-source join has a real
+ * row to find. That is the point of doing it here rather than on a fixture.
+ */
+async function yahooSeason() {
+  console.log('\nReading a Yahoo league in season');
+
+  const LEAGUE = String(Date.now() + 2).slice(-9);
+  const boardQuery = 'scoring=half-ppr&teams=12';
+  const board = await (await fetch(API + '/api/board?' + boardQuery)).json();
+
+  const nothing = await (await fetch(
+    API + '/api/yahoo/league/' + LEAGUE + '/season?' + boardQuery)).json();
+  check('a league nobody has read reads as not yet, rather than refusing',
+    nothing.read === false && !!nothing.hint, JSON.stringify(nothing).slice(0, 80));
+
+  // Real people off the live board, so the board join is exercised for real.
+  const picked = board.players.slice(0, 4) as {
+    name: string; position: string; team: string;
+  }[];
+  const yahooPlayer = (p: typeof picked[number], id: number) => ({
+    player: [
+      [
+        { player_key: '470.p.' + id }, { player_id: String(id) },
+        { name: { full: p.name } }, { editorial_team_abbr: p.team },
+        { display_position: p.position }, { primary_position: p.position },
+        { eligible_positions: [{ position: p.position }] },
+      ],
+      { selected_position: [{ position: p.position }] },
+    ],
+  });
+  const list = (items: unknown[]) => {
+    const out: Record<string, unknown> = { count: items.length };
+    items.forEach((item, i) => { out[String(i)] = item; });
+    return out;
+  };
+  const rosterFor = (teamId: number, players: unknown[]) => ({
+    fantasy_content: {
+      team: [
+        [{ team_key: '470.l.' + LEAGUE + '.t.' + teamId }],
+        { roster: { week: 3, is_editable: 1, 0: { players: list(players) } } },
+      ],
+    },
+  });
+
+  const posted = {
+    settings: {
+      fantasy_content: {
+        league: [
+          {
+            league_key: '470.l.' + LEAGUE, league_id: LEAGUE, name: 'Self Test League',
+            game_code: 'nfl', season: '2026', num_teams: 2, current_week: 3,
+          },
+          {
+            settings: [{
+              roster_positions: [
+                { roster_position: { position: 'QB', count: 1, is_starting_position: 1 } },
+                { roster_position: { position: 'W/R/T', count: 1, is_starting_position: 1 } },
+                { roster_position: { position: 'BN', count: 4, is_starting_position: 0 } },
+              ],
+              stat_categories: { stats: [{ stat: { stat_id: 4, name: 'Passing Yards', enabled: '1' } }] },
+              stat_modifiers: { stats: [{ stat: { stat_id: 4, value: '0.04' } }] },
+              waiver_type: 'WR', uses_faab: '0',
+            }],
+          },
+        ],
+      },
+    },
+    teams: {
+      fantasy_content: {
+        league: [
+          { league_key: '470.l.' + LEAGUE },
+          {
+            teams: list([
+              { team: [[{ team_key: '470.l.' + LEAGUE + '.t.1' }, { team_id: '1' }, { name: 'Theirs' },
+                { managers: [{ manager: { guid: 'GUID-THEIRS' } }] }]] },
+              { team: [[{ team_key: '470.l.' + LEAGUE + '.t.2' }, { team_id: '2' }, { name: 'Mine' },
+                { managers: [{ manager: { guid: 'GUID-MINE' } }] }]] },
+            ]),
+          },
+        ],
+      },
+    },
+    rosters: [
+      rosterFor(1, [yahooPlayer(picked[0], 9001), yahooPlayer(picked[1], 9002)]),
+      rosterFor(2, [yahooPlayer(picked[2], 9003), yahooPlayer(picked[3], 9004)]),
+    ],
+    profile: { fantasy_content: { users: { count: 1, 0: { user: [{ guid: 'GUID-MINE' }] } } } },
+  };
+
+  const put = await fetch(API + '/api/yahoo/league/' + LEAGUE + '/snapshot', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(posted),
+  });
+  check('a snapshot carrying every roster is taken', put.ok, String(put.status));
+
+  const season = await (await fetch(
+    API + '/api/yahoo/league/' + LEAGUE + '/season?' + boardQuery)).json();
+
+  check('the league comes back read', season.read === true);
+  check('every roster posted is joined', season.league.rosters.length === 2,
+    String(season.league?.rosters?.length));
+  check('the own roster is the one the guid matched',
+    season.league.rosters.filter((r: { own: boolean }) => r.own)
+      .map((r: { teamKey: string }) => r.teamKey)
+      .join() === '470.l.' + LEAGUE + '.t.2');
+
+  // The flex against the real vocabulary the service fetched for itself, which
+  // is the whole reason this check is here and not in `server:test`.
+  const flex = season.league.slots.find((s: { position: string }) => s.position === 'W/R/T');
+  check('a composite slot is resolved from the vocabulary the service fetched',
+    JSON.stringify(flex?.accepts) === JSON.stringify(['WR', 'RB', 'TE']),
+    JSON.stringify(flex?.accepts));
+  check('no starting slot in an ordinary league is left unresolved',
+    season.league.unresolvedSlots.length === 0,
+    JSON.stringify(season.league.unresolvedSlots));
+
+  // Four players taken off the top of the board, so all four must find it back.
+  check('players taken from the board join it again through the snapshot',
+    season.league.matched.board === 4, season.league.matched.board + ' of 4');
+  check('and the league totals count every roster',
+    season.league.matched.of === 4 && season.league.matched.rosters === 2);
+
+  check('every feed behind the answer reports its own age',
+    ['league', 'pool', 'vocabulary', 'board']
+      .every((f) => Object.prototype.hasOwnProperty.call(season.feeds[f], 'fetchedAt')),
+    JSON.stringify(Object.keys(season.feeds || {})));
+  check('the league half is dated by when the browser read it, not by a fetch',
+    season.feeds.league.fetchedAt === season.snapshot.readAt);
+
+  /*
+   * A bookmarklet cannot update itself, so this is the shape an old copy posts.
+   * It has to be read rather than refused, and it has to be named, because one
+   * roster in a two team league otherwise looks like Yahoo having failed.
+   */
+  const OLD = String(Date.now() + 3).slice(-9);
+  const behind = {
+    ...posted,
+    settings: JSON.parse(JSON.stringify(posted.settings)
+      .replaceAll('470.l.' + LEAGUE, '470.l.' + OLD).replaceAll('"' + LEAGUE + '"', '"' + OLD + '"')),
+    rosters: undefined,
+    roster: posted.rosters[0],
+  };
+  const oldPut = await fetch(API + '/api/yahoo/league/' + OLD + '/snapshot', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(behind),
+  });
+  const oldBody = await oldPut.json();
+  check('a reader too old to send every roster is still read', oldPut.ok && oldBody.rosters.length === 1,
+    String(oldPut.status) + ' ' + JSON.stringify(oldBody.rosters?.length));
+  check('and it is named as behind rather than left to look like an empty league',
+    oldBody.readerBehind === true, JSON.stringify(oldBody.readerBehind));
+
+  const sleeper = await fetch(API + '/api/sleeper/league/1234567890123456789/season');
+  check('a platform with no in-season reading is refused the route',
+    sleeper.status === 404, String(sleeper.status));
 }
 
 /** The average distance between where a player went and their ADP. */

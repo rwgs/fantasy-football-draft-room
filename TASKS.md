@@ -1346,7 +1346,7 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 ### Phase 8 tasks, in order
 
 Split from the contract in `PLAN.md`, "What discovery settled". **Phase 8 was
-authorized 2026-09-08; Y8.1 and Y8.2 are done, Y8.3 onward unstarted.** Each is
+authorized 2026-09-08; Y8.1, Y8.2 and Y8.3a are done, Y8.3b onward unstarted.** Each is
 one reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
 league, and nothing in it recommends anything.
 
@@ -1507,21 +1507,94 @@ league, and nothing in it recommends anything.
     projection, on Y8.1's precedent. Nothing was wired up to make it look used.
   - Dependencies: Y8.1.
 
-- [ ] Y8.3: An in-season view that shows the league and how old it is.
-  - Scope: a screen alongside the draft that shows the league, the own team,
-    every roster, the roster slots, the scoring rules, and the age of each feed
-    behind it. Read-only. No projections and no advice.
-  - Acceptance: every roster and setting agrees with Yahoo; the own team is the
-    one the `guid` matched, not a seat number; each panel says how old its data
-    is; a missing snapshot reads as "not read yet" with the bookmarklet offered,
-    rather than as an empty league.
-  - Automated: `engine:test` for the endpoint-visible behaviour, since that is
-    where a check meets the service as a caller does. `shots` extended to
-    photograph the in-season view, including the no-snapshot state, while
-    keeping both draft modes.
+**Y8.3 was split in two while starting it, and the outcome is unchanged.** As
+written it needed the reader, the snapshot shape, the join, an endpoint, a new
+screen and `shots` — more than one reviewable pass, which this file's own rule
+makes two tasks rather than one. Y8.3a is everything up to the service handing
+back a joined league; Y8.3b is the screen that shows it. The acceptance criteria
+are divided between them and none was dropped.
+
+- [x] Y8.3a: Read every roster, and serve the league joined.
+  - Scope: the reader fetches every team's roster rather than only yours;
+    `readSnapshot` carries `rosters` instead of one `roster`; `joinLeague` joins
+    all of them and marks which is the user's own; new `GET
+    /api/:platform/league/:id/season` hands back the joined league with the age
+    of each feed behind it.
+  - Why every roster, since the old reader deliberately read one: a weekly
+    decision is about the whole league — what a trade costs the other side, who
+    is startable on somebody else's bench, which teams need what. Y8.3's
+    acceptance asks for every roster and Phase 11 cannot exist without them.
+  - Acceptance criteria met here, out of Y8.3's four: the own team is the one
+    the `guid` matched and never a position in a list, each feed reports its own
+    age, and a league nobody has read answers "not yet" rather than refusing.
+    The fourth — every roster agreeing with Yahoo — needs a real league in a
+    browser and is Y8.3b's, where there is a screen to compare on.
+  - **A stale bookmarklet is the real risk here, and it is now handled rather
+    than noted.** A bookmarklet carries its whole source in the address it was
+    dragged from, so it cannot ever update itself: a stale reader is likelier
+    than a stale userscript, not less. An old copy posts the singular `roster`,
+    which is read, turned into a one-element list, and reported as
+    `readerBehind` — because one roster in an eight-team league otherwise looks
+    exactly like Yahoo having failed. The shape it posted is the signal, and it
+    is a better one than a build hash: it is the capability itself rather than a
+    proxy for it. Noted where the code is: if the reader ever goes stale without
+    changing shape, it needs a hash like the bridge's.
+  - Built to fail per feed rather than together. The league is already in hand —
+    it came from the browser, not a feed — so a pool that will not come costs
+    the injuries and ownership percentages and nothing else. Each of the four
+    reports its own `fetchedAt`, `stale` and `error`.
+  - Automated validation: 5 new checks in `server:test`, taking it to 95, and
+    **14 in `engine:test`** under "Reading a Yahoo league in season" — the
+    endpoint-visible half, where the real pool, the real slot vocabulary and the
+    real board meet a posted snapshot. The self-test's snapshot is synthetic
+    Yahoo envelope with real names taken off the live board, so the cross-source
+    join has a real row to find; that is the point of checking it there rather
+    than on a fixture.
+  - **The suite bites, checked by breaking both new rules.** Deriving the own
+    team from anything but the guid reddens exactly that check; refusing the old
+    reader's singular roster reddens exactly the stale-reader check. One each,
+    nothing else.
+  - Manual validation: **the endpoint driven by hand against the real feeds**,
+    since there is no screen yet and an endpoint nobody can see is worth looking
+    at once. Two real players posted under their real Yahoo keys plus one
+    invented: pool join 2 of 2 with ownership, bye week and status coming
+    through, board join 2 of 2, and the invented player visible on both rosters
+    with `pool: null`, `board: null` and his name in `unmatched` — which is the
+    acceptance criterion demonstrated rather than asserted. `W/R/T` resolved to
+    `WR+RB+TE` off the vocabulary the service fetched for itself, no unresolved
+    slot, the own roster marked on the second team, and four feeds each dated
+    separately.
+  - Removed what this orphaned: the reader's `ownTeamId`, which existed only to
+    choose which single roster to fetch, and the team id in its URL match. Which
+    team is yours was already the service's answer from the guid.
+  - Local gate: typecheck clean, `server:test` 95, `bridge:test` 7,
+    `engine:test` green, build clean, `shots` clean with no console errors. Lint
+    43 warnings, unchanged. `engine:test` ran against a second service on 5179
+    rather than restarting 5178.
+  - Deliberately not built: the screen. `shots` therefore says nothing about
+    this work beyond confirming no regression, exactly as Y8.1 and Y8.2.
+  - Dependencies: Y8.2.
+
+- [ ] Y8.3b: The in-season screen.
+  - Scope: a fourth screen — `season`, alongside `setup`, `draft` and `results`
+    — reached from the setup screen, showing the league, the own team, every
+    roster, the roster slots, the scoring rules and the age of each feed. Read
+    only. No projections and no advice.
+  - Decided with the user rather than assumed: a fourth screen and not a third
+    mode. The mode badge distinguishes how a *draft* runs, mock against
+    assistant, which an in-season view is not, so the draft flow is untouched
+    and `SPEC.md`'s two-mode framing stands.
+  - Acceptance: the two criteria Y8.3a could not reach — every roster and
+    setting agrees with Yahoo, and a missing snapshot reads as "not read yet"
+    with the bookmarklet offered rather than as an empty league. A reader
+    reported as behind says so.
+  - Automated: `shots` extended to photograph the in-season view, including the
+    no-snapshot state, while keeping both draft modes.
   - Manual: read the real league through the bookmarklet and compare all eight
     rosters and every setting against Yahoo, in a browser, with screenshots.
-  - Dependencies: Y8.2.
+    **This is the run that has never happened for every roster** — the reader
+    only ever fetched one before Y8.3a.
+  - Dependencies: Y8.3a.
 
 - [ ] Y8.4: Make the failure states of the view honest.
   - Scope: the cases `ROADMAP.md` names as Phase 8's exit criteria — switching
@@ -1537,7 +1610,7 @@ league, and nothing in it recommends anything.
     visible failure state.
   - Manual: switch between two real leagues if a second is available, and
     restart the service mid-view. Record what could not be exercised.
-  - Dependencies: Y8.3. Note the memory rule that restarting the service wipes
+  - Dependencies: Y8.3b. Note the memory rule that restarting the service wipes
     a live draft room; do not exercise the restart case during one.
 
 ### Subsequent task planning

@@ -1,8 +1,11 @@
 # Yahoo-first in-season advice
 
-Status: planned, 2026-09-08. This request authorizes the planning documents;
-implementation has not started. Requirements live in [SPEC.md](SPEC.md), phase
-order in [ROADMAP.md](ROADMAP.md), and actionable work in [TASKS.md](TASKS.md).
+Status: planned 2026-09-08, and Phase 8 authorized and under way the same day —
+Y8.1, Y8.2 and Y8.3a are built. Phase 7 is not closed: the API application's
+status and two league-scope reads are still open. Requirements live in
+[SPEC.md](SPEC.md), phase order in [ROADMAP.md](ROADMAP.md), and actionable work
+with its validation in [TASKS.md](TASKS.md), which is where progress is
+recorded rather than here.
 
 ## Outcome and scope
 
@@ -158,8 +161,9 @@ Two scopes, authenticating differently, so two transports:
 | Game | `/fantasy/v2/game/nfl/...` | the service, directly | disk, like the other feeds |
 
 The league half is `userscript/league-reader.js`, already built and proven
-against the real league: four GETs, Yahoo's own JSON posted unread, all
-interpretation in `server/src/platforms/yahoo/league.js`. The game half needs no
+against the real league: three GETs plus one per team for the rosters, Yahoo's
+own JSON posted unread, all interpretation in
+`server/src/platforms/yahoo/league.js`. The game half needs no
 cookie — measured, `401` against every league path and `200` against every game
 path with no credentials at all — so it becomes an ordinary source module.
 
@@ -179,7 +183,7 @@ listed as league-scope is already read and parsed today.
 | Roster slots, with `is_starting_position` | settings | L |
 | Scoring, as `stat_categories` joined to `stat_modifiers` on `stat_id` | settings | L |
 | Waiver method and trade window | settings | L |
-| Own roster, with `eligible_positions` and `selected_position` | team roster | L |
+| Every roster, with `eligible_positions` and `selected_position` | team rosters, one request each | L |
 | Player pool, injuries, byes, ownership percentage | game players | G |
 | Stat vocabulary, slot vocabulary, week dates | game reference lists | G |
 | Kickoff times and live game state | **ESPN**, the only source that has them | — |

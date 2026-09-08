@@ -5,8 +5,8 @@
  * reason it is not part of `yahoo-draft-bridge.user.js`. The bridge has to be a
  * userscript: it wraps `WebSocket` before Yahoo's own bundle builds one, and
  * only code injected at `document-start` can do that. This needs none of it.
- * It makes four ordinary fetches when you click it. See `DECISIONS.md`,
- * 2026-09-08, for the decision and what it costs.
+ * It makes three ordinary fetches when you click it, plus one per team for the
+ * rosters. See `DECISIONS.md`, 2026-09-08, for the decision and what it costs.
  *
  * WHAT IT SENDS, AND WHAT IT NEVER SENDS
  *
@@ -76,11 +76,12 @@
     if (tone !== 'busy') show.timer = setTimeout(() => host.remove(), 9000);
   }
 
-  // ---- Which league, and which team ------------------------------------
+  // ---- Which league ----------------------------------------------------
 
   /*
-   * The league out of the address bar. A league page is `/f1/<league>` with an
-   * optional team on the end.
+   * The league out of the address bar. A league page is `/f1/<league>`, with a
+   * team on the end that is not read: every roster is fetched, so which team
+   * page you happened to be on decides nothing.
    *
    * The API wants a key like `470.l.<league>`, and that leading number is the
    * game — it changes every season and appears nowhere in the address. It does
@@ -94,8 +95,8 @@
    * one, and a reader that did would have to find the game key properly.
    */
   function leagueFromUrl() {
-    const at = location.pathname.match(/\/f1\/(\d+)(?:\/(\d+))?/);
-    return at ? { leagueId: at[1], teamId: at[2] || null } : null;
+    const at = location.pathname.match(/\/f1\/(\d+)/);
+    return at ? { leagueId: at[1] } : null;
   }
 
   async function readJson(path) {
@@ -134,34 +135,53 @@
         readJson('/league/' + leagueKey + '/teams'),
       ]);
 
-      // The team is optional: a league page carries one, a league home page may
-      // not. Without it the snapshot still has the league and everyone in it.
-      let roster = null;
-      const teamId = where.teamId || ownTeamId(teams, profile);
-      if (teamId) {
-        try {
-          roster = await readJson('/team/' + leagueKey + '.t.' + teamId + '/roster');
-        } catch (err) {
-          // A roster that would not come is worth saying and not worth failing
-          // for. Everything else already read is still worth having.
-          show('Read the league, but not the roster: ' + err.message, 'bad');
-        }
-      }
+      /*
+       * EVERY ROSTER, NOT ONLY YOURS.
+       *
+       * A weekly decision is about the whole league: what a trade would cost
+       * the other side, who is startable on somebody else's bench, which teams
+       * need what. So each team's roster is read, one request each, in parallel.
+       *
+       * One request each rather than the `/league/<key>/teams/roster` collection
+       * the API's own shape suggests would answer in one. That path is not tried
+       * here because it has never been run against a real league from this
+       * machine, and the per-team path has; an unverified saving is not worth
+       * a reader that comes back empty. Worth measuring later.
+       */
+      const teamIds = allTeamIds(teams);
+      // Collected in team order rather than in the order they answer, so two
+      // reads of the same league give the same list. A roster that would not
+      // come is a null here and is named at the end: it is worth saying and not
+      // worth failing for, since everything else read is still worth having.
+      const answered = await Promise.all(teamIds.map(
+        (id) => readJson('/team/' + leagueKey + '.t.' + id + '/roster').catch(() => null),
+      ));
+      const rosters = answered.filter(Boolean);
+      const missing = teamIds.filter((id, at) => !answered[at]);
 
       const res = await fetch(SERVICE + '/api/yahoo/league/' + where.leagueId + '/snapshot', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ settings, teams, roster, profile }),
+        body: JSON.stringify({ settings, teams, rosters, profile }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || ('the service answered ' + res.status));
 
       const slots = (body.slots || []).filter((s) => s.starting).reduce((n, s) => n + s.count, 0);
-      const players = body.roster ? body.roster.players.length : 0;
+      const read = body.rosters || [];
+      const players = read.reduce((n, r) => n + r.players.length, 0);
+      // The roster count is said against the team count rather than on its own,
+      // because "7 rosters" in an 8 team league is the interesting number and
+      // "7 rosters" alone is not. A roster that failed is named on the same
+      // message rather than in one that this would replace a moment later.
       show('Read ' + (body.name || 'the league') + ': ' + (body.teams || []).length
         + ' teams, ' + slots + ' starting slots, ' + (body.scoring || []).length
-        + ' scoring rules' + (players ? ', ' + players + ' on your roster' : '')
-        + '.' + (STAMPED ? '' : '\n(running from source, not a stamped copy)'));
+        + ' scoring rules, ' + read.length + ' rosters holding ' + players + ' players.'
+        + (missing.length ? '\nTeam' + (missing.length > 1 ? 's ' : ' ') + missing.join(', ')
+          + ' did not answer, so ' + (missing.length > 1 ? 'those rosters are' : 'that roster is')
+          + ' missing.' : '')
+        + (STAMPED ? '' : '\n(running from source, not a stamped copy)'),
+      missing.length ? 'bad' : undefined);
     } catch (err) {
       // Every fault is said out loud. A bookmarklet that fails silently is
       // worse than no bookmarklet, because there is nowhere to look.
@@ -170,19 +190,27 @@
     }
   }
 
-  /** Your team in the league, by matching your guid to a manager's. */
-  function ownTeamId(teams, profile) {
+  /**
+   * Every team id in the league, out of the teams response.
+   *
+   * The one place this file reads Yahoo's shape, and it is against the rule at
+   * the top of it on purpose: a roster is fetched per team, so the ids have to
+   * be known here to make the requests at all. Nothing is decided from them —
+   * which team is yours is still the service's answer, from the guid — and a
+   * shape this cannot walk yields no ids, at which point the service refuses
+   * the snapshot on the same response rather than filing an empty league.
+   */
+  function allTeamIds(teams) {
+    const out = [];
     try {
-      const mine = profile.fantasy_content.users['0'].user[0].guid;
       const list = teams.fantasy_content.league[1].teams;
       for (let i = 0; list[String(i)]; i += 1) {
         const meta = list[String(i)].team[0];
         const flat = Object.assign({}, ...meta.filter((x) => x && typeof x === 'object'));
-        const managers = flat.managers || [];
-        if (managers.some((m) => m.manager && m.manager.guid === mine)) return flat.team_id;
+        if (flat.team_id) out.push(flat.team_id);
       }
-    } catch { /* the service decides this properly; here it only picks a roster */ }
-    return null;
+    } catch { /* no ids, so no rosters; the settings and teams still go */ }
+    return out;
   }
 
   run();

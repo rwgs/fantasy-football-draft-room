@@ -156,7 +156,7 @@ const nameFor = (player) => player.name || player.playerKey || 'a player with no
  * about a player is not this file's job — saying which records are the same
  * person is.
  */
-function joinRoster(roster, { byPlayerKey, byBoardKey, starting }) {
+function joinRoster(roster, { byPlayerKey, byBoardKey, starting, ownTeamKey }) {
   const players = roster.players.map((player) => ({
     ...player,
     fills: fills(player, starting),
@@ -166,6 +166,10 @@ function joinRoster(roster, { byPlayerKey, byBoardKey, starting }) {
 
   return {
     ...roster,
+    // Which roster is the user's own, answered by the guid the snapshot matched
+    // against a manager and never by a position in the list. A seat number is
+    // what the draft room has to fall back on; a league has an identity.
+    own: !!ownTeamKey && roster.teamKey === ownTeamKey,
     players,
     matched: {
       pool: players.filter((p) => p.pool).length,
@@ -183,10 +187,10 @@ function joinRoster(roster, { byPlayerKey, byBoardKey, starting }) {
 }
 
 /**
- * A snapshot, its slots resolved and its roster joined.
+ * A snapshot, its slots resolved and every roster in it joined.
  *
  * `pool`, `vocabulary` and `board` all default to empty, and an empty one gives
- * a roster that matched nobody rather than an error. That is the state before
+ * rosters that matched nobody rather than an error. That is the state before
  * anything has been fetched, and it reads as what it is: every player present,
  * every join `null`, every name in `unmatched`.
  */
@@ -208,14 +212,25 @@ export function joinLeague({ snapshot, pool = [], vocabulary = [], board = [] } 
     if (player?.key && !byBoardKey.has(player.key)) byBoardKey.set(player.key, player);
   }
 
+  const rosters = (snapshot.rosters ?? []).map((roster) => joinRoster(roster, {
+    byPlayerKey, byBoardKey, starting, ownTeamKey: snapshot.ownTeamKey,
+  }));
+
   return {
     slots,
     // The slots a lineup check must refuse to reason about. Empty for every
     // league read so far, and named rather than counted for the same reason an
     // unmatched player is.
     unresolvedSlots: slots.filter((slot) => slot.unresolved).map((slot) => slot.position),
-    roster: snapshot.roster
-      ? joinRoster(snapshot.roster, { byPlayerKey, byBoardKey, starting })
-      : null,
+    rosters,
+    // The league-wide totals, which is the number the manual comparison against
+    // Yahoo is recorded as. Summed from the rosters rather than counted again,
+    // so the parts cannot disagree with the whole.
+    matched: {
+      pool: rosters.reduce((n, r) => n + r.matched.pool, 0),
+      board: rosters.reduce((n, r) => n + r.matched.board, 0),
+      of: rosters.reduce((n, r) => n + r.matched.of, 0),
+      rosters: rosters.length,
+    },
   };
 }

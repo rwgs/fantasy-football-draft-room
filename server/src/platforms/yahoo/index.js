@@ -28,6 +28,8 @@ import {
 } from './room.js';
 import { bridgeStatus } from '../../bridge.js';
 import { getSnapshot, putSnapshot } from './league.js';
+import { joinLeague } from './inSeason.js';
+import { fetchPlayerPool, fetchReference } from '../../sources/yahooPlayers.js';
 
 /**
  * A Yahoo league ID as the draft room writes it: bare digits.
@@ -474,6 +476,68 @@ export async function readAdvice(leagueId) {
 }
 
 /**
+ * The league in season, joined to the feeds that describe its players.
+ *
+ * "Not yet" rather than a refusal when nothing has been read, on the same
+ * reading `getSnapshot` and `roomState` give: the app asks this before the user
+ * has clicked the bookmarklet, which is the ordinary course of events.
+ *
+ * EACH FEED ANSWERS FOR ITSELF, so one that fails does not take the league with
+ * it. The league is the thing being shown here and it is already in hand — it
+ * came from the browser, not from a feed — so a pool that will not come costs
+ * the injuries and the ownership percentages and nothing else. What it must not
+ * do is come back looking like a league whose players are all fine, which is why
+ * `joinLeague` leaves an unjoined player's `pool` null rather than empty, and why
+ * the age and the failure of every feed are reported beside the answer.
+ */
+export async function readSeason(leagueId, boardQuery) {
+  const held = getSnapshot(leagueId);
+  if (!held.read) return { read: false, league: null, feeds: null, hint: held.hint };
+
+  const asked = (work) => work.then(
+    (value) => ({ value, error: null }),
+    (err) => ({ value: null, error: String(err.message || err) }),
+  );
+
+  const [pool, vocabulary, board] = await Promise.all([
+    asked(fetchPlayerPool()),
+    asked(fetchReference('rosterPositions')),
+    asked(buildBoard(boardQuery)),
+  ]);
+
+  const league = joinLeague({
+    snapshot: held.snapshot,
+    pool: pool.value?.players ?? [],
+    vocabulary: vocabulary.value?.rosterPositions ?? [],
+    board: board.value?.players ?? [],
+  });
+
+  return {
+    read: true,
+    snapshot: held.snapshot,
+    league,
+    // Per feed rather than one age for the lot, because they are fetched apart
+    // and a screen that showed the newest of them would be reporting the age of
+    // whichever happened to refresh last.
+    feeds: {
+      league: { fetchedAt: held.snapshot.readAt, stale: false, error: null },
+      pool: feedAge(pool, pool.value?.meta),
+      vocabulary: feedAge(vocabulary, vocabulary.value?.meta),
+      board: feedAge(board, board.value?.meta),
+    },
+  };
+}
+
+/** One feed's age and whether it answered, in the shape every feed reports. */
+function feedAge(asked, meta) {
+  return {
+    fetchedAt: meta?.fetchedAt ?? null,
+    stale: !!meta?.stale,
+    error: asked.error,
+  };
+}
+
+/**
  * Take the queue the app wants written, and resolve it to Yahoo's own ids.
  *
  * The one thing this project sends to a league platform, and the reason the
@@ -524,6 +588,7 @@ export default {
   roomAdpByKey,
   putSnapshot,
   getSnapshot,
+  readSeason,
   isValidId: (id) => IS_ID.test(id),
   idHint: 'A Yahoo league ID is the number in your draft room address.',
   importLeague,

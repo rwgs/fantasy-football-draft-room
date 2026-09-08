@@ -110,7 +110,8 @@ const snapshot = (over) => ({
   leagueKey: '470.l.111',
   leagueId: '111',
   slots: slots(),
-  roster: { teamKey: '470.l.111.t.3', week: 3, editable: true, players: [rostered()] },
+  ownTeamKey: '470.l.111.t.3',
+  rosters: [{ teamKey: '470.l.111.t.3', week: 3, editable: true, players: [rostered()] }],
   ...over,
 });
 
@@ -194,11 +195,11 @@ test("a rostered player joins Yahoo's pool on the whole player key", () => {
   const joined = joinLeague({
     snapshot: snapshot(), pool: [pooled({ status: 'Q', statusFull: 'Questionable' })], vocabulary: vocabulary(),
   });
-  const player = joined.roster.players[0];
+  const player = joined.rosters[0].players[0];
 
   assert.equal(player.pool.status, 'Q');
   assert.equal(player.pool.percentOwned, 100);
-  assert.deepEqual(joined.roster.matched, { pool: 1, board: 0, of: 1 });
+  assert.deepEqual(joined.rosters[0].matched, { pool: 1, board: 0, of: 1 });
 });
 
 /*
@@ -213,20 +214,20 @@ test('the same player id under another season does not join', () => {
     vocabulary: vocabulary(),
   });
 
-  assert.equal(joined.roster.players[0].pool, null);
-  assert.deepEqual(joined.roster.unmatched.pool, ['Ada Halfback']);
+  assert.equal(joined.rosters[0].players[0].pool, null);
+  assert.deepEqual(joined.rosters[0].unmatched.pool, ['Ada Halfback']);
 });
 
 test('a player the pool does not list keeps his place and is named', () => {
   const joined = joinLeague({ snapshot: snapshot(), pool: [], vocabulary: vocabulary() });
 
-  assert.equal(joined.roster.players.length, 1);
-  assert.equal(joined.roster.players[0].name, 'Ada Halfback');
+  assert.equal(joined.rosters[0].players.length, 1);
+  assert.equal(joined.rosters[0].players[0].name, 'Ada Halfback');
   // Null, not an empty record. "Healthy" and "never found" are different
   // answers and a spread record cannot tell them apart.
-  assert.equal(joined.roster.players[0].pool, null);
-  assert.deepEqual(joined.roster.unmatched.pool, ['Ada Halfback']);
-  assert.equal(joined.roster.matched.pool, 0);
+  assert.equal(joined.rosters[0].players[0].pool, null);
+  assert.deepEqual(joined.rosters[0].unmatched.pool, ['Ada Halfback']);
+  assert.equal(joined.rosters[0].matched.pool, 0);
 });
 
 // --- The join to the cross-source board --------------------------------------
@@ -234,33 +235,33 @@ test('a player the pool does not list keeps his place and is named', () => {
 test('a generational suffix does not stop a board join', () => {
   const joined = joinLeague({
     snapshot: snapshot({
-      roster: {
+      rosters: [{
         players: [rostered({ name: 'Chris Godwin Jr.', positions: ['WR'], displayPosition: 'WR' })],
-      },
+      }],
     }),
     board: [boardRow({ id: 'sl-9', key: 'chris godwin|WR', name: 'Chris Godwin', position: 'WR', team: 'TB' })],
     vocabulary: vocabulary(),
   });
 
-  assert.equal(joined.roster.players[0].board.name, 'Chris Godwin');
-  assert.deepEqual(joined.roster.unmatched.board, []);
+  assert.equal(joined.rosters[0].players[0].board.name, 'Chris Godwin');
+  assert.deepEqual(joined.rosters[0].unmatched.board, []);
 });
 
 test('a defence joins on its team, whatever either source calls it', () => {
   const joined = joinLeague({
     snapshot: snapshot({
-      roster: {
+      rosters: [{
         players: [rostered({
           playerKey: '470.p.100034', name: 'Texans', team: 'HOU',
           displayPosition: 'DEF', positions: ['DEF'], selectedPosition: 'DEF',
         })],
-      },
+      }],
     }),
     board: [boardRow({ id: 'ffc-1', key: 'DEF|HOU', name: 'Houston Defense', position: 'DEF', team: 'HOU' })],
     vocabulary: vocabulary(),
   });
 
-  assert.equal(joined.roster.players[0].board.name, 'Houston Defense');
+  assert.equal(joined.rosters[0].players[0].board.name, 'Houston Defense');
 });
 
 /*
@@ -271,16 +272,16 @@ test('a defence joins on its team, whatever either source calls it', () => {
 test('a player eligible at two positions keeps both and joins on either', () => {
   const joined = joinLeague({
     snapshot: snapshot({
-      roster: {
+      rosters: [{
         players: [rostered({
           name: 'Bo Twoways', displayPosition: 'WR,TE', primaryPosition: 'WR', positions: ['WR', 'TE'],
         })],
-      },
+      }],
     }),
     board: [boardRow({ id: 'sl-2', key: 'bo twoways|TE', name: 'Bo Twoways', position: 'TE', team: 'DET' })],
     vocabulary: vocabulary(),
   });
-  const player = joined.roster.players[0];
+  const player = joined.rosters[0].players[0];
 
   assert.deepEqual(player.positions, ['WR', 'TE']);
   assert.equal(player.board.position, 'TE');
@@ -291,29 +292,29 @@ test('a player eligible at two positions keeps both and joins on either', () => 
 
 test('a player no source can place stays visible on both joins', () => {
   const joined = joinLeague({
-    snapshot: snapshot({ roster: { players: [rostered({ name: 'Unheard Of' })] } }),
+    snapshot: snapshot({ rosters: [{ players: [rostered({ name: 'Unheard Of' })] }] }),
     pool: [pooled({ playerKey: '470.p.999' })],
     board: [boardRow()],
     vocabulary: vocabulary(),
   });
 
-  assert.equal(joined.roster.players.length, 1);
-  assert.equal(joined.roster.players[0].pool, null);
-  assert.equal(joined.roster.players[0].board, null);
-  assert.deepEqual(joined.roster.unmatched, { pool: ['Unheard Of'], board: ['Unheard Of'] });
+  assert.equal(joined.rosters[0].players.length, 1);
+  assert.equal(joined.rosters[0].players[0].pool, null);
+  assert.equal(joined.rosters[0].players[0].board, null);
+  assert.deepEqual(joined.rosters[0].unmatched, { pool: ['Unheard Of'], board: ['Unheard Of'] });
 });
 
 test('a nameless player who is not a defence is not joined to a nameless row', () => {
   const joined = joinLeague({
     snapshot: snapshot({
-      roster: { players: [rostered({ name: null, positions: ['WR'] })] },
+      rosters: [{ players: [rostered({ name: null, positions: ['WR'] })] }],
     }),
     board: [boardRow({ key: '|WR', name: '', position: 'WR' })],
     vocabulary: vocabulary(),
   });
 
-  assert.equal(joined.roster.players[0].board, null);
-  assert.deepEqual(joined.roster.unmatched.board, ['470.p.1']);
+  assert.equal(joined.rosters[0].players[0].board, null);
+  assert.deepEqual(joined.rosters[0].unmatched.board, ['470.p.1']);
 });
 
 // --- What a snapshot with nothing fetched beside it reads as ------------------
@@ -321,29 +322,87 @@ test('a nameless player who is not a defence is not joined to a nameless row', (
 test('a quarterback fills his own slot and no flex that will not take him', () => {
   const joined = joinLeague({
     snapshot: snapshot({
-      roster: {
+      rosters: [{
         players: [rostered({ name: 'Cal Passer', displayPosition: 'QB', positions: ['QB'] })],
-      },
+      }],
     }),
     vocabulary: vocabulary(),
   });
-  assert.deepEqual(joined.roster.players[0].fills, ['QB']);
+  assert.deepEqual(joined.rosters[0].players[0].fills, ['QB']);
 });
 
 test('a snapshot joined against nothing reports every player unmatched', () => {
   const joined = joinLeague({ snapshot: snapshot() });
 
-  assert.deepEqual(joined.roster.matched, { pool: 0, board: 0, of: 1 });
+  assert.deepEqual(joined.rosters[0].matched, { pool: 0, board: 0, of: 1 });
   // And with no vocabulary, nothing about a slot is claimed either way: every
   // starting slot is unresolved because none of them has been explained.
   assert.deepEqual(joined.unresolvedSlots, ['QB', 'WR', 'RB', 'TE', 'W/R/T', 'DEF']);
-  assert.deepEqual(joined.roster.players[0].fills, []);
+  assert.deepEqual(joined.rosters[0].players[0].fills, []);
 });
 
-test('a snapshot with no roster read is null rather than an empty roster', () => {
-  const joined = joinLeague({ snapshot: snapshot({ roster: null }), vocabulary: vocabulary() });
-  assert.equal(joined.roster, null);
+test('a snapshot whose rosters did not arrive has none, not one that is empty', () => {
+  const joined = joinLeague({ snapshot: snapshot({ rosters: [] }), vocabulary: vocabulary() });
+  assert.deepEqual(joined.rosters, []);
+  assert.deepEqual(joined.matched, { pool: 0, board: 0, of: 0, rosters: 0 });
   assert.equal(joined.slots.length, 8);
+});
+
+// --- Every roster in the league ----------------------------------------------
+
+test('every roster is joined, and the league totals are the sum of them', () => {
+  const joined = joinLeague({
+    snapshot: snapshot({
+      rosters: [
+        { teamKey: '470.l.111.t.3', players: [rostered()] },
+        {
+          teamKey: '470.l.111.t.4',
+          players: [rostered({ playerKey: '470.p.2', playerId: '2', name: 'Bea Wideout', positions: ['WR'] })],
+        },
+      ],
+    }),
+    pool: [pooled()],
+    board: [boardRow()],
+    vocabulary: vocabulary(),
+  });
+
+  assert.equal(joined.rosters.length, 2);
+  // One player joined both feeds and one joined neither, so the totals say two
+  // of two rosters and one of two players rather than averaging anything.
+  assert.deepEqual(joined.matched, { pool: 1, board: 1, of: 2, rosters: 2 });
+  assert.deepEqual(joined.rosters[1].unmatched.pool, ['Bea Wideout']);
+});
+
+/*
+ * The acceptance criterion this exists for: the own team is the one the guid
+ * matched, not a position in a list. `readSnapshot` does the matching and this
+ * carries it, so a league where the user is the fourth team reads correctly.
+ */
+test('the own roster is the one the guid matched, not the first in the list', () => {
+  const joined = joinLeague({
+    snapshot: snapshot({
+      ownTeamKey: '470.l.111.t.4',
+      rosters: [
+        { teamKey: '470.l.111.t.3', players: [] },
+        { teamKey: '470.l.111.t.4', players: [] },
+      ],
+    }),
+    vocabulary: vocabulary(),
+  });
+
+  assert.deepEqual(joined.rosters.map((r) => r.own), [false, true]);
+});
+
+test('a league whose own team never resolved claims no roster as yours', () => {
+  const joined = joinLeague({
+    snapshot: snapshot({
+      ownTeamKey: null,
+      rosters: [{ teamKey: '470.l.111.t.3', players: [] }],
+    }),
+    vocabulary: vocabulary(),
+  });
+
+  assert.equal(joined.rosters[0].own, false);
 });
 
 test('there is no joining without a snapshot', () => {

@@ -94,10 +94,10 @@ const teamsResponse = () => ({
   },
 });
 
-const rosterResponse = () => ({
+const rosterResponse = (teamKey = '470.l.111.t.7') => ({
   fantasy_content: {
     team: [
-      [{ team_key: '470.l.111.t.7' }],
+      [{ team_key: teamKey }],
       {
         roster: {
           coverage_type: 'week', week: 3, is_editable: 1,
@@ -160,7 +160,7 @@ const profileResponse = () => ({
 const full = () => readSnapshot({
   settings: settingsResponse(),
   teams: teamsResponse(),
-  roster: rosterResponse(),
+  rosters: [rosterResponse()],
   profile: profileResponse(),
 });
 
@@ -206,7 +206,7 @@ test('a category with no modifier is kept, and says so, rather than being droppe
 });
 
 test('the roster carries what a player may fill and what they fill now', () => {
-  const players = full().roster.players;
+  const players = full().rosters[0].players;
   assert.equal(players.length, 3);
   const flexed = players.find((p) => p.playerKey === '470.p.2');
   assert.deepEqual(flexed.positions, ['RB', 'W/R/T']);
@@ -215,19 +215,19 @@ test('the roster carries what a player may fill and what they fill now', () => {
 });
 
 test('a benched player reads as benched rather than as unplaced', () => {
-  const benched = full().roster.players.find((p) => p.playerKey === '470.p.3');
+  const benched = full().rosters[0].players.find((p) => p.playerKey === '470.p.3');
   assert.equal(benched.selectedPosition, 'BN');
   assert.equal(benched.isFlex, false);
 });
 
 test('team abbreviations come back the way the rest of the project joins on them', () => {
   // Yahoo writes `Phi` and `kc`; `names.js` joins defences on `PHI` and `KC`.
-  const teams = full().roster.players.map((p) => p.team);
+  const teams = full().rosters[0].players.map((p) => p.team);
   assert.deepEqual(teams, ['PHI', 'KC', 'NYG']);
 });
 
 test('bye weeks and keeper status come through', () => {
-  const players = full().roster.players;
+  const players = full().rosters[0].players;
   assert.equal(players.find((p) => p.playerKey === '470.p.1').byeWeek, 10);
   assert.equal(players.find((p) => p.playerKey === '470.p.1').isKeeper, false);
   assert.equal(players.find((p) => p.playerKey === '470.p.2').isKeeper, true);
@@ -235,7 +235,7 @@ test('bye weeks and keeper status come through', () => {
 
 test('empty entries padding a metadata block are skipped, not read as fields', () => {
   // The real thing had three of them among twenty-four.
-  assert.equal(full().roster.players[0].name, 'A Quarterback');
+  assert.equal(full().rosters[0].players[0].name, 'A Quarterback');
 });
 
 test('the own team is found by guid, not by a seat number', () => {
@@ -259,10 +259,42 @@ test('a guid that matches nobody leaves the own team unresolved', () => {
 
 test('the parts that did not arrive are absent rather than empty', () => {
   const snap = readSnapshot({ settings: settingsResponse() });
-  assert.equal(snap.roster, null);
+  assert.deepEqual(snap.rosters, []);
   assert.deepEqual(snap.teams, []);
-  // The settings still read, so a league whose roster failed is still worth something.
+  // No rosters is not the same claim as a reader too old to send them.
+  assert.equal(snap.readerBehind, false);
+  // The settings still read, so a league whose rosters failed is still worth something.
   assert.equal(snap.slots.length, 3);
+});
+
+test('every roster the reader sent is read, each keeping its own team', () => {
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse('470.l.111.t.7'), rosterResponse('470.l.111.t.2')],
+    profile: profileResponse(),
+  });
+  assert.deepEqual(snap.rosters.map((r) => r.teamKey), ['470.l.111.t.7', '470.l.111.t.2']);
+  assert.equal(snap.rosters[1].players.length, 3);
+  assert.equal(snap.readerBehind, false);
+});
+
+/*
+ * A bookmarklet cannot update itself -- its whole source sits in the address it
+ * was dragged from -- so an old copy posting one roster under the older name is
+ * the likeliest failure this reader has. It is read, and it is named, because a
+ * league showing one roster out of eight otherwise looks like Yahoo failing.
+ */
+test('a reader too old to send every roster is read and named as behind', () => {
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    roster: rosterResponse(),
+    profile: profileResponse(),
+  });
+  assert.equal(snap.rosters.length, 1);
+  assert.equal(snap.rosters[0].players.length, 3);
+  assert.equal(snap.readerBehind, true);
 });
 
 test('a snapshot with no settings at all is refused', () => {

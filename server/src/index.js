@@ -609,6 +609,33 @@ app.get('/api/:platform/league/:id/snapshot', async (req, res) => {
 });
 
 /**
+ * The league in season, with every roster joined to the feeds.
+ *
+ * The snapshot route above hands back what the browser read, unjoined. This is
+ * that plus the pool, the slot vocabulary and the board, which is a different
+ * cost and a different set of failures: the snapshot is in memory and cannot
+ * fail, and these three reach the network. Two routes rather than one because
+ * the app asks the first on a beat and this one when a screen opens.
+ *
+ * Offered only to platforms that have a snapshot to join, exactly as the
+ * snapshot routes are.
+ */
+app.get('/api/:platform/league/:id/season', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.readSeason) {
+    res.status(404).json({ error: 'That platform has no in-season reading.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.readSeason(target.id, readQuery(req.query)));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
  * What the board makes of the room, written by the app and read by the bridge.
  *
  * The two cannot address each other. The app is a page on this machine and the
