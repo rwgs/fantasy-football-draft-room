@@ -10,7 +10,203 @@ fixed.
 
 ## Unreleased
 
+### Added
+
+**The app says which bridge is running, and says when one has stopped.**
+Following a Yahoo draft needs the bridge userscript installed, and a stale copy
+is the failure this project keeps having: it mirrors every pick perfectly while
+writing no queue, and says nothing about it. 2026-09-07 cost three mock drafts
+to a copy that served, stored and listed as 1.3.0 while running 1.0.0, whose
+frame filter is three versions old and drops every `Q` before it leaves the
+page. The service was working correctly the whole time.
+
+So the service now stamps a build into every copy it hands out, the running
+bridge reports that build on every post, and the masthead names the version
+whenever Yahoo is the platform — on any screen, in either mode, rather than only
+inside a draft that has already started. A banner says when the build does not
+match the file on disk. A copy too old to name itself reads as behind rather
+than as unknown, and a copy run straight from the repository is never called
+stale.
+
+Silence is answered too, because none of those readings expires on its own: a
+bridge posts only from inside a draft room, so "current" is a fact about a copy
+that was talking then. Fifteen seconds without a post takes the reassurance
+away, says in the masthead how long it has been, and raises a banner naming both
+causes. A bridge nothing has ever heard from is not called silent, because a
+draft room nobody has opened yet looks exactly like that.
+
+What that episode turned out to be is worth knowing before your own draft.
+Chromium's per-extension **"Allow user scripts"** control is a separate gate
+from the `userScripts` permission. With it off, Tampermonkey registers nothing
+and injects nothing, while every other account of the script agrees that all is
+well — the dashboard shows no warning, the stored copy is correct, the update
+check passes, and the served file is right. Only the page disagrees.
+`window.WebSocket` still being unpatched in the draft room is the one-line
+check, and a bridge that logs no version banner has not run at all.
+
+**A pick says which starting slot it fills.** The take line under the
+recommendation knew only that a candidate went into some open slot, so it said
+"You still have to start one" — which, reported from a live draft on 2026-09-07
+by a user who had just drafted a tight end, reads as being told to take a
+second. The arithmetic was right and the sentence was not: a flex takes a back,
+a receiver or a tight end, so with the flex empty a second tight end genuinely
+does fill a starter. The other branch was wrong the same way, claiming a full
+lineup where all it knew was that this player filled nothing.
+
+It now names the slot: "He fills your open WR slot", or your flex, or your
+superflex, or "He fills no starting slot, so this is depth." Naming it is worth
+more than politeness, because it names the bar the player should be judged
+against. A service too old to send the slot has the clause dropped rather than
+guessed, and the panel over the draft room takes one of three words or nothing,
+so the page under it cannot put arbitrary text on the panel.
+
+**Everything the service hands out follows `PORT`.** Set it and nothing
+downstream used to move: the bridge posted to a port nothing was listening on,
+the manager checked a closed port for updates so the copy could never refresh
+itself, the panel read nothing, and the app's "reinstall from the service" link
+was dead at the moment you had just been told to click it. That last one is this
+project's own recurring failure arriving by the one route the build stamp cannot
+see, since a bridge that never reaches the service reports no build to compare.
+The file keeps a working default and the service rewrites on the way out, so a
+copy served on the default port is byte for byte the file on disk, and a copy
+run straight from the repository still works unmodified.
+
+**A per-feed age, on the draft screen.** Each ADP feed now says how old its own
+reading is, so a stale one is visible during the draft rather than hidden behind
+a fresh one.
+
 ### Fixed
+
+**Un-starring a player takes him out of your Yahoo queue.** Reported live in
+league 876392 on 2026-09-07, by the run that first proved the write works at
+all: the star could add and could never take back. Nothing distinguishes the
+app's own entries from yours by looking at the room, and after any write Yahoo
+echoes the app's list straight back in a `Q|`, so the queue read off that frame
+held the app's own choices wearing your clothes. Merging it whole underneath the
+stars rewrote every player the app had ever queued, on every beat, for the rest
+of the draft.
+
+The room now remembers the ids it asked for, and only what is left after
+subtracting them is treated as yours to protect. The rule itself does not move:
+a queue this app never wrote is still never cleared, and an entry you made in
+Yahoo's own panel still survives every write that does not name him. What
+changed is which list the rule is applied to. The disclosure under the control
+said "merges and loses nothing", which was true of your entries and had become
+misleading about the app's, so it says what it does instead.
+
+Two costs are recorded rather than fixed. A service restarted mid-draft forgets
+whose entries were whose. And an empty list is still never sent, so the last
+player the app queued has to be deleted in Yahoo's own panel — un-star in the
+app first, because deleting while starred writes him back.
+
+**The queue is written again after the service restarts.** The app posts its
+wanted list only when the list changes. A service restarted mid-draft comes back
+with the room whole — the bridge says the picks, the pool, the seats and the
+last `Q|` again — but nothing says the app's own wanted list again, because the
+app is the only place it exists, and the app's own guard still held the same
+string. So queue writing alone stayed dormant until a star was touched. The
+picks read now carries the queue's state on the beat the app already listens to,
+and a service that has forgotten lifts the guard for exactly one post.
+
+**The autodraft queue is a plan, not four ways to make one pick.** Reported live
+as Yahoo taking two defences, and then two kickers. The queue was built from the
+same list that fills the row on screen, which is a pick and three substitutes,
+each priced against the roster as it stands — so the same position stays on top
+and the next man at it comes up again. That is correct for advice, and it became
+a plan with a wasted pick in it because Yahoo reads a queue as successive picks.
+Late on is where it showed: worth over replacement is what puts a position on
+the list at all, and by the end the positions with anything left worth having
+are the ones with a single slot. The queue is now built by advancing the roster
+as it goes, so a position that reaches its cap drops out of everything below it,
+counting both what you already hold and what your starred players would add. The
+row on screen still repeats a position, because for one pick that is the right
+answer.
+
+**Replacement starters are allocated inside the slots your league actually
+has.** The live 12 team half-PPR board allocated 131 replacement starters
+against 108 real slots, which inflated back and receiver worth against
+quarterback and tight end for every player on it. It was silent, and it was on
+every board.
+
+**The board keeps measuring your actual room while you are on the clock.** The
+forecast returned nothing whenever it was your turn, so every measurement of the
+room you are really in was dropped for generic ADP at the one moment the pick
+had to be made. The screen and the forecast now read one horizon, with your own
+turn stepped over rather than played by the computer. Alongside it: a player far
+past his ADP stops reading as certain to last, because the survival tail is now
+read in logs; the best survivor is measured by what he is worth rather than by
+ADP order, so both sides of the waiting-cost subtraction mean the same "best"; a
+player no run leaves on the board reads as an explicit zero, which three
+consumers had been reading two different ways; and a corrected live pick reads
+as a change rather than as the same room, with out-of-order poll answers
+dropped.
+
+**A pick is scored on what two turns come to.** The score was a player's worth
+counted twice and what you would do instead not at all, which on the audit's own
+table took a back for 150 over the receiver worth 170. It is now his worth plus
+the best you would expect at another position you still have to start. The two
+numbers the panel prints are the two the pick was chosen on.
+
+**The advice follows the two rules the computer teams already followed.** Both
+were in the opponents' code, described there as hard rules, so the app was
+holding its own opponents to a standard it did not hold its own advice to. Once
+your picks left equal your open starting slots, only a candidate that fills a
+starter is weighed; and beating a replacement starter orders the list rather
+than qualifying for it. Before this it would name a backup quarterback worth 100
+over the receiver worth 30 who would have filled your last empty slot, and
+return no queue at all from a pool of thirty sub-replacement backs.
+
+**A flex filler is priced at what a flex costs to fill.** With a tight end held
+and the flex open, a second one was priced against roughly TE12 in a one tight
+end league — a soft bar the top of that board is steep above — while the slot he
+was competing for was the flex, whose bar is a back or a receiver. Worth over
+replacement asks what the slot would otherwise hold, so a candidate taking a
+flex or a superflex is now priced over that slot's own bar, and the take line
+says which bar it stands over. Between two flex candidates the one with more
+points wins rather than the one with the softer bar. The pool's WORTH column
+does not move, because that is a fact about a player at his position rather than
+about your roster.
+
+**A position your league cannot start is kept off the board.** It was being
+priced and offered in a league with no slot for it.
+
+**A two-way player's projection reaches his board row.** Where the position a
+player is filed at is not one a roster can hold, his projection is now read at
+the first eligible position that is, so the market already holding him at
+receiver gets the projection instead of an empty column. Travis Hunter is this
+season's case: `fantasy_positions` is `["DB", "WR"]` and only `player.position`
+says DB, and the three points columns of 65.6, 83.1 and 100.6 are each exactly
+17.5 apart, which is 35 catches at half a point rather than any tackle total.
+
+**Every player carries his team's bye.** 399 of 626 rows had no bye while the
+board already knew all 32 teams' weeks, so a roster of starters who all sit in
+week 7 showed an empty column, no clash highlight and no clash in the grade — a
+missing field reading as a covered roster. The bye is now read off the team,
+because that is whose week off it is.
+
+**A feed that answers badly is treated as a failed fetch.** A response that
+parses cleanly but carries no players, or none at a position the board expects,
+used to overwrite a good cached snapshot with an empty one, because a
+valid-but-empty response does not throw. The prior snapshot is now kept and
+marked stale. There was also no timeout anywhere in the service, so a hung ESPN
+could hold the whole board behind the other feeds; every feed now carries one,
+and ESPN is awaited only where it prices the board.
+
+**The key on the draft screen can be read to the end.** Open, it was 2143 px of
+key in a 724 px column that clips rather than scrolls, so everything past ALL 3
+was off the bottom with no way to reach it, and the player list — the point of
+the screen — was squeezed to nothing. One term also carried two cells, and the
+grid places what it is given: the second landed in the term column and pushed
+every entry after it a cell along, so R, the alternates, HANDCUFF and COVERS
+each read with their label and their meaning in the wrong columns. Checked open
+at 1440x900, 1440x650 and 430x844.
+
+**The stale-bridge banner no longer tells you to reload the draft room.**
+Yahoo's `auth` is single use: reloading the URL does not reconnect, it leaves
+the draft. So the one banner that fires mid-draft, against a bridge that is
+still mirroring picks correctly, was advising the thing that ends your draft, to
+fix a fault whose whole cost is an unwritten queue. It says to re-open the room
+from the lobby instead, with the reason after it.
 
 **The survival bar had never been drawn at all.** Its fill is a `span` inside a
 plain `span`, so it stayed `display: inline`, and an inline box takes neither a
@@ -136,10 +332,13 @@ for you. The frame that would take one outright is now documented and is
 deliberately absent from the bridge.
 
 Your own Yahoo entries are never dropped, and **First** says whether yours or
-theirs go on top. The one exception is the first write of a draft, which
-replaces whatever was in the queue, because nothing can read a Yahoo queue
-before writing one — no frame reports one unprompted and no endpoint carries
-one. The control says so, and every write after the first merges.
+theirs go on top. The one exception is a write made before the room has ever
+reported a queue, which replaces whatever was in it, unseen. That happens when
+the bridge attached after the socket was already open: Yahoo does report a queue
+unprompted, on the connect burst, arriving bare when the queue is empty — so a
+bridge that joins with the room is told the queue within a second and never has
+to write in ignorance. The control says so, and every write after the first
+merges.
 
 All of this came out of `tools/yahoo/`, which had been holding the answer since
 September: `S|<league>|<team>|<ids…>` sets the whole queue and `Q|` echoes it

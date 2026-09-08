@@ -637,6 +637,49 @@ Phase 4: prove the platform seam against real leagues.
   - Dependencies or blockers: none. This was the concrete half of the release
     question below, taken on its own because it is a defect either way.
 
+- [x] Write the CHANGELOG the last 41 commits never got.
+  - Scope: `CHANGELOG.md` only. Everything since `c0ddb69` -- the bridge build
+    stamp and the silence reading, the slot a pick fills, `PORT` reaching what
+    the service hands out, the per-feed age, and thirteen fixes from the queue
+    removal and the audit passes through to the key that could not be scrolled.
+    Prepended as `Added` then `Fixed`, which is the order a release section here
+    already uses.
+  - Why: 41 commits of user-visible behaviour had landed on this branch and not
+    one touched the file. `ROADMAP.md` names the entry as Phase 6 work, and it
+    is cheaper to write while the reasoning is still in `TASKS.md` than to
+    reconstruct at release.
+  - **One existing entry was wrong rather than missing, and is corrected.** The
+    queue entry explained the first write with "nothing can read a Yahoo queue
+    before writing one -- no frame reports one unprompted and no endpoint
+    carries one". `e019eec` established that as false: the connect burst carries
+    a `Q`, arriving bare when the queue is empty. The behaviour it describes has
+    not moved -- a write before the room has reported a queue still replaces it
+    unseen -- so the sentence now gives the real reason, that the bridge
+    attached late. `room.js` had carried the correction in a comment since;
+    Phase 6's exit criterion is that no documented promise goes unkept, and this
+    was one.
+  - Acceptance criteria: every claim traceable to a commit or to the code, no
+    entry for a change a user cannot see, and the file's own conventions held --
+    80 column wrap, British spelling, LF endings. All met.
+  - Automated validation: none applies, and none is possible; the change is
+    prose. Verified instead by reading the claims back against the source rather
+    than against the task notes: `BRIDGE_QUIET_MS = 15000` for the fifteen
+    seconds, `STARTER_SLOTS` for the three words the panel accepts, `FeedAges`
+    on the draft screen for the per-feed age, and `queuePlan`'s three states for
+    the corrected sentence. `typecheck`, `server:test` 30/30 and `bridge:test`
+    7/7 were green on this tree; a markdown file cannot move them, and no code
+    gate was re-run after the edit for that reason.
+  - Manual validation: not applicable -- nothing rendered by the app changed.
+    Line endings checked deliberately, because the rewrap went through Python
+    and `.gitattributes` sets `eol=lf`: still 0 CRLF, and the diff stayed local
+    at 203 insertions and 4 deletions rather than reflowing the file.
+  - Found and not acted on, since it predates this and belongs to no request
+    here: the panel entry in the released-pending section reads "A small panel
+    over the draft page A small panel over the page carries the pick you are",
+    a duplicated clause from an earlier edit. Worth a one-line fix at release.
+  - Dependencies or blockers: none. This is the documentation half of Phase 6;
+    the product questions in it are untouched and still open below.
+
 - [ ] Decide whether the service should serve the userscript in a release.
   - Now serves three things, not one: the bridge userscript, `/panel.js`, and
     `/panel`, the page that installs the panel as a bookmarklet.
