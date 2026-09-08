@@ -1123,7 +1123,9 @@ export default function App() {
             >
               the service
             </a>
-            {', then reload the draft room. Its console should name the build above.'}
+            {', then re-open the draft room from the lobby rather than'}
+            {' reloading the tab: Yahoo\'s auth token is single use, and a reload'}
+            {' leaves the draft. The room\'s console should name the build above.'}
           </span>
         </div>
       )}

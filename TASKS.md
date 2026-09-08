@@ -84,11 +84,11 @@ Phase 4: prove the platform seam against real leagues.
     syncing, which was two faults rather than one. The other — a bridge posting
     to a league the app is not following, which the app also cannot see — is not
     addressed here.
-  - Noticed and not acted on: the stale-bridge banner says to reload the draft
-    room, and `docs/yahoo-draft-protocol.md` records that Yahoo's `auth` is
-    single-use and a reload leaves the draft. The new banner says to re-open
-    from the lobby instead; the older one still gives the advice that costs a
-    seat.
+  - Noticed here and acted on since, in the task below: the stale-bridge banner
+    said to reload the draft room, and `docs/yahoo-draft-protocol.md` records
+    that Yahoo's `auth` is single-use and a reload leaves the draft. The banner
+    built here says to re-open from the lobby instead, and the older one now
+    says the same rather than giving the advice that costs a seat.
 
 - [x] Build the autodraft queue as a plan, not as four ways to make one pick.
   - Scope: new `recommendSequence` in `client/src/engine/forecast.ts`, which
@@ -473,6 +473,40 @@ Phase 4: prove the platform seam against real leagues.
     The whole gate was then re-run against 5178 once restarting it was asked
     for -- `engine:test` green and `shots` clean with no console error against a
     service the status check calls current.
+
+- [x] Stop the stale-bridge banner giving advice that costs a draft seat.
+  - Scope: one sentence in `App.tsx`. "Reinstall from the service, then reload
+    the draft room" became "then re-open the draft room from the lobby rather
+    than reloading the tab", with the reason after it -- which is the wording
+    the silence banner immediately above it already carried.
+  - Why: recorded as noticed and not acted on when that silence banner was
+    built. `docs/yahoo-draft-protocol.md` has it observed: Yahoo's `auth` is
+    single use, reloading the URL does not reconnect, it leaves the draft. So
+    the one banner that fires mid-draft against a bridge that is still
+    mirroring picks correctly was telling the user to do the thing that ends
+    their draft, to fix a fault whose entire cost is an unwritten queue. Taking
+    the advice was worse than the defect it was advice about.
+  - Acceptance criteria: no user-facing string in the client tells anyone to
+    reload a Yahoo draft room; the sentence carries its reason rather than
+    being a rule to take on trust; the reinstall-then-re-open order survives,
+    since a manager still holding the old copy would only re-inject the old
+    copy. All three met.
+  - Automated validation: none added, and none is possible -- what changed is a
+    string, and no check can tell safe advice from advice that costs a seat.
+    The same reasoning as the wording fix earlier in this phase. Typecheck
+    clean, lint unchanged at 43 warnings, `server:test` 26/26, `bridge:test`
+    7/7, `engine:test` green with the three fixture suites skipped as ever,
+    build clean, `shots` clean with no console errors.
+  - Manual validation: **done.** The banner photographed in a real browser
+    reading the new sentence end to end, with the reading served to the page
+    rather than posted to the service, so a bridge that might have been posting
+    for real was left alone. No console error on that page either. `shots` does
+    not reach this banner and was not made to: driving it needs a bridge report
+    the service will not produce on demand.
+  - Left alone deliberately: `tools/yahoo/draft-room-probe.js` also says to
+    reload the room, and there it is right -- it is a developer probe whose
+    whole purpose is catching a socket as it opens.
+  - Dependencies or blockers: none.
 
 - [ ] Keep a seat off Yahoo's autodraft.
   - Scope: not started, and deliberately not started. Reading the captures for
