@@ -868,6 +868,71 @@ Phase 4: prove the platform seam against real leagues.
     feed is how they drift apart.
   - Dependencies or blockers: none.
 
+## Planned next: Yahoo-first in-season advice
+
+Requested 2026-09-08. Planning only; all implementation tasks below are unstarted.
+The current draft tasks above remain open with their recorded validation gaps.
+See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
+
+### Phase 7 tasks, in order
+
+- [ ] Y7.1: Establish read access to the user's Yahoo league after the draft.
+  - Scope: observe ordinary league-page data requests in the user's signed-in
+    browser; identify season/league/team keys and a reproducible read path.
+    Check the recorded API application's status without exposing credentials.
+  - Acceptance: demonstrate a league/settings and roster read outside the
+    draft room, or document the concrete blocker. Record permission needs and
+    whether the access model fits the existing no-server-credentials rule.
+  - Validation: compare the reading to Yahoo and repeat it after normal page
+    navigation; retain only sanitized examples. No platform writes.
+  - Dependency: implementation authorization and access to the real league.
+
+- [ ] Y7.2: Audit league fields and completeness through the observed route.
+  - Scope: every roster, own lineup, scoring, all position eligibility, locks,
+    player availability, waiver/FAAB rules, trade restrictions and pagination.
+  - Acceptance: a field coverage table in `docs/yahoo-in-season-data.md`,
+    with observed source, timing, missing fields and affected features. Own
+    team selection is established, not inferred from a draft seat number.
+  - Validation: compare all rosters and settings against Yahoo; demonstrate
+    the last page, a waiver player, and a free agent where present. Record
+    unobserved cases honestly for later synthetic/manual checks.
+  - Dependency: Y7.1. Do not assume an unowned player is immediately addable.
+
+- [ ] Y7.3: Establish weekly and remaining-season analysis coverage.
+  - Scope: assess usable Yahoo, Sleeper and ESPN data independently of league
+    integration, including raw stats versus point totals, scoring, player
+    identity, injuries, byes, kickoff times, usage, freshness and access terms.
+  - Acceptance: name the proposed sources and supported horizons, with
+    coverage and missing-data behavior. Keep FantasyPros excluded unless the
+    paid-key condition in DECISIONS.md changes. No purchases in this task.
+  - Validation: sample multiple positions and missing/injured/bye players;
+    verify week/season and scoring basis. Do not substitute draft rankings
+    or annual projections for unobserved weekly data.
+  - Dependency: Y7.2's actual league scoring and eligibility requirements.
+
+- [ ] Y7.4: Close discovery with a concrete implementation design.
+  - Scope: update PLAN.md with the observed reader approach, minimum snapshot
+    contract, refresh/stale policy, identity mapping and source selection;
+    create small Phase 8 tasks with automated and manual checks.
+  - Acceptance: every dependent requirement is supported or explicitly held;
+    explain any access, cost or scope decision still needed. Record the chosen
+    technical approach in DECISIONS.md once settled, without claiming a
+    working in-season feature exists.
+  - Validation: trace the contract to Y7.1-Y7.3 evidence, check no credentials
+    enter service payloads, and reconcile SPEC/ROADMAP/PLAN/TASKS. Document
+    rollback and the outstanding real-league checks for implementation.
+  - Dependency: Y7.1-Y7.3. Stop for a decision if the demonstrated approach
+    requires changing an existing product or architecture boundary.
+
+### Subsequent task planning
+
+Phases 8-11 remain roadmap outcomes until their input contracts are established.
+Before implementing each phase, split it into reviewable tasks with explicit
+acceptance and validation, then record actual results rather than marking the
+phase done from a build alone. Order: league view, weekly lineup advice,
+waiver add/drop comparisons, trade evaluation, then trade targets and comparison
+with waivers. Other league platforms remain deferred.
+
 ## Blocked
 
 - [ ] Yahoo's own Fantasy Sports API, if the application is ever approved.

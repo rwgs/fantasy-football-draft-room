@@ -169,6 +169,51 @@ browser cannot call directly, cache them, and join them.
 - A league's imported settings match the league, and anything that cannot be
   modelled is reported as a warning rather than dropped.
 
+## Planned extension: Yahoo-first in-season advice
+
+Status: requested 2026-09-08; not implemented. The draft behavior above remains
+the current product. This section adds requirements for the same local app;
+it does not claim the current feeds or Yahoo draft bridge already satisfy them.
+See [PLAN.md](PLAN.md) for the approach and [ROADMAP.md](ROADMAP.md) for delivery.
+
+- Support the user's current Yahoo league first. Other in-season league
+  integrations are deferred; analysis data may come from other providers.
+- Read the actual season, week, team ownership, full rosters, scoring, lineup
+  eligibility, lock rules and transaction constraints. Missing or unsupported
+  rules must be reported before dependent advice is offered.
+- Recommend legal weekly starters from the current roster, showing the changes
+  and projected improvement over the current lineup while preserving locks.
+- Compare waiver pickups with their required drops, claim timing, FAAB or
+  priority cost, and the effect on this week and remaining-season coverage.
+- Evaluate proposed trades and suggest targets based on both teams' needs,
+  accounting for outgoing players, replacements, roster limits and timing.
+- Compare keeping/optimizing the roster, adding from waivers and trading on a
+  common league snapshot and time horizon. A higher individual player rank
+  does not by itself establish an improvement to the team.
+- Keep player identity and league ownership separate from projections and
+  rankings. Preserve provider IDs, source, week/season and update times so
+  advice can combine sources without confusing players or scoring formats.
+- Display incomplete matches, stale data and projection uncertainty. Missing
+  projections are not zero; preseason ADP is not weekly player value. Block
+  actionable advice when required ownership or lock information is unreliable.
+- Add an in-season view alongside the draft workflow. Keep the app local, user
+  preferences in the browser and private league snapshots out of the disk feed
+  cache. No hosted service, accounts or database are required.
+- Give recommendations only. Setting a lineup, submitting a waiver claim or
+  sending/accepting a trade remains the user's action in Yahoo. The existing
+  optional draft queue is the only platform write.
+
+Acceptance: the league view agrees with Yahoo; small lineup cases agree with
+an exhaustive legal-lineup check; waiver/trade cases include moves that improve
+the lineup and apparent upgrades that hurt it; unavailable/stale data produces
+an explicit limitation. Validate in a real browser and retain the existing
+draft checks. Remaining-season comparisons require a verified data basis;
+automatic transactions and dynasty draft-pick valuation are outside this scope.
+
+Open dependencies: Yahoo access outside the draft room, current API approval
+status, the user's exact league rules, and usable weekly/remaining-season
+analysis feeds. Phase 7 must establish these before dependent implementation.
+
 ## Unresolved questions
 
 - Whether a real Yahoo draft behaves like a mock one. Every observation so far

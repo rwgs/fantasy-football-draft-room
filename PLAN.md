@@ -1,4 +1,190 @@
-# Following a Yahoo draft through the browser
+# Yahoo-first in-season advice
+
+Status: planned, 2026-09-08. This request authorizes the planning documents;
+implementation has not started. Requirements live in [SPEC.md](SPEC.md), phase
+order in [ROADMAP.md](ROADMAP.md), and actionable work in [TASKS.md](TASKS.md).
+
+## Outcome and scope
+
+Extend this local app with an in-season section for the user's Yahoo league:
+choose weekly starters, evaluate waiver pickups and drops, evaluate trades,
+and compare trading with using waivers or keeping the current roster. Yahoo
+comes first; other league platforms come later. Analysis feeds may come from
+other providers even while Yahoo is the only supported in-season platform.
+
+Keep the draft screens and behavior intact. Share player identity, feed access,
+league settings, caching and useful roster rules where they actually fit.
+Weekly advice gets its own calculations rather than reusing draft ADP, pick
+survival or CPU behavior as a measure of weekly player value. Advice remains
+read-only: the user makes lineup changes, claims and trades in Yahoo.
+
+## First prove the data, then build the advice
+
+The existing Yahoo adapter reads a live draft room. It does not prove access
+to current league rosters, weekly lineups, scoring, waivers or transactions
+after the draft. Its `importLeague` explicitly leaves scoring and roster shape
+unknown. The first implementation milestone is therefore a data-access study
+against the user's actual league, outside a draft room.
+
+For each required field, record the observed source, example shape, player and
+league identifiers, pagination, refresh behavior, failure cases and permission
+requirements. Keep identifying captures local and ignored; use synthetic or
+sanitized fixtures in tests. Record verified findings in a new
+`docs/yahoo-in-season-data.md` during that study, rather than guessing endpoints
+in this plan.
+
+| Data to establish | What depends on it |
+| --- | --- |
+| Season, week, own team, every roster and lineup | Team view and current baseline |
+| Exact scoring, slots, all eligible positions, IR and roster limits | Legal lineups and moves |
+| NFL kickoff times, byes, status and Yahoo's lock rules | Moves still possible this week |
+| Full player pool, ownership, free-agent/waiver status and claim deadlines | Available replacements |
+| Waiver method, priority, budget and transaction restrictions | Cost and feasibility of claims |
+| Trade deadline, rules and other teams' needs | Feasible trade scenarios |
+| Weekly projections, remaining-season outlook and their update times | Quantified recommendations |
+
+Browser-based reading is the first candidate because it fits the existing
+no-server-credentials boundary. Investigate ordinary league pages and the data
+they read; do not assume the draft socket or its userscript works there. If a
+browser reader is viable, keep transport in the browser and interpretation in
+the service, and forward only required data, never cookies, tokens or headers.
+Do not widen the draft script's page matches as a shortcut.
+
+Yahoo describes an official Fantasy Sports API and OAuth on its
+[API overview](https://developer.yahoo.com/api/) (checked 2026-09-08). That
+establishes a possible alternative, not this project's access or the required
+field coverage. The API application is still recorded as pending in TASKS.md;
+its current approval status has not been verified. Revisit this route only
+with evidence that changes the 2026-09-04 decision. An OAuth design that stores
+credentials in the service would require changing the current boundary.
+
+If the browser route cannot supply the required data, present the observed
+gaps and a concrete alternative, such as a user-imported snapshot or an
+approved API integration. Stop before implementing a different access or
+credential model. A blocked Yahoo route does not silently switch priority to
+Sleeper.
+
+## Implementation approach and checks
+
+**Phase 7: establish access and projection coverage.** Two separate checks:
+read the real Yahoo league, and identify usable weekly analysis data. Audit
+available Yahoo, Sleeper and ESPN data for coverage, scoring compatibility,
+freshness and usage requirements. The current season projections and ESPN
+draft rankings do not establish weekly or remaining-season coverage.
+FantasyPros remains excluded under the 2026-09-05 decision unless a paid key
+changes the premise. Deliver a field coverage table and a proposed minimum
+data contract, with missing fields and affected features explicit. Check it
+against the Yahoo UI; prove completeness across pagination and all rosters.
+
+**Phase 8: display a trustworthy league snapshot.** Add Yahoo in-season read
+capabilities alongside the existing draft adapter; choose their exact methods
+from observed data rather than stretching the five draft methods. Keep league
+ownership/rules separate from analysis feeds so a Yahoo league can use another
+provider's projections. Use platform, season and league identity together;
+preserve provider player IDs and all Yahoo eligibility positions. The existing
+name matching can help resolve records, but taking only the first position is
+insufficient for lineup eligibility. Ambiguous or missing matches remain
+visible, and players without draft ADP must remain in the pool.
+
+Publish coherent snapshots with capture time, source update time when known,
+completeness and per-feed age. Do not combine half of a new ownership snapshot
+with half of an old one. Keep private league snapshots in bounded service
+memory and user settings in browser storage; do not introduce a database or
+persist private league payloads in the public feed disk cache. A restart means
+resyncing. Determine refresh intervals and stale limits from the Phase 7
+evidence, separately from the draft's cache durations. Incomplete or stale
+ownership/lock data blocks actionable advice; it may still be displayed with
+its age. Test league switching, pagination failure, service restart, a silent
+reader and player-match failures. Manually compare every roster and setting.
+
+**Phase 9: weekly lineup advice.** Establish a pure calculation over a league
+snapshot and week-specific player data, in a separate in-season module. Score
+projected stats using actual league rules where available; provider point
+totals are usable only when their scoring basis matches. Unsupported scoring
+and missing projections are explicit, never silently defaulted or treated as
+zero. Respect multi-position eligibility, FLEX, SUPERFLEX, IR, byes and locked
+players. Compare the current lineup with the best legal lineup still possible,
+showing swaps, projected difference, source age and uncertainty. Validate small
+cases against exhaustive enumeration, including a greedy FLEX assignment that
+would block a better lineup. Check locked players stay fixed and missing data
+cannot produce a confident recommendation. This is the first useful release.
+
+**Phase 10: waiver pickups and drops.** Apply each feasible add/drop to the
+same baseline and rerun the lineup calculation. Include the player given up,
+bench/bye coverage, roster restrictions, claim timing, FAAB or priority cost,
+and alternatives if the claim fails. An unowned player is not necessarily an
+immediate free agent. Show this week's improvement separately from the
+remaining-season outlook; do not invent the latter from preseason ADP or an
+annual total divided by weeks. Bid amounts are suggestions with assumptions,
+not a claim-win probability. Test an illegal drop, a locked addition, a
+pending waiver, insufficient budget and a better player whose drop cost makes
+the move worse. Compare examples with Yahoo's available-player view without
+submitting a transaction.
+
+**Phase 11: trades and choosing how to improve.** First evaluate user-entered
+offers, then suggest a bounded shortlist of targets from other rosters using
+the same evaluator. Recalculate both teams after a trade, including lost
+starters, replacement pickups, roster space, effective timing and bye coverage.
+Show why the other team might benefit without predicting their willingness to
+accept. Compare keep/optimize, waiver add/drop and trade scenarios using the
+same snapshot, scoring and time horizon. Keep FAAB costs and player costs
+visible rather than inventing a points-to-dollars conversion. Test unequal
+player-count trades, a nominal upgrade that hurts the lineup, a trade that
+cannot take effect in time, and an available waiver alternative that makes
+the trade unnecessary. Missing remaining-season evidence limits the advice;
+it cannot justify a confident season-long trade recommendation.
+
+Other league platforms are deferred until Phase 11 is useful for Yahoo and the
+user chooses the next integration. Add one adapter at a time against the same
+contract checks. No separate repository, generic plugin framework, automatic
+transactions, hosted accounts, AI service dependency or dynasty draft-pick
+valuation is part of this plan.
+
+## Validation, sequencing and stop points
+
+Each phase depends on the preceding phase's exit criteria in ROADMAP.md. Split
+implementation into the reviewable tasks in TASKS.md; expand later phases into
+tasks only when their inputs are known. Phase 7 discovery need not wait for a
+future live draft or the older Sleeper fixture work. Those existing checks and
+release obligations remain open, and this plan does not mark them complete.
+
+For implementation, run focused deterministic checks first. Endpoint-visible
+behavior belongs in `npm run engine:test`; service-only internals belong in
+`npm run server:test`; browser transport needs bridge coverage. Extend the
+existing runners only as required. The complete local gate is typecheck,
+client lint, engine tests, server tests, bridge tests, build and screenshots.
+Check `npm run serve -- status` before trusting service tests. Extend shots to
+exercise the in-season views and failures while retaining both draft modes.
+Record missing private fixtures and manual evidence explicitly; a skipped
+real-league check does not establish platform correctness or release readiness.
+
+For each phase, validate real Yahoo readings beside the app without submitting
+lineups, claims or trades. Record discrepancies and stop dependent advice when
+required rules/data are unavailable. Before calling a recommendation complete,
+demonstrate both a beneficial move and a superficially attractive move the
+calculation correctly rejects.
+
+Keep implementation commits separable by phase. Rollback means reverting only
+that phase's changes after review, leaving the draft workflow and existing
+browser settings usable. Version new browser state separately so it cannot
+overwrite saved draft settings. No destructive migration is planned.
+
+Stop now at the user's planning-only boundary. After implementation is
+authorized, execute one phase at a time and report its checks before moving
+on. Pause for a decision if access requires credentials in the service, paid
+data, a different persistence model, unsupported league rules or reduced scope.
+Do not treat elapsed time or a failed data source as approval for a substitute.
+
+## Earlier Yahoo draft plan, retained
+
+The earlier plan below is preserved because draft validation and release work
+remain open. It is a historical account, not current status: TASKS.md records
+the main merge and live mock validation as done, and bridge tests now exist.
+Its statements about being behind main and never running the userscript are
+superseded by those records. This planning change does not re-audit or close
+the remaining draft tasks.
+
+### Following a Yahoo draft through the browser
 
 Approach for the change currently in flight. Replaced when the next non-trivial
 change begins, so anything that must outlive this change is promoted first.

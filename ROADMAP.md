@@ -4,7 +4,9 @@ Ordered outcomes, each one leaving the project in a working state.
 
 Phases 1 and 2 shipped before this document existed and are recorded as
 completed rather than restated in detail; `CHANGELOG.md` holds what they
-delivered. Phases 3 onward are the Yahoo work currently in flight.
+delivered. Phases 3 through 6 are the Yahoo draft work currently in flight.
+Phases 7 through 11 plan the Yahoo-first in-season extension requested on
+2026-09-08; none is implemented. See [PLAN.md](PLAN.md) for the approach.
 
 ## Phase 1: First release — complete, 1.0.0
 
@@ -191,3 +193,104 @@ The Yahoo work is fit to publish, or a decision is recorded not to publish it.
 ### Validation
 
 - Full local gate, independent review, and documented manual testing.
+
+## Phase 7: Prove Yahoo in-season access and analysis data
+
+Outcome: a verified way to read the user's actual Yahoo league outside the
+draft room, and a coverage assessment for weekly and remaining-season advice.
+
+Scope: observe the league's data access; document fields, identifiers,
+pagination, refresh, permissions and gaps; verify scoring and roster rules;
+assess projection sources. Browser reading is the first candidate under the
+existing credential boundary. The API application status is unverified.
+
+Dependencies: implementation authorization and access to the user's signed-in
+league for observation. This investigation need not wait for Phases 4-6's
+outstanding live-draft/fixture work; those obligations remain open.
+
+Exit: each required field in PLAN.md is demonstrated against Yahoo or recorded
+as unavailable with the dependent feature held. A minimum data contract and
+access approach are reviewable. Do not start dependent phases with guessed
+fields. If the available route requires changing credentials, cost or scope,
+present the alternative and wait for that decision.
+
+Validation: compare readings to Yahoo; check complete pagination and all team
+rosters; retain only sanitized fixtures in git. Record reproducible reads and
+source coverage, not a claim that the draft bridge proves in-season support.
+
+## Phase 8: A trustworthy Yahoo league view
+
+Outcome: select the Yahoo league and own team, then see current rosters,
+settings, availability and data age in an in-season view alongside the draft.
+
+Dependencies: Phase 7 proves the required reads and the chosen access model.
+Scope: Yahoo reader, normalized snapshots, player ID mapping, eligibility,
+bounded private memory state and explicit missing/stale states.
+
+Exit: every roster and relevant setting agrees with Yahoo; unknown players
+remain visible; switching league/season cannot reuse another league's state;
+interrupted pagination cannot turn owned players into available players.
+
+Validation: synthetic snapshot and endpoint checks, transport checks where
+applicable, restart/staleness/partial-response cases, browser screenshots and
+a manual comparison to the user's league. Run the full local implementation
+gate defined in PLAN.md; preserve and report outstanding draft validation.
+
+## Phase 9: Weekly starting-lineup advice
+
+Outcome: the first useful in-season release recommends legal swaps from the
+user's roster and explains the projected difference for the selected week.
+
+Dependencies: Phase 8 and verified weekly projection/scoring coverage.
+Scope: a separate pure in-season calculation, exact league scoring, all
+eligibility positions, fixed locked players, byes, IR and missing data.
+
+Exit: advice respects all supported rules and improves on or agrees with the
+current legal lineup. Unsupported rules or missing required data limit advice
+explicitly. The user still makes the changes in Yahoo.
+
+Validation: small cases checked against exhaustive legal lineups, FLEX and
+SUPERFLEX traps, kickoff/lock boundaries, missing projections and screenshots.
+Manually compare a normal week and a constrained lineup to Yahoo. Full gate.
+
+## Phase 10: Waiver pickups with their drop costs
+
+Outcome: compare feasible additions with keeping the roster, including the
+player dropped, weekly benefit, future coverage and FAAB/priority cost.
+
+Dependencies: Phase 9, complete availability and verified waiver rules.
+Remaining-season claims also require the Phase 7 analysis coverage.
+
+Exit: each suggestion names a legal add/drop and its timing; unavailable or
+locked players cannot be offered as immediate fixes. Missing future data is
+disclosed. Claim success is never promised.
+
+Validation: ownership, waiver versus free-agent status, deadlines, budget,
+illegal drops and a nominal upgrade whose drop cost makes it worse. Compare
+with Yahoo without submitting claims; screenshot advice and limitations. Full
+gate. Do not enable any transaction-writing path.
+
+## Phase 11: Trade advice and comparison with waivers
+
+Outcome: evaluate entered offers, suggest a small set of targets, and compare
+trade, waiver and keep/optimize scenarios for the user's team.
+
+Dependencies: Phase 10, other teams' current rosters, verified trade rules and
+remaining-season evidence for any season-long recommendation.
+
+Exit: all scenarios share a baseline and horizon; trades account for both
+teams' outgoing players, replacements, roster space and effective date. Show
+why a target could fit the other team without asserting they will accept.
+
+Validation: unequal-count trades, lost starters, unavailable replacements,
+deadline restrictions, a harmful apparent upgrade and a waiver alternative
+that makes a trade unnecessary. Manual Yahoo comparison, screenshots and full
+gate. Existing release obligations remain required before publication.
+
+## Deferred: Other in-season platforms
+
+After the Yahoo workflow is useful through Phase 11, let the user choose the
+next platform. Reuse the demonstrated data contract and advice calculations;
+prove the new adapter against the same checks. No integration or framework
+work for Sleeper, ESPN or another league platform is scheduled now. Using an
+analysis feed from one of them does not require adding its league integration.

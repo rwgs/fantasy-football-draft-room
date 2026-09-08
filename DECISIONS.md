@@ -9,6 +9,38 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-08 In-season advice stays in this repository, Yahoo first
+
+Status: Accepted scope for planning by the user. Implementation is not started;
+Yahoo in-season access and analysis sources remain to be demonstrated.
+
+### Decision
+
+Plan weekly lineup, waiver and trade advice as an extension of this local app.
+Yahoo is the first in-season league platform because it is the user's current
+league. Other league integrations follow later. League platforms and analysis
+sources stay separate, so advice for Yahoo may use another provider's data.
+
+Reuse the existing data and identity foundation where it fits, and keep
+in-season calculations separate from the draft simulation. Preserve the
+existing local operation and platform-write boundaries: the user carries out
+lineup changes, waiver claims and trades in Yahoo. PLAN.md describes the
+proposed implementation; SPEC.md and ROADMAP.md record requirements and phases.
+
+### Why and alternatives
+
+A separate repository would duplicate player matching, feed maintenance and
+league conventions, or require maintaining a shared package before a second
+independent product exists. Reconsider that split only if independent releases,
+hosting or maintainers create a real need. Starting with Sleeper because its
+reads are easier would delay usefulness for the user's actual league.
+
+Draft ADP and the draft room bridge are not proof of weekly value or in-season
+data access. Discovery against the real Yahoo league comes before dependent
+features. The 2026-09-04 browser-access decision and the 2026-09-05 FantasyPros
+exclusion still apply; this plan does not approve server-held credentials,
+paid data, automatic transactions or a database.
+
 ## 2026-09-07 A shared slot is priced at what a shared slot costs to fill
 
 Status: Accepted, by the user, off a live draft that showed it. Amends
