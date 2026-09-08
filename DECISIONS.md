@@ -9,6 +9,74 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-08 The in-season reader is a bookmarklet, like the panel
+
+Status: Accepted. Applies `The panel is a bookmarklet, not part of the bridge`
+below to a second thing that needs no privileges, rather than deciding anything
+new about userscripts.
+
+### Decision
+
+Reading a Yahoo league in-season runs from a bookmarklet installed off the
+service, on the same pattern as the panel: source in `userscript/`, served
+stamped from a `/…` address, whole body carried in the bookmarklet. It is not
+added to `yahoo-draft-bridge.user.js`, and the bridge's `@match` list is not
+widened to league pages.
+
+### Why
+
+Something has to run on a Yahoo page, because every read that made this
+possible worked only by the browser attaching its own cookie, and the service
+must never hold one. That is the whole of the requirement. It is three ordinary
+`fetch` calls against a stable API, wanted when the user asks for a refresh
+rather than continuously.
+
+Set against what the bridge needs, that is nothing. The bridge must be a
+userscript because it wraps `WebSocket` at `document-start`, before Yahoo's
+bundle builds one, and only a manager can inject that early. The panel decision
+below already refused to give a thing needing no privileges every failure mode
+of a thing that needs several, and the in-season reader is the same shape of
+thing as the panel.
+
+The evidence since is worse than when that was written. 2026-09-07 cost three
+mock drafts to a userscript that served, stored and listed as current while
+running a copy three versions old, and the cause turned out to be a per-
+extension "Allow user scripts" control that was off while the permission itself
+was granted — a state in which a manager registers nothing, injects nothing and
+reports no fault anywhere. A second userscript is a second thing that can fail
+that way, silently, and in-season advice has no equivalent of a draft board
+going visibly empty to reveal it.
+
+A bookmarklet has no install, no update, no version and no manager. Whatever it
+does wrong, it does in the open.
+
+### Cost, stated plainly
+
+One click per refresh, where a userscript could have read on its own. In-season
+this is closer to a feature than a cost — a snapshot is taken when the user
+wants one, not on Yahoo's schedule or ours — but it is still a click, and it
+means the app can never quietly hold a current picture of a league nobody has
+opened.
+
+The reader also has to run on a Yahoo page, which the panel did not: the panel
+only needed a DOM, and this needs the cookie. So it cannot be clicked from the
+app's own tab, and the install page has to say so.
+
+### Rejected
+
+Widening the bridge's page matches. `PLAN.md` already named it as the shortcut
+to avoid, and it fails the same test the panel entry set: the bridge would gain
+a second job with different privileges, on pages it has no other reason to run
+on, and the two would share a fate.
+
+A second userscript. It buys an automatic refresh nobody asked for, at the
+price of the exact failure this project has already paid for twice.
+
+Reading the league pages' HTML instead, to avoid the API. Rejected on evidence
+rather than taste: the sub-resources answer JSON directly, so the HTML route is
+a megabyte of advertising-heavy markup parsed to reach data already available
+in a documented envelope. See `docs/yahoo-in-season-data.md`.
+
 ## 2026-09-08 In-season advice stays in this repository, Yahoo first
 
 Status: Accepted scope for planning by the user. Implementation is not started;

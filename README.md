@@ -173,6 +173,28 @@ The numbers come from the app, so they appear once the app is following that
 draft. Until then the panel says so rather than sitting blank. Nothing in it can
 take a click meant for the draft, and it never touches Yahoo's own page.
 
+### Reading a league in season
+
+Groundwork, and honest about it: the service can be handed your Yahoo league
+outside a draft — the settings, the scoring, every team, and your own roster —
+but nothing in the app displays it yet. What works today is the reading and the
+route that keeps it.
+
+Open <http://127.0.0.1:5178/league-reader> and drag the button to your bookmarks
+bar. Open your league — the page whose address has `/f1/` and a number in it —
+and click the bookmark. It says what it read, bottom right, and the service then
+answers `GET /api/yahoo/league/<league>/snapshot` with it.
+
+**It only works on a Yahoo page**, which is the one way it differs from the
+panel. It reads Yahoo with the session your browser already holds, so this
+service can never do it alone, and clicking it on any other tab reaches nothing.
+No cookie, token or crumb is sent anywhere; every request it makes is a GET, and
+it changes nothing in your league.
+
+Nothing refreshes on its own — click it again when you want a fresh reading.
+What the reading covers, and what it does not, is in
+[docs/yahoo-in-season-data.md](docs/yahoo-in-season-data.md).
+
 ### If no picks appear
 
 Ask the draft room itself, in its console:
@@ -493,10 +515,11 @@ draft-room/
 │       └── platforms/       one directory per league site, five methods each
 │           ├── index.js     the registry. An explicit list, not a scan
 │           ├── sleeper/     index.js, league.js, draft.js — pulled from a feed
-│           └── yahoo/       index.js, frames.js, room.js — pushed by the bridge
+│           └── yahoo/       index.js, frames.js, room.js, league.js — pushed in
 ├── userscript/              runs on Yahoo's page, not served from here
 │   ├── yahoo-draft-bridge.user.js   carries the room's frames to the service
-│   └── draft-panel.js               the board's reading, over the draft room
+│   ├── draft-panel.js               the board's reading, over the draft room
+│   └── league-reader.js             reads a Yahoo league in season
 └── client/                  React and TypeScript, built with Vite
     └── src/
         ├── config.ts        your leagues and your name, read from the env
@@ -593,7 +616,7 @@ The data service reads three of its own, and needs none of them:
 
 | Variable | What it does |
 |---|---|
-| `PORT` | The port the data service binds. Default 5178. What it hands out follows it: the bridge userscript, the panel and the app's reinstall link are all written to this port |
+| `PORT` | The port the data service binds. Default 5178. What it hands out follows it: the bridge userscript, the panel, the league reader and the app's reinstall link are all written to this port |
 | `HOST` | The address it binds. Default `127.0.0.1`, the loopback only |
 | `DRAFT_YEAR` | Draft a different season. Defaults to the current year |
 

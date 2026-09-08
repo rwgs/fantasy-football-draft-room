@@ -15,6 +15,11 @@
 // wants set and resolves it to Yahoo's own player ids, for the bridge to send.
 // It is the only write to a league platform in this project, it happens only
 // when the user turns it on, and it never sends a pick.
+//
+// `putSnapshot` and `getSnapshot` are the same arrangement for a league in
+// season rather than a draft: a bookmarklet on the league page reads what the
+// service cannot and posts it, and `league.js` does the reading of it. Separate
+// from the room entirely, because a draft and a season share no state.
 
 import { buildBoard } from '../../board.js';
 import { joinKey, normPos, normTeam } from '../../names.js';
@@ -22,6 +27,7 @@ import {
   applyPost, getAdvice, getRoom, queuePlan, roundCount, setAdvice, setWanted, teamCount,
 } from './room.js';
 import { bridgeStatus } from '../../bridge.js';
+import { getSnapshot, putSnapshot } from './league.js';
 
 /**
  * A Yahoo league ID as the draft room writes it: bare digits.
@@ -516,6 +522,8 @@ export default {
   readAdvice,
   putQueue,
   roomAdpByKey,
+  putSnapshot,
+  getSnapshot,
   isValidId: (id) => IS_ID.test(id),
   idHint: 'A Yahoo league ID is the number in your draft room address.',
   importLeague,

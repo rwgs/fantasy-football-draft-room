@@ -222,6 +222,7 @@ app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
  * is picked up without restarting a service that may be holding a live draft.
  */
 const PANEL_MARK = '__PANEL_BUILD__';
+const READER_MARK = '__READER_BUILD__';
 
 function panelSource() {
   return readFileSync(join(HERE, '..', '..', 'userscript', 'draft-panel.js'), 'utf8');
@@ -279,6 +280,59 @@ app.get('/panel', (_req, res) => {
 </ol>
 <p>Click it again after a page reload. Close the panel with the <code>x</code> in its corner.
    The numbers appear once the app is following that draft.</p>
+</main></body></html>`);
+});
+
+function readerSource() {
+  return readFileSync(join(HERE, '..', '..', 'userscript', 'league-reader.js'), 'utf8');
+}
+
+app.get('/league-reader.js', (_req, res) => {
+  res.type('text/javascript; charset=utf-8');
+  res.set('cache-control', 'no-store');
+  res.send(atServiceOrigin(readerSource(), PORT));
+});
+
+/**
+ * Where the league reader is installed from.
+ *
+ * The panel's page with one difference that matters enough to say twice: the
+ * panel runs anywhere with a DOM, and this only works on a Yahoo page, because
+ * the whole point of it is the session cookie the browser attaches there.
+ */
+app.get('/league-reader', (_req, res) => {
+  const source = readerSource();
+  const href = 'javascript:' + encodeURIComponent(
+    atServiceOrigin(source.replace(READER_MARK, panelBuild(source)), PORT),
+  );
+  res.type('html').set('cache-control', 'no-store').send(`<!doctype html>
+<html><head><meta charset="utf-8"><title>League reader</title><style>
+ body { font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1211;
+        color: #e8e6e3; margin: 0; padding: 40px; }
+ main { max-width: 620px; margin: 0 auto; }
+ h1 { font-size: 20px; margin: 0 0 4px; }
+ p { color: #b9c2bd; }
+ a.bm { display: inline-block; margin: 18px 0; padding: 10px 16px; background: #1a201e;
+        border: 1px solid #b78a2e; border-radius: 6px; color: #e9c46a;
+        text-decoration: none; font-weight: 600; }
+ ol { color: #b9c2bd; } li { margin: 6px 0; }
+ code { background: #1a201e; padding: 1px 5px; border-radius: 3px; color: #e8e6e3; }
+</style></head><body><main>
+<h1>League reader</h1>
+<p>Reads your Yahoo league in season - the settings, the scoring, every team and
+   your own roster - and hands it to this machine. It reads only; it changes
+   nothing in Yahoo and never sends a pick, a claim or a cookie anywhere.</p>
+<p><b>Drag this to your bookmarks bar:</b></p>
+<a class="bm" href="${href}">Read league</a>
+<ol>
+  <li>Drag the button above onto your bookmarks bar. Clicking it here does nothing.</li>
+  <li>Open your Yahoo league - the page whose address has <code>/f1/</code> and a number in it.</li>
+  <li>Click the bookmark. It says what it read, bottom right.</li>
+</ol>
+<p><b>It has to be clicked on a Yahoo page.</b> It reads Yahoo using the session
+   your browser already holds, which is why this service can never do it alone -
+   and why clicking it on any other tab reaches nothing.</p>
+<p>Click it again whenever you want a fresh reading. Nothing refreshes on its own.</p>
 </main></body></html>`);
 });
 
@@ -496,6 +550,59 @@ app.get('/api/:platform/room/:id', async (req, res) => {
   try {
     res.set('cache-control', 'no-store');
     res.json(await target.platform.roomState(target.id));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
+ * A league in season, as the user's own browser read it.
+ *
+ * The same arrangement as the room ingestion above and for the same reason: the
+ * endpoints that carry a league's settings, its rosters and its player pool all
+ * authenticate on the browser's session cookie, so the service cannot ask and
+ * has to be told. What differs is who does the telling. A draft needs a
+ * userscript, because catching a socket means running at `document-start`;
+ * reading a league is three ordinary fetches when the user asks for them, so it
+ * is a bookmarklet. See `DECISIONS.md`, 2026-09-08.
+ *
+ * What arrives is Yahoo's own JSON, unread. No cookie, token or crumb is sent
+ * here and none would be accepted — the browser holds those and keeps them.
+ *
+ * Offered only to platforms that can take one, exactly as the routes above are.
+ */
+app.post('/api/:platform/league/:id/snapshot', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.putSnapshot) {
+    res.status(404).json({ error: 'That platform is read from its own feed, not posted to.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.putSnapshot(target.id, req.body || {}));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
+ * What was read for a league, or "not yet".
+ *
+ * Answers rather than refuses when nothing has been posted, for the reason the
+ * room route above gives: the app asks before the user has clicked anything,
+ * and that is the ordinary course of events rather than a fault.
+ */
+app.get('/api/:platform/league/:id/snapshot', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.getSnapshot) {
+    res.status(404).json({ error: 'That platform is read from its own feed, not posted to.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.getSnapshot(target.id));
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }

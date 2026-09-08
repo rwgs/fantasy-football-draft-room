@@ -12,6 +12,34 @@ fixed.
 
 ### Added
 
+**A Yahoo league can be read outside a draft, though nothing shows it yet.**
+Groundwork for in-season advice, and worth stating plainly: the service can now
+be handed your league — the settings, the exact scoring, every team, and your
+own roster — but no screen displays any of it. What exists is the reading and
+the route that keeps it.
+
+Yahoo's league pages turned out to stop short of what was needed: settings,
+team and player pages fetch no JSON at all and arrive as a megabyte of
+server-rendered HTML. The same API those pages already call answers its own
+sub-resources anyway, which they simply do not use, so no HTML is parsed
+anywhere. That ends the unknown the draft adapter has carried since Yahoo went
+in — it could never read a roster shape or a scoring rule, because a draft room
+does not send them. Scoring arrives as categories joined to modifiers rather
+than a label, slots keep a composite flex as one position, and a roster carries
+what each player may fill against what they fill now.
+
+It reads through a bookmarklet installed from `/league-reader`, on the same
+reasoning as the panel: only the browser has the session cookie, and the bridge
+is a userscript solely because it must wrap `WebSocket` before Yahoo's own code
+runs. This needs none of that, so it does not inherit a userscript's ways of
+failing to install. It runs only on a Yahoo page, sends no cookie anywhere, and
+every request it makes is a GET.
+
+Your own team is finally identified rather than guessed. The profile endpoint
+returns a guid and every team carries its managers' guids, so the two match —
+where a draft room has no identifier for a person separate from their seat,
+which is why the draft code has to read the seat number out of the room address.
+
 **The app says which bridge is running, and says when one has stopped.**
 Following a Yahoo draft needs the bridge userscript installed, and a stale copy
 is the failure this project keeps having: it mirrors every pick perfectly while

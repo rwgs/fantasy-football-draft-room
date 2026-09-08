@@ -205,24 +205,32 @@ Nothing below has been read, and none of it should be assumed:
 - Whether any of this differs in a keeper league, or one mid-playoffs.
 - What happens to all of it when the season ends.
 
-## What still has to run in the browser
+## What runs in the browser, and why it has to
 
-**Decided nowhere yet, and it needs a decision.** Every read above worked
-because the browser attached its own cookie. The service cannot make these
-calls and must not hold what would let it. So something has to run on a Yahoo
-page.
+**Decided and built.** Every read above worked because the browser attached its
+own cookie. The service cannot make these calls and must not hold what would let
+it, so something has to run on a Yahoo page. That something is
+`userscript/league-reader.js`, a bookmarklet installed from `/league-reader`,
+and `DECISIONS.md` for 2026-09-08 records why it is not a second userscript: the
+draft bridge has to be one because it wraps `WebSocket` at `document-start`, and
+this needs none of that.
 
-It does not follow that it is a second always-on userscript. The draft bridge
-has to be one, because it must wrap `WebSocket` at `document-start` before the
-room opens; that constraint is what drove the panel out of a userscript manager
-entirely. In-season reading has none of it. These are three ordinary `fetch`
-calls against a stable API, wanted when the user asks rather than continuously,
-which is the shape the existing bookmarklet panel already serves.
+It fetches the four resources, sends Yahoo's own JSON unread to the service, and
+`server/src/platforms/yahoo/league.js` does all of the interpreting — so there
+is one place to fix when Yahoo changes a shape rather than two.
 
-The options are a bookmarklet on the league page, a second userscript matched
-to league pages, or widening the draft script's matches — and the last is the
-one `PLAN.md` already warns against as a shortcut. Settle it in Y7.4 and record
-it in `DECISIONS.md` before any of it is built.
+One simplification worth recording, because it removes the only piece of
+discovery the reader would otherwise need. The API wants `470.l.<league>` and
+that leading number is the season's game code, which appears nowhere in a league
+page's address. It does not have to be found: **`nfl.l.<league>` addresses the
+same league in the current season's game**, checked against a real league rather
+than assumed, and the numeric key comes back on the response. The limit is the
+other side of the same coin — `nfl` means this season, so it cannot address a
+past season's league.
+
+The endpoint that would have discovered it properly,
+`/users;use_login=1/games;game_keys=nfl/leagues`, hung rather than answering
+every time it was tried. Worth knowing before reaching for it.
 
 ## Reproducing this
 

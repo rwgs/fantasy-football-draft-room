@@ -1086,6 +1086,51 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     page and killing the watcher with `Stop-Process -Force`: 4.7 MB of bodies
     survived where the old tool saved nothing.
 
+- [x] Y7.1b: Settle how a league is read, and prove the chain end to end.
+  - Scope: the transport question Y7.1 left open, decided and built. A
+    bookmarklet, `userscript/league-reader.js`, installed from `/league-reader`
+    on the pattern the panel already set; `server/src/platforms/yahoo/league.js`
+    to read Yahoo's JSON into a snapshot; `POST` and `GET
+    /api/:platform/league/:id/snapshot`, offered only to platforms that can take
+    one, exactly as the room routes are.
+  - Decision: `DECISIONS.md`, 2026-09-08, applying the accepted panel entry
+    rather than settling anything new. The bridge must be a userscript because
+    it wraps `WebSocket` at `document-start`; this is four fetches when asked,
+    so it inherits none of that. Widening the bridge's matches was rejected,
+    as `PLAN.md` already warned, and so was a second userscript.
+  - Simplified while building, and it removed the only discovery step: the API
+    wants `470.l.<league>` and that leading number is the season's game code,
+    which is nowhere in a league address. `nfl.l.<league>` reaches the same
+    league in the current season and the numeric key comes back on the
+    response, so nothing has to know what season it is. Checked against the real
+    league. The endpoint that would have discovered it properly hung every time
+    it was tried, which is worth knowing before reaching for it.
+  - Automated validation: eighteen checks in `npm run server:test` under
+    `league.test.js`, on a synthetic fixture that copies the shape and none of
+    the people — the two-element resource, the index-keyed list, the metadata
+    split into single-key objects padded with empties, the composite `W/R/T`
+    slot, a scoring category with no modifier against it, and the refusals. The
+    suite bites: reverting the `flatten` fix fails exactly one check and no
+    others. Typecheck, lint, `server:test` 48, `bridge:test` 7, `engine:test`,
+    build and `shots` all clean, no console errors.
+  - Manual validation: **done, against the real league.** The bookmarklet as the
+    service hands it out, run in the league page, reported "8 teams, 9 starting
+    slots, 38 scoring rules, 17 on your roster" and the stored snapshot changed
+    to match. Nine starting slots is the arithmetic of the slot list, which is
+    the check worth having. The refusals were exercised too: a snapshot posted
+    under the wrong league ID, a malformed envelope and an empty body all give
+    400 and say which.
+  - Worth knowing for the next run: a tab left open through repeated navigation
+    freezes, and a frozen renderer runs synchronous JavaScript while never
+    firing a timer or settling a fetch. That reads exactly like a hung request
+    and is not one. A fresh tab fixes it; check liveness with a timer before
+    concluding anything about Yahoo.
+  - Deliberately not built: any in-season screen. There is no such surface in
+    the app and inventing one is Phase 8's product question, not this slice's.
+    So `shots` says nothing about this work, and the chain ends at the service
+    handing the snapshot back.
+  - Dependencies or blockers: none.
+
 - [ ] Y7.2: Audit league fields and completeness through the observed route.
   - Scope: every roster, own lineup, scoring, all position eligibility, locks,
     player availability, waiver/FAAB rules, trade restrictions and pagination.
@@ -1096,6 +1141,13 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     the last page, a waiver player, and a free agent where present. Record
     unobserved cases honestly for later synthetic/manual checks.
   - Dependency: Y7.1. Do not assume an unowned player is immediately addable.
+  - Already answered by Y7.1 and Y7.1b, so what is left is narrower than the
+    scope above reads: the roster slots, the scoring as categories joined to
+    modifiers, all rosters, own-team identity by guid, waiver method and trade
+    dates are read and parsed. What is genuinely open is player availability
+    and ownership, the FAAB balance where a league has one, pagination on any
+    list, lock rules against kickoff times, and how any of it differs in a
+    keeper league or a past season.
 
 - [ ] Y7.3: Establish weekly and remaining-season analysis coverage.
   - Scope: assess usable Yahoo, Sleeper and ESPN data independently of league
