@@ -463,14 +463,16 @@ Phase 4: prove the platform seam against real leagues.
     typecheck and build clean, lint unchanged with nothing in the lines touched.
   - Manual validation: `npm run shots` clean, no console error, the queue
     control photographed. The three fixture suites skipped as ever.
-  - What the checks do not reach, and how it was run instead: the service on
-    5178 had been up nineteen hours, nothing from outside says whether it is
-    holding a room, and wiping one is the failure this task is about. So
-    `engine:test` ran against a second service started on 5179 from the new
-    code and the running one was left alone. That covers the reading; the client
-    half is three lines and was read rather than driven, since nothing here can
-    restart a service under a live draft in a browser. Worth watching once on
-    the next mock.
+  - What the checks do not reach: the client half is three lines and was read
+    rather than driven, since nothing here can restart a service under a live
+    draft in a browser. Worth watching once on the next mock.
+  - How the run was ordered, since the failure under test is a restart: the
+    service on 5178 had been up nineteen hours and nothing from outside says
+    whether it is holding a room, so `engine:test` first ran against a second
+    service started on 5179 from the new code, leaving the running one alone.
+    The whole gate was then re-run against 5178 once restarting it was asked
+    for -- `engine:test` green and `shots` clean with no console error against a
+    service the status check calls current.
 
 - [ ] Keep a seat off Yahoo's autodraft.
   - Scope: not started, and deliberately not started. Reading the captures for
