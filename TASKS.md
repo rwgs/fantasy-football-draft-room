@@ -1034,6 +1034,41 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
   - Validation: compare the reading to Yahoo and repeat it after normal page
     navigation; retain only sanitized examples. No platform writes.
   - Dependency: implementation authorization and access to the real league.
+  - Progress, 2026-09-08, authorized and part done. The route is established
+    and written up in `docs/yahoo-in-season-data.md`, sanitized: the league
+    pages call `pub-api*.fantasysports.yahoo.com` and answer under the same
+    `fantasy_content` envelope the official API documents, on the browser's own
+    cookie and with no OAuth. Observed against the owner's real 8-team league.
+    Keys are `<game>.l.<league>` and `<game>.l.<league>.t.<team>`, with the game
+    code read from the league rather than assumed, since it changes yearly.
+  - What that settles: the league object, all teams with standings and waiver
+    priority, and — the one that matters — own-team identity, because
+    `users;use_login=1/profile` returns a `guid` and every team carries
+    `managers[].manager.guid`. Y7.2's requirement that the own team be
+    established rather than inferred from a seat number is answered by that
+    pair, which is something the draft adapter cannot do. The access model fits
+    the no-server-credentials rule unchanged: transport stays in the browser.
+  - What it does not settle, and it is the finding that shapes Phase 8: the
+    settings, team and players pages fetch no JSON at all. They arrive as
+    server-rendered HTML, so scoring rules, roster slots and the rosters
+    themselves — the inputs a legal-lineup check needs — are the exact three
+    things the clean route misses.
+  - Blocked on a decision, not on code: whether to ask the same API for
+    `/league/<key>/settings` and `/team/<key>/roster`, which are standard
+    sub-resources of the envelope already in use. The probe is written and was
+    not run. Issuing a request the page never made is a step beyond observing
+    one, and the auto-mode classifier declined it, correctly. The alternative
+    is parsing 1 MB of HTML, which is brittle enough to cost before it is
+    chosen. Ask before running the probe.
+  - Not done: the API application's status is unchecked. Only the account
+    holder can read it.
+  - Tooling fixed while doing this, in git-ignored `tools/`, so it appears in
+    no diff: `cdp-watch.mjs` held HTTP response bodies in memory and wrote them
+    only from an exit handler that a killed process on Windows never runs.
+    Frames were already appended live; responses were not, so all six earlier
+    captures hold frames and no responses. Checked by capturing a real league
+    page and killing the watcher with `Stop-Process -Force`: 4.7 MB of bodies
+    survived where the old tool saved nothing.
 
 - [ ] Y7.2: Audit league fields and completeness through the observed route.
   - Scope: every roster, own lineup, scoring, all position eligibility, locks,
