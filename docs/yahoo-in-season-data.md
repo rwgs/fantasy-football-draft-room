@@ -5,10 +5,12 @@ written down because the draft protocol document covers only the room and
 in-season advice needs everything the room never sends. Companion to
 `yahoo-draft-protocol.md`, and the evidence behind Phase 7 in `ROADMAP.md`.
 
-Everything here was watched happening on 2026-09-08, using `tools/yahoo/`
-against the repository owner's own league: 8 teams, one season in progress.
-The league ID, the manager names and the guids are all real, so none of them
-appear below. Field names and shapes do; values do not.
+Everything here was read on 2026-09-08. The league-scope half was watched
+happening with `tools/yahoo/`, in the repository owner's own signed-in browser,
+against their league: 8 teams, one season in progress. The game-scope half
+needed no browser and no account, and was read straight from a shell. The
+league ID, the manager names and the guids are all real, so none of them appear
+below. Field names, shapes and counts do; values do not.
 
 Each entry is marked **observed** where a response carried it, or **open**
 where it has not been read yet. The distinction matters, because a field
@@ -41,6 +43,38 @@ Two identifier shapes carry everything:
 `<game>` was `470` for this season. It is the game code, not a constant, so it
 changes every year and must be read rather than hard-coded — `game_code` and
 `season` are both on the league object, which is what makes that possible.
+
+## Two scopes, and only one needs you signed in
+
+**Observed, 2026-09-08, and it is the most useful thing in this document.** The
+API has two scopes and they do not authenticate alike:
+
+| Scope | Path begins | Signed in? |
+| --- | --- | --- |
+| League | `/fantasy/v2/league/<league key>/…` | **required** |
+| Game | `/fantasy/v2/game/nfl/…` | **not required** |
+
+Asked with no cookie at all, from a shell rather than a browser, every league
+path answered `401` with `"You must be logged in to view this league."` Every
+game path answered `200`. Both were checked against the same real league and
+the same season in the same minute, so the difference is the scope and not the
+weather.
+
+That splits the in-season problem in two, and the halves have different costs:
+
+- **Anything about *your* league** — its settings, its teams, its rosters, who
+  owns whom — is behind the cookie. Only the browser can ask, which is what
+  `userscript/league-reader.js` exists for.
+- **Anything about *players in general*** — the pool, ownership percentages,
+  injuries, byes, ADP, the stat vocabulary, week dates — is public. The service
+  can fetch it directly, cache it, and never involve the browser at all, the
+  same way it already fetches Fantasy Football Calculator and Sleeper.
+
+**No decision is taken here.** Whether the service should fetch the game scope
+itself is Y7.4's to settle, and it touches the architecture boundary, so it is
+recorded as available rather than acted on. What it removes is the assumption
+this study began with: that in-season advice needs a browser read for
+everything. It needs one for the league, and for nothing else.
 
 ## What one page read
 
@@ -187,23 +221,232 @@ now. `bye_weeks` and `is_keeper` come free with it.
 `editorial_team_abbr` is worth noting for identity: it is the same team
 abbreviation `server/src/names.js` already joins defences on.
 
+## The player pool, and the reference lists behind it
+
+**Observed, 2026-09-08, all without a cookie.** `/game/nfl/players` answers the
+pool, and four reference resources answer the vocabularies it is written in.
+
+`players` carries 21 fields per player, arriving as 24 metadata entries — the
+three spare ones are the empty padding `league.js` documents. Scanned across
+300 players rather than the two a sample would have shown:
+
+| Field | On how many | Note |
+| --- | --- | --- |
+| `player_key`, `player_id`, `name`, `url` | 300/300 | identity |
+| `editorial_team_abbr`, `editorial_team_key`, `editorial_team_full_name` | 300/300 | the abbreviation `names.js` joins defences on |
+| `display_position`, `position_type`, `eligible_positions` | 300/300 | what they may fill |
+| `eligible_positions_to_add`, `is_undroppable`, `is_keeper` | 300/300 | transaction legality |
+| `bye_weeks` | 300/300 | byes, for every player, free |
+| `status`, `status_full` | **60/300** | only when something is wrong |
+| `injury_note` | **58/300** | only when something is wrong |
+| `has_player_notes` | 298/300 | |
+| `player_notes_last_timestamp` | 204/300 | |
+| `has_recent_player_notes` | 31/300 | |
+| `linked_player` | 1/300 | rare enough to be a surprise later |
+
+**The injury fields are the trap.** They are absent on a healthy player, not
+present-and-empty, so a reader that indexes `status` and expects a value will
+see `undefined` for the 80% of the pool that is fine and cannot tell that from
+a shape change. Absence means healthy and has to be written down as meaning
+that. The codes seen in 300 players were `Q`, `O`, `IR`, `IR-R`, `PUP-R`, `NA`
+and `CEL`, with `status_full` spelling each one out.
+
+Three sub-resources hang off the same path via `;out=`, comma-separated for
+more than one:
+
+| `;out=` | Answers | Public? |
+| --- | --- | --- |
+| `percent_owned` | `{coverage_type: week, week: N}`, `value`, `delta` | yes, **300/300** |
+| `draft_analysis` | `average_pick`, `average_round`, `average_cost`, `percent_drafted`, and a `preseason_` variant of each | yes |
+| `ownership` | who holds the player **in a league** | no — `[]` at game scope |
+
+`percent_owned` is worth naming twice: it came back for every player scanned,
+it is scoped to a week, and it carries a `delta`. An ownership percentage that
+is moving is the signal waiver advice actually wants, and it costs no cookie.
+`draft_analysis` is a second ADP source alongside Fantasy Football Calculator,
+mentioned because it exists and not because anything should switch to it.
+
+`ownership` returning an empty array at game scope is the same boundary from
+the other side: who owns a player is a fact about a league, so it needs one.
+
+### Pagination, and what the end looks like
+
+**Observed.** `;start=<n>;count=<m>` pages the list, and `start` shifts the
+window as expected. `count` is not capped at the 25 the official API documents:
+`count=500` returned 500 players in one response.
+
+The pool was **2888 players** on the day. Walking to the end showed three
+distinct behaviours, and the third is a shape change:
+
+| Ask | Answer |
+| --- | --- |
+| `start=2850;count=25` | `count: 25` — a full page |
+| `start=2875;count=25` | `count: 13` — a short page, so this is the last one |
+| `start=2900;count=25` | `players: []` — **an empty array, not an object** |
+
+Everywhere else in this API a list is an object keyed by index with a `count`
+beside it. Past the end it is a bare `[]`. A pager that reads `.count` off it
+gets `undefined` rather than zero, so the loop's end condition has to accept
+both shapes. That is the kind of thing only walking to the end finds.
+
+### The vocabularies
+
+**Observed**, and they change what the settings response has to be read
+against:
+
+| Resource | Holds |
+| --- | --- |
+| `/game/nfl/stat_categories` | 108 stats, ids 0-107, each with `name`, `display_name` and the `position_types` it applies to |
+| `/game/nfl/roster_positions` | 21 slots, with `display_name` and `position_type` |
+| `/game/nfl/position_types` | 5: `O`, `K`, `OT`, `DT`, `DP` |
+| `/game/nfl/game_weeks` | 18 weeks, each with `start`, `end` and `current` dates |
+
+`roster_positions` settles something this project had written down as unknowable:
+**the flex vocabulary is published.** All 21 slots are enumerated, and the four
+composites among them are `W/T`, `W/R`, `W/R/T` and `Q/W/R/T`. So a flex slot's
+eligible set can be read from a list rather than parsed out of a slash-separated
+string, which is what weekly lineup advice needs and what
+`server/src/platforms/yahoo/league.js` said was guesswork. Its own decision is
+unaffected and still right: it separates starters from bench on
+`is_starting_position` rather than on the position's name, which stays the
+sturdier reading whether or not the names are enumerable.
+
+`game_weeks` gives week 1 as 2026-09-09 to 2026-09-14, and week 18 as
+2027-01-05 to 2027-01-10. That is week *boundaries*, which is not the same as
+lineup locks: it says which dates belong to which week, not when an individual
+game kicks off, and the owner's league carried `weekly_deadline: null`. Locks
+remain open below.
+
+### Stats come back raw, not as points
+
+**Observed.** `/player/<player key>/stats` answers, with `;type=week;week=<n>`
+for one week and nothing for the season. It returns `player_stats.stats` as a
+list of `{stat_id, value}` pairs, and a season read also carries
+`player_advanced_stats` with its own ids from 1001 up.
+
+`stat_id` is the join key, and it is the same one the league's own
+`stat_modifiers` use. So fantasy points are not a thing Yahoo hands over at
+this scope — they are the product of a raw stat here and a modifier from the
+league's settings, which is exactly why `scoring_type` was never enough and why
+the settings sub-resource matters as much as it does. Anything computing points
+needs both scopes: the public stat and the private modifier.
+
+One honest limit on this reading: it was taken on 2026-09-08, before week 1
+kicked off, so **every value was zero.** The shape is observed; the values are
+not. Whether the numbers are right, and how quickly they land during a game,
+cannot be known until a game has been played. Y7.3 owns that.
+
+## Coverage, by what needs it
+
+The audit, in one place. Every row marked observed traces to a response read on
+2026-09-08 — either a capture under `tools/yahoo/dump` or a request made
+directly while writing this. Rows are grouped by the feature that fails without
+them, because a field's importance is not a property of the field.
+
+`L` marks a league-scope read, which needs the signed-in browser. `G` marks
+game scope, which needs nothing.
+
+### Reading a league at all
+
+| Needs | Source | Scope | State |
+| --- | --- | --- | --- |
+| Which league | league page address, `league_key` | L | observed |
+| Which season's game | `nfl.l.<id>` addresses it; `game_code` and `season` come back | L | observed |
+| Which team is yours | `users;use_login=1/profile` `guid` against `managers[].manager.guid` | L | **observed, and established rather than inferred** |
+| Every team | `league/<key>/teams` | L | observed, 8 of 8 |
+| League shape | `num_teams`, `max_teams`, `roster_type`, `draft_status` | L | observed |
+| Which week | `current_week`, `matchup_week`, `start_week`, `end_week` | L | observed |
+| Week dates | `game/nfl/game_weeks` | G | observed, 18 weeks |
+
+### Scoring a lineup
+
+| Needs | Source | Scope | State |
+| --- | --- | --- | --- |
+| Roster slots | `settings.roster_positions` | L | observed |
+| Which slots start | `is_starting_position` per slot | L | observed |
+| Flex eligibility | `game/nfl/roster_positions`, 4 composites | G | observed |
+| Scoring rules | `stat_categories` joined to `stat_modifiers` on `stat_id` | L | observed, 38 against 35 |
+| Stat names | `game/nfl/stat_categories`, 108 stats | G | observed |
+| Player eligibility | `eligible_positions` per player | L and G | observed |
+| Current lineup | `selected_position` on a roster | L | observed |
+| Raw stat values | `player/<key>/stats`, `;type=week` | G | shape observed, **all values zero — nothing played yet** |
+| Points per player | not served; must be computed from the two above | — | **not available, by design** |
+| Negative and fractional points | `uses_negative_points`, `uses_fractional_points` | L | flags observed, effect unchecked |
+| When a lineup locks | `weekly_deadline` | L | **open — `null` in the league read** |
+| Per-game kickoff | not found at either scope | — | **open** |
+
+### Waivers and adds
+
+| Needs | Source | Scope | State |
+| --- | --- | --- | --- |
+| Waiver method | `waiver_type`, `waiver_rule`, `uses_faab`, `waiver_days`, `waiver_time` | L | observed |
+| Waiver priority | `waiver_priority` per team | L | observed |
+| Weekly adds used | `roster_adds` per team | L | observed |
+| Transaction counts | `number_of_moves`, `number_of_trades` | L | observed |
+| FAAB balance | not on any response seen | L | **open — needs a FAAB league** |
+| Who owns a player | `;out=ownership` | L | **open — empty at game scope** |
+| Free agent against waiver | `players;status=A` and siblings | L | **open** |
+| Whether an add is legal now | `eligible_positions_to_add`, `is_undroppable`, `cant_cut_list` | L and G | fields observed, **rules unverified** |
+| Ownership trend | `;out=percent_owned`, with `delta`, per week | G | observed, every player |
+| Pool depth | `players;start=;count=`, 2888 players | G | observed to the last page |
+
+### Injuries, byes and availability to play
+
+| Needs | Source | Scope | State |
+| --- | --- | --- | --- |
+| Bye week | `bye_weeks` | L and G | observed, every player |
+| Injury status | `status`, `status_full` | G | observed — **present on 60 of 300, absent means healthy** |
+| Injury detail | `injury_note` | G | observed, 58 of 300 |
+| News | `has_player_notes`, `player_notes_last_timestamp`, `has_recent_player_notes` | G | observed; the notes themselves unread |
+
+### Trades
+
+| Needs | Source | Scope | State |
+| --- | --- | --- | --- |
+| Trade window | `trade_end_date`, `trade_ratify_type`, `trade_reject_time` | L | observed |
+| Every roster to trade against | `team/<key>/roster` per team | L | **observed for own team only; the other seven unrequested** |
+| Standings, to know who needs what | `team_standings`, `points_for`, `points_against` | L | observed |
+| Yahoo's own suggestions | `teams;out=recommended_trade_partners` | L | observed to exist, contents unread |
+
+### Freshness
+
+| Needs | Source | Scope | State |
+| --- | --- | --- | --- |
+| How stale a read is | `league_update_timestamp` | L | observed |
+| What Yahoo suggests | `@refresh_rate`, `30` on every response | L and G | observed, **never tested against reality** |
+
 ## Still open
 
-Nothing below has been read, and none of it should be assumed:
+Nothing below has been read, and none of it should be assumed. What is left is
+now almost entirely league-scoped, which is to say it needs the signed-in
+browser, or a league configured differently from the one available:
 
-- Player availability: free agent against waiver, and claim deadlines. The
-  `players` sub-resource answered, but was asked only for a count of three and
-  was not inspected for ownership or waiver state.
-- The FAAB balance itself, as opposed to `uses_faab` saying a league has one.
-- Whether `stat_modifiers` covers every case, including negative points and
-  fractional scoring, when read against what Yahoo displays.
-- Pagination, on any list endpoint. `players` takes a `count`; the page-through
-  parameter has not been exercised.
-- Weekly lock rules and kickoff times, and how `weekly_deadline` expresses them.
-- Refresh behaviour and how stale a cached read may be. `refresh_rate` appears
-  on every response as `30` and has not been tested against reality.
-- Whether any of this differs in a keeper league, or one mid-playoffs.
-- What happens to all of it when the season ends.
+- **Availability in a league**: free agent against waiver against taken, and
+  claim deadlines. The `status=A` filter and `;out=ownership` both need league
+  scope, and `ownership` is empty without one. This is the largest gap and the
+  one most features rest on.
+- **The FAAB balance.** Settings say whether a league has one; no response seen
+  carries the number. The league available uses waiver priority rather than
+  FAAB, so this needs a differently configured league to answer at all.
+- **Whether an unowned player is addable now.** Not the same question as
+  availability, and not to be inferred from it.
+- **League-scoped pagination.** Proven at game scope above, including the empty
+  array past the end. Whether a league's own lists behave identically is
+  untested, and `post_draft_players` may change what the list even contains.
+- **Weekly lock rules and kickoff times.** `game_weeks` gives week boundaries,
+  which is not a lock. `weekly_deadline` was `null` in the league read, so what
+  a set value looks like is unseen, and per-game kickoff times were not found at
+  any scope.
+- **Whether `stat_modifiers` covers every case**, including negative and
+  fractional points, read against what Yahoo displays. `uses_negative_points`
+  and `uses_fractional_points` are present; their effect is unchecked.
+- **Stat values, as opposed to stat shape.** Every number read was zero,
+  because nothing had been played. Freshness during a game is unknown, and
+  `refresh_rate` says `30` on every response with nothing yet testing that.
+- **A keeper league, a league mid-playoffs, and a past season.** All three
+  unread. The past season is known to be out of reach through the current
+  route: `nfl.l.<id>` means this season by construction.
+- **What happens to all of it when the season ends.**
 
 ## What runs in the browser, and why it has to
 
@@ -234,7 +477,17 @@ every time it was tried. Worth knowing before reaching for it.
 
 ## Reproducing this
 
-`.\capture.ps1` records it, the same tool the draft protocol was read with. It
+The game scope needs nothing — no browser, no account, no tooling. Any of these
+can be checked from a shell, and should be, because they are the rows this
+document is most confident about:
+
+    curl "https://pub-api-ro.fantasysports.yahoo.com/fantasy/v2/game/nfl/roster_positions?format=json"
+    curl "https://pub-api-ro.fantasysports.yahoo.com/fantasy/v2/game/nfl/stat_categories?format=json"
+    curl "https://pub-api-ro.fantasysports.yahoo.com/fantasy/v2/game/nfl/game_weeks?format=json"
+    curl "https://pub-api-ro.fantasysports.yahoo.com/fantasy/v2/game/nfl/players;count=5;out=percent_owned,draft_analysis?format=json"
+
+The league scope needs the browser, and `.\capture.ps1` records it — the same
+tool the draft protocol was read with. It
 attaches over the DevTools protocol and writes both websocket frames and HTTP
 response bodies to `tools/yahoo/dump`, as they arrive.
 

@@ -1157,6 +1157,53 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     and ownership, the FAAB balance where a league has one, pagination on any
     list, lock rules against kickoff times, and how any of it differs in a
     keeper league or a past season.
+  - Progress, 2026-09-08, and the acceptance artifact is written. The coverage
+    table is in `docs/yahoo-in-season-data.md`, grouped by the feature that
+    fails without each field rather than by endpoint, every row marked with its
+    scope and whether a response actually carried it. Each observed row traces
+    to a capture under `tools/yahoo/dump` or to a request made while writing it.
+  - The finding that reshapes Phase 7, and it was not expected: **the API has
+    two scopes and only one needs the cookie.** Every `/league/...` path answers
+    `401 "You must be logged in to view this league."` with no cookie, and every
+    `/game/nfl/...` path answers `200`. Checked against the same league in the
+    same minute, so it is the scope and not a fluke. So the browser is needed
+    for the league and for nothing else: the pool, injuries, byes, ownership
+    percentages with a weekly `delta`, ADP, the stat vocabulary and the week
+    dates are all public, and the service could fetch them exactly as it
+    already fetches Fantasy Football Calculator and Sleeper. **Recorded, not
+    acted on** — whether it should is Y7.4's, and it moves an architecture
+    boundary.
+  - Closed by direct reading, all without an account: pagination, including the
+    shape trap at the end of a list — a full page reads `count: 25`, the last
+    page `count: 13`, and past the end `players` is a bare `[]` rather than the
+    index-keyed object every other list is, so a pager reading `.count` gets
+    `undefined` instead of zero. The pool was 2888 players, and `count=500`
+    answered in one response despite the documented cap of 25. Injury fields
+    are conditional, not empty: `status` and `status_full` were on 60 of 300
+    players scanned and `injury_note` on 58, so absence means healthy and has
+    to be written down as meaning that. Stats arrive as raw `stat_id` values,
+    never as points, which is why the league's `stat_modifiers` are load-bearing
+    and why points need both scopes at once.
+  - Corrected a claim this repository had recorded as fact: the flex vocabulary
+    **is** published. `/game/nfl/roster_positions` enumerates all 21 slots, the
+    composites among them being `W/T`, `W/R`, `W/R/T` and `Q/W/R/T`. The comment
+    in `server/src/platforms/yahoo/league.js` said that was a vocabulary Yahoo
+    had not published and now says what is actually true. Its decision does not
+    change: what starts still comes from the league's `is_starting_position`,
+    which stays the sturdier reading either way.
+  - Automated validation: none, and none is appropriate — nothing was built.
+    The four game-scope reads are in the document as runnable `curl` lines and
+    all four were re-run exactly as written, answering `200` under a
+    `fantasy_content` envelope, so the document does not ship a broken command.
+  - Not done, and why it cannot be here: the validation asks for a waiver player
+    and a free agent, and both are league-scoped, so they need a signed-in
+    browser run. Also outstanding are the other seven rosters, the FAAB balance
+    — the available league uses waiver priority, so no league on hand can answer
+    it — a set `weekly_deadline`, per-game kickoff times, which were found at no
+    scope, and any keeper or past-season league. Every stat value read was zero
+    because nothing had kicked off, so stat shape is observed and stat values
+    are not. All of it is listed under "Still open" in the document rather than
+    left implied.
 
 - [ ] Y7.3: Establish weekly and remaining-season analysis coverage.
   - Scope: assess usable Yahoo, Sleeper and ESPN data independently of league

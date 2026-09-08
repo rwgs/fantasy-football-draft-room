@@ -137,9 +137,13 @@ function readScoring(settings) {
  *
  * `is_starting_position` is what separates a slot you fill from bench and IR,
  * and it is carried through rather than inferred from the position's name: a
- * flex arrives as a composite like `W/R/T`, and deciding what counts as a
- * starter by reading those strings would be guessing at a vocabulary Yahoo has
- * not published.
+ * flex arrives as a composite like `W/R/T`, and a league says which of its own
+ * slots start. Reading that off the strings instead would mean deciding what
+ * `W/R/T` and `Q/W/R/T` are for, which is a different question from whether
+ * this league starts them. Those names are enumerable, all 21 of them, from
+ * `/game/nfl/roster_positions` — see `docs/yahoo-in-season-data.md` — so a flex
+ * slot's eligible set can be looked up when lineup advice needs it. What starts
+ * still comes from the league.
  */
 function readSlots(settings) {
   return listOf(settings.roster_positions)
