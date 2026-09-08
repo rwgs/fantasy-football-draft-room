@@ -1125,6 +1125,15 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     firing a timer or settling a fetch. That reads exactly like a hung request
     and is not one. A fresh tab fixes it; check liveness with a timer before
     concluding anything about Yahoo.
+  - Left open on purpose, and cheap to reopen: whether this should become a
+    userscript of its own, separate from the bridge, so a league reads itself
+    without a click. Converting it is a metadata header and a match on the same
+    file; nothing service-side moves. The case for it is a league tab left open
+    all season, which a userscript could poll. Judge it against a screen that
+    consumes the snapshot rather than before one exists. `DECISIONS.md` carries
+    the reasoning, including the correction that the first version of that entry
+    overstated: a missing snapshot is perfectly visible, more so than an empty
+    draft board, because nothing is on a clock.
   - Deliberately not built: any in-season screen. There is no such surface in
     the app and inventing one is Phase 8's product question, not this slice's.
     So `shots` says nothing about this work, and the chain ends at the service

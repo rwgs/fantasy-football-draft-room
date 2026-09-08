@@ -44,11 +44,29 @@ running a copy three versions old, and the cause turned out to be a per-
 extension "Allow user scripts" control that was off while the permission itself
 was granted — a state in which a manager registers nothing, injects nothing and
 reports no fault anywhere. A second userscript is a second thing that can fail
-that way, silently, and in-season advice has no equivalent of a draft board
-going visibly empty to reveal it.
+that way, silently.
 
 A bookmarklet has no install, no update, no version and no manager. Whatever it
 does wrong, it does in the open.
+
+The argument that settles it is smaller than it first looks, and worth stating
+so nobody re-derives a bigger one. **Either way the read happens on a Yahoo
+page**, because that is the only origin holding the cookie. A userscript would
+not let the app refresh itself while the user sits in it; it would save a click
+once they are already on the league page, not a trip. Against that click it
+costs four requests on every league page load whether a read was wanted or not.
+At the frequency in-season advice is actually used — setting a lineup, checking
+waivers — a click is a fair price for failing in the open.
+
+### Cheap to reverse, which is why it is decided now
+
+Converting the reader to a userscript is adding a metadata header and a match to
+the same file. Nothing on the service side moves, because it does not care who
+posted. So this is not a door closing, and it should be reopened if the workflow
+turns out to want it — in particular if a league tab stays open all season, when
+a userscript could poll and keep the snapshot warm with no interaction at all.
+Wait for a screen that consumes the snapshot before judging that: there is none
+yet, and refresh ergonomics guessed at without one are guessed at.
 
 ### Cost, stated plainly
 
@@ -64,13 +82,25 @@ app's own tab, and the install page has to say so.
 
 ### Rejected
 
-Widening the bridge's page matches. `PLAN.md` already named it as the shortcut
-to avoid, and it fails the same test the panel entry set: the bridge would gain
-a second job with different privileges, on pages it has no other reason to run
-on, and the two would share a fate.
+Widening the bridge's page matches. It fails the test the panel entry set: the
+bridge would gain a second job on pages it has no other reason to run on, and
+the two would share an install, a version and a manager.
 
-A second userscript. It buys an automatic refresh nobody asked for, at the
-price of the exact failure this project has already paid for twice.
+State the technical part accurately, because it is weaker than it sounds and a
+later reader should not treat it as a wall. The bridge replaces `window.WebSocket`
+at `document-start` and listens to every socket a page opens, identifying the
+draft socket by frame content rather than by URL — and the queue write targets
+whatever that guess landed on. Widening the matches widens that, since one file
+has one `@run-at`. But the league pages that were captured opened no socket at
+all, so the exposure was never observed, and a single guard on
+`location.pathname` would confine the wrapper to `/draftclient/` anyway. The
+objection is real and solvable; the shared install fate is the part that is not.
+
+A second userscript, matched to league pages. This is the option worth keeping
+warm rather than dismissing: it is properly separate from the bridge, which is
+right — different sites, different jobs, different privileges — and it buys the
+click back. It loses the bookmarklet's one virtue, which is that it cannot fail
+to install without saying so. Revisit it against a real workflow, per above.
 
 Reading the league pages' HTML instead, to avoid the API. Rejected on evidence
 rather than taste: the sub-resources answer JSON directly, so the HTML route is
