@@ -435,7 +435,7 @@ Phase 4: prove the platform seam against real leagues.
     day, which stands.
   - Dependencies or blockers: none.
 
-- [ ] Re-post what the app wants queued when the service has forgotten it.
+- [x] Re-post what the app wants queued when the service has forgotten it.
   - Scope: the app posts its wanted list only when the list changes, guarded by
     `lastQueueSent` in `DraftScreen.tsx`. A service restarted mid-draft has
     forgotten `wanted`, the app's guard still holds the same string, and no
@@ -447,10 +447,30 @@ Phase 4: prove the platform seam against real leagues.
     exactly what lifts it, and that is the trap: it hides behind any use.
   - Acceptance criteria: a service that has forgotten a room's wanted list is
     told it again without the user touching a star; nothing is written more
-    often than now while the service does remember.
-  - Dependencies or blockers: none. The reading is already on hand -- the advice
-    route answers `queue.state`, and `off` while the setting is on is exactly
-    the disagreement that should trigger a re-post.
+    often than now while the service does remember. Both met.
+  - Built: the picks read now carries `queueState`, the same `off`/`first`/
+    `ready` the advice route names `queue.state`, on the beat the app already
+    listens to rather than a second poll of its own. `DraftScreen` keeps it, and
+    `off` while the setting is on lifts the guard for exactly one post: the next
+    poll reads `ready`, and a React state set to the value it already holds
+    re-runs nothing, so a service that goes on remembering is written to no more
+    often than before. It is the app's half of the bridge's `needQueue`, which
+    already restores the room's own queue after the same restart.
+  - Automated validation: two checks in `engine:test` under "Writing a Yahoo
+    draft queue" -- a wanted list the service is not holding reads as `off` with
+    the picks, and one it is holding reads as the write it would make. Full
+    `engine:test` green, `server:test` 26 passing, `bridge:test` 7 passing,
+    typecheck and build clean, lint unchanged with nothing in the lines touched.
+  - Manual validation: `npm run shots` clean, no console error, the queue
+    control photographed. The three fixture suites skipped as ever.
+  - What the checks do not reach, and how it was run instead: the service on
+    5178 had been up nineteen hours, nothing from outside says whether it is
+    holding a room, and wiping one is the failure this task is about. So
+    `engine:test` ran against a second service started on 5179 from the new
+    code and the running one was left alone. That covers the reading; the client
+    half is three lines and was read rather than driven, since nothing here can
+    restart a service under a live draft in a browser. Worth watching once on
+    the next mock.
 
 - [ ] Keep a seat off Yahoo's autodraft.
   - Scope: not started, and deliberately not started. Reading the captures for

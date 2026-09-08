@@ -23,7 +23,7 @@ import AdpSourcePicker from './AdpSourcePicker';
 import QueueWriter from './QueueWriter';
 import { ADP_FEEDS } from '../engine/types';
 import type {
-  AppMode, Board, FeedAge, Platform, Player, QueuePriority, QueueWrite, SortKey,
+  AppMode, Board, FeedAge, Platform, Player, QueuePriority, QueueState, QueueWrite, SortKey,
 } from '../engine/types';
 
 /** How often the assistant asks a pulled platform for new picks. */
@@ -148,6 +148,16 @@ export default function DraftScreen(props: Props) {
    * that sets a queue replaces it. See `DECISIONS.md`.
    */
   const [roomQueue, setRoomQueue] = useState<{ id: string | null; name: string }[] | null>(null);
+  /**
+   * What the service says it is doing with the queue this screen asked for.
+   *
+   * Null is a platform that does not answer the question. `off` while the
+   * setting is on is a disagreement, and the one this exists for: a service
+   * restarted mid-draft is handed the picks, the pool and the room's own queue
+   * again by the bridge, and the wanted list by nobody, because this screen is
+   * where it lives.
+   */
+  const [queueState, setQueueState] = useState<QueueState | null>(null);
   const [pane, setPane] = useState<Pane>('pool');
   const [paused, setPaused] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -279,6 +289,7 @@ export default function DraftScreen(props: Props) {
           ? new Map(live.roomAdp.map((r) => [r.id, r.adp]))
           : null);
         setRoomQueue(live.queue ?? null);
+        setQueueState(live.queueState ?? null);
         setLiveError(null);
         setLiveAt(Date.now());
 
@@ -574,11 +585,21 @@ export default function DraftScreen(props: Props) {
       ? null
       : wanted.map((p) => ({ name: p.name, position: p.position, team: p.team }));
 
-    // Posted only when it has changed. The chain is rebuilt on every pick and
-    // most rebuilds say the same thing, and a queue is not worth a request that
-    // asks the room to set what it is already set to.
+    /*
+     * Posted only when it has changed. The chain is rebuilt on every pick and
+     * most rebuilds say the same thing, and a queue is not worth a request that
+     * asks the room to set what it is already set to.
+     *
+     * Unless the service is no longer holding it, which is the one case where
+     * saying the same thing again is the whole point. A restart mid-draft
+     * leaves the room whole and the wanted list gone, and until 2026-09-08 this
+     * guard kept the app silent about it until a star was touched --
+     * which hid it behind any use, since starring a player is exactly what
+     * lifts it. Watched happening during mock `10977360`.
+     */
     const said = draftId + '|' + queuePriority + '|' + JSON.stringify(payload);
-    if (said === lastQueueSent.current) return;
+    const forgotten = payload !== null && queueState === 'off';
+    if (said === lastQueueSent.current && !forgotten) return;
     lastQueueSent.current = said;
 
     void postRoomQueue(platform, draftId, payload, queuePriority).catch(() => {
@@ -586,7 +607,8 @@ export default function DraftScreen(props: Props) {
       // the room keeps whatever queue it already had.
       lastQueueSent.current = null;
     });
-  }, [assistant, platform, draftId, queueWrite, queuePriority, queue, available, queueChain]);
+  }, [assistant, platform, draftId, queueWrite, queuePriority, queue, available, queueChain,
+    queueState]);
 
   const draft = (id: string) => {
     setQueue((q) => q.filter((x) => x !== id));

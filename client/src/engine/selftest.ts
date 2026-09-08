@@ -3140,6 +3140,27 @@ async function yahooQueue() {
     JSON.stringify(off.queue));
 
   /*
+   * And the app is told which of the two it is, on the beat it already listens
+   * to.
+   *
+   * The picks read carries this rather than the advice read, which the panel
+   * over the draft room polls instead. `off` here while the setting is on means
+   * the service is holding no wanted list, which is what a restart mid-draft
+   * leaves behind: the bridge says the picks, the pool and the room's own queue
+   * again, and the list the app asked for exists nowhere but the app. Watched
+   * on 2026-09-07 during mock `10977360` -- the room came back whole and the
+   * queue writing alone stayed dormant, because nothing on either side said so.
+   */
+  const asItStands = async () => (await (await fetch(
+    API + '/api/yahoo/draft/' + LEAGUE + '/picks?' + boardQuery,
+  )).json()).queueState;
+  check('a wanted list the service is not holding reads as off with the picks',
+    await asItStands() === 'off');
+  await want({ queue: [named(squad[1])], priority: 'app' });
+  check('and one it is holding reads as the write it would make',
+    await asItStands() === 'ready');
+
+  /*
    * UN-STARRING TAKES A PLAYER BACK OUT AGAIN.
    *
    * Its own room, because this is a sequence rather than a state and the checks

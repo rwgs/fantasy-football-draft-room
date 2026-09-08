@@ -263,6 +263,18 @@ export async function draftPicks(leagueId, boardQuery) {
     // changes on the same events and asking twice would be two answers to one
     // question. Null until the room has said, which is not the same as empty.
     queue: roomQueue(room, byKey),
+    /*
+     * Whether this service still holds what the app asked to be queued.
+     *
+     * The same reading `readAdvice` names `queue.state`, sent here because this
+     * is the beat the app is already listening on. It is the app's half of
+     * `needQueue` in `room.js`: a service restarted mid-draft is told the
+     * picks, the pool and the last `Q|` again by the bridge, and nothing tells it
+     * the wanted list, which exists nowhere but the app. `off` while the app is
+     * writing a queue is that disagreement, and the app answers it by saying
+     * the list again.
+     */
+    queueState: queuePlan(leagueId).reason,
   };
 }
 

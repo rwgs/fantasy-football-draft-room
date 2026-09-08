@@ -631,6 +631,14 @@ export interface LivePicks {
    * place rather than being dropped, because he is holding one in the room.
    */
   queue?: { id: string | null; name: string }[] | null;
+  /**
+   * What the service makes of the queue this app asked it to write.
+   *
+   * Yahoo only, and the same reading the panel over the draft room shows. `off`
+   * is the one worth acting on: while the setting is on it means the service is
+   * holding no wanted list, which is what a restart mid-draft leaves behind.
+   */
+  queueState?: QueueState;
 }
 
 /**
@@ -642,6 +650,17 @@ export interface LivePicks {
  * out takes a player worth having rather than whatever Yahoo would have picked.
  */
 export type QueueWrite = 'off' | 'mirror' | 'autodraft';
+
+/**
+ * What the service is doing with the queue, as it reports it.
+ *
+ * `off` is nothing asked for, `first` is a write into a room that has never
+ * said what its own queue holds, and `ready` is one merged with a queue that
+ * has been read. The room's own queue survives a restart, because the bridge
+ * says it again; the list this app asked for does not, because this app is the
+ * only place it exists.
+ */
+export type QueueState = 'off' | 'first' | 'ready';
 
 /**
  * Whose entries lead when the app's queue and the room's are merged.
