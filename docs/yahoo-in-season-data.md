@@ -54,8 +54,9 @@ advertising and image traffic that is not worth keeping:
 | `/fantasy/v2/league/<league key>/teams;out=recommended_trade_partners` | Yahoo's own trade suggestions |
 | `/fantasy/v3/getCrumb` | a CSRF crumb, which only writes would need |
 
-The `;out=` suffix is the API's own sub-resource syntax, so the same path
-should extend to other sub-resources. Whether it does is **open**; see below.
+The `;out=` suffix is the API's own sub-resource syntax, and the same path does
+extend to sub-resources the pages never call. That is what closes the gap; see
+below.
 
 ## Who you are
 
@@ -94,7 +95,8 @@ reliable shortcut on its own.
 
 Absent from this response, and needed: the scoring rules themselves and the
 roster slots. `scoring_type` names the *kind* of scoring, not the points per
-reception or per passing yard. See the gap below.
+reception or per passing yard. Both come from the settings sub-resource
+instead, below.
 
 ## Each team
 
@@ -111,52 +113,116 @@ reception or per passing yard. See the gap below.
 
 So standings, waiver priority and transaction counts are all available for
 every team without a second request. `waiver_priority` and `roster_adds` are
-part of what waiver advice needs; the waiver *method* and any FAAB budget are
-not in this response and remain **open**.
+part of what waiver advice needs; the waiver *method* is not in this response
+but is in the settings one, and the FAAB balance is in neither.
 
-## The gap this study found
+## The pages are not the limit
 
-**Observed, and it is the finding that shapes Phase 8.** The pages that display
-settings, rosters and the player pool do not fetch them as JSON. Navigating to
-the league settings page and the players page produced no new `pub-api` calls
-at all — both arrived as server-rendered HTML, 939 KB and 1.09 MB respectively.
-The team page behaved the same way.
+**Observed.** The pages that display settings, rosters and the player pool
+fetch no JSON at all. Navigating to the league settings page and the players
+page produced no new `pub-api` calls — both arrived as server-rendered HTML,
+939 KB and 1.09 MB. The team page behaved the same way.
 
-So the clean JSON route covers the league, the teams and the user, and stops
-exactly where the scoring rules, the roster slots and the rosters themselves
-begin. Those three are the inputs a legal-lineup check cannot do without.
+That looked like the end of the clean route, and it is not. The same API the
+league page already calls answers its own sub-resources, which the pages simply
+do not use. All three were asked for once, read-only, and all three returned
+`200`:
 
-Two ways forward, and the choice is not yet made:
+| Sub-resource | Path |
+| --- | --- |
+| Settings | `/fantasy/v2/league/<league key>/settings` |
+| Roster | `/fantasy/v2/team/<team key>/roster` |
+| Players | `/fantasy/v2/league/<league key>/players;count=<n>` |
 
-1. **Ask the same API for the sub-resources the pages do not.**
-   `/fantasy/v2/league/<key>/settings` and
-   `/fantasy/v2/team/<key>/roster` are standard sub-resources of the API whose
-   envelope these responses already use, and the `;out=` syntax observed above
-   is that API's own. Whether they answer a cookie the way `teams` does is
-   **untested** — the probe was written and not run, because issuing a request
-   the page itself never made is a step beyond observing one, and it needs a
-   decision rather than an assumption.
-2. **Parse the HTML.** It demonstrably contains the data, since the pages
-   display it. It is also the brittle option: a markup change breaks it
-   silently, and 1 MB of advertising-heavy HTML is a poor contract.
+They return XML by default. **`?format=json` switches them to JSON**, under the
+same `fantasy_content` envelope as everything else. So HTML parsing is not
+needed anywhere, and it should not be built.
 
-Option 1 is worth testing before option 2 is costed, because if it answers, it
-gives the same envelope as everything above and the whole snapshot comes from
-one shape.
+One shape quirk to know before writing a reader: a resource comes back as a
+two-element array, not an object. `league[0]` is the metadata and
+`league[1].settings` is the settings; `team[0]` is a 24-entry metadata list and
+`team[1].roster` is the roster. It is the Fantasy API's long-standing JSON
+translation of its XML, and a reader that indexes `[0]` and `[1]` by position
+is doing the normal thing rather than the fragile thing.
+
+## Settings
+
+**Observed**, from `league[1].settings`. This is the response that ends the
+scoring and roster-shape unknown that `importLeague` has carried since the
+platform seam went in.
+
+Roster slots came back as `roster_positions`, and for this league read:
+
+    QB:1  RB:2  WR:2  TE:1  W/R/T:1  K:1  DEF:1  BN:8  IR:2
+
+So the flex slot is named as a composite position, `W/R/T`, and bench and IR
+are slots like any other. Scoring came back as `stat_categories` with 38
+entries and `stat_modifiers` with 35 — the categories name what is counted and
+the modifiers carry the points per unit, which together are the exact scoring
+rules, not just `scoring_type`'s label for them.
+
+The same response also carries what waiver and trade advice needs:
+`waiver_type`, `waiver_rule`, `waiver_days`, `uses_faab`, `waiver_time`,
+`trade_end_date`, `trade_ratify_type`, `trade_reject_time`, `player_pool`,
+`cant_cut_list` and `post_draft_players`, plus `uses_fractional_points` and
+`uses_negative_points`, and the playoff fields `playoff_start_week`,
+`num_playoff_teams` and `has_multiweek_championship`.
+
+## A roster
+
+**Observed**, from `team[1].roster`. 17 players for the team read, each
+carrying:
+
+`player_key`, `player_id`, `name`, `editorial_team_key`,
+`editorial_team_abbr`, `bye_weeks`, `is_keeper`, `uniform_number`,
+`display_position`, `primary_position`, `position_type`, `eligible_positions`,
+`eligible_positions_to_add`, `is_undroppable`, `headshot`, `has_player_notes`
+and `player_notes_last_timestamp`.
+
+Alongside those, `selected_position` — the slot the player is currently
+started in. That pair, `eligible_positions` and `selected_position`, is exactly
+what a legal-lineup check needs: what a player may fill, and what they fill
+now. `bye_weeks` and `is_keeper` come free with it.
+
+`editorial_team_abbr` is worth noting for identity: it is the same team
+abbreviation `server/src/names.js` already joins defences on.
 
 ## Still open
 
 Nothing below has been read, and none of it should be assumed:
 
-- Scoring rules — points per reception, per yard, per touchdown.
-- Roster slots, position eligibility, IR rules and roster limits.
-- Any roster at all, own or otherwise, and current weekly lineups.
-- Player availability: free agent against waiver, and claim deadlines.
-- Waiver method, FAAB budget, and transaction restrictions.
-- The trade deadline and trade rules.
-- Pagination, on any list endpoint.
-- Refresh behaviour and how stale a cached read may be.
+- Player availability: free agent against waiver, and claim deadlines. The
+  `players` sub-resource answered, but was asked only for a count of three and
+  was not inspected for ownership or waiver state.
+- The FAAB balance itself, as opposed to `uses_faab` saying a league has one.
+- Whether `stat_modifiers` covers every case, including negative points and
+  fractional scoring, when read against what Yahoo displays.
+- Pagination, on any list endpoint. `players` takes a `count`; the page-through
+  parameter has not been exercised.
+- Weekly lock rules and kickoff times, and how `weekly_deadline` expresses them.
+- Refresh behaviour and how stale a cached read may be. `refresh_rate` appears
+  on every response as `30` and has not been tested against reality.
 - Whether any of this differs in a keeper league, or one mid-playoffs.
+- What happens to all of it when the season ends.
+
+## What still has to run in the browser
+
+**Decided nowhere yet, and it needs a decision.** Every read above worked
+because the browser attached its own cookie. The service cannot make these
+calls and must not hold what would let it. So something has to run on a Yahoo
+page.
+
+It does not follow that it is a second always-on userscript. The draft bridge
+has to be one, because it must wrap `WebSocket` at `document-start` before the
+room opens; that constraint is what drove the panel out of a userscript manager
+entirely. In-season reading has none of it. These are three ordinary `fetch`
+calls against a stable API, wanted when the user asks rather than continuously,
+which is the shape the existing bookmarklet panel already serves.
+
+The options are a bookmarklet on the league page, a second userscript matched
+to league pages, or widening the draft script's matches — and the last is the
+one `PLAN.md` already warns against as a shortcut. Settle it in Y7.4 and record
+it in `DECISIONS.md` before any of it is built.
 
 ## Reproducing this
 

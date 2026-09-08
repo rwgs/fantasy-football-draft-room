@@ -1048,20 +1048,36 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     established rather than inferred from a seat number is answered by that
     pair, which is something the draft adapter cannot do. The access model fits
     the no-server-credentials rule unchanged: transport stays in the browser.
-  - What it does not settle, and it is the finding that shapes Phase 8: the
-    settings, team and players pages fetch no JSON at all. They arrive as
-    server-rendered HTML, so scoring rules, roster slots and the rosters
-    themselves — the inputs a legal-lineup check needs — are the exact three
-    things the clean route misses.
-  - Blocked on a decision, not on code: whether to ask the same API for
-    `/league/<key>/settings` and `/team/<key>/roster`, which are standard
-    sub-resources of the envelope already in use. The probe is written and was
-    not run. Issuing a request the page never made is a step beyond observing
-    one, and the auto-mode classifier declined it, correctly. The alternative
-    is parsing 1 MB of HTML, which is brittle enough to cost before it is
-    chosen. Ask before running the probe.
+  - The pages themselves stop short: settings, team and players fetch no JSON
+    at all and arrive as server-rendered HTML. The same API answers its own
+    sub-resources anyway, which those pages simply do not call. Asked once each,
+    read-only, on the user's say-so: `/league/<key>/settings`,
+    `/team/<key>/roster` and `/league/<key>/players;count=<n>` all returned 200.
+    XML by default, JSON with `?format=json`, same `fantasy_content` envelope.
+    So no HTML parsing is needed anywhere and none should be built.
+  - Which ends the unknown `importLeague` has carried since the seam went in.
+    Settings gave the roster slots — `QB:1 RB:2 WR:2 TE:1 W/R/T:1 K:1 DEF:1
+    BN:8 IR:2`, flex as a composite position — and the scoring itself as 38
+    `stat_categories` with 35 `stat_modifiers`, plus `waiver_type`,
+    `waiver_rule`, `uses_faab`, `trade_end_date` and the playoff fields. The
+    roster gave 17 players carrying `eligible_positions` and
+    `selected_position`, which is precisely the pair a legal-lineup check
+    needs, with `bye_weeks`, `is_keeper` and `editorial_team_abbr` alongside —
+    the same abbreviation `names.js` already joins defences on.
+  - One shape quirk a reader must know: a resource comes back as a two-element
+    array, `league[0]` metadata and `league[1].settings`, `team[0]` metadata and
+    `team[1].roster`. That is the API's own JSON translation of its XML.
+  - Left for Y7.4, and it is a product decision rather than a gap in the data:
+    every read above worked because the browser attached its own cookie, so
+    something must run on a Yahoo page. It does not follow that it is a second
+    always-on userscript — the draft bridge has to be one only because it wraps
+    `WebSocket` at `document-start`, and in-season reading is three ordinary
+    fetches wanted when asked. Bookmarklet, second userscript, or widening the
+    draft script's matches, which `PLAN.md` already warns against. Decide it
+    before building it.
   - Not done: the API application's status is unchecked. Only the account
-    holder can read it.
+    holder can read it. Worth closing out either way now the browser route
+    reaches everything the application asked for.
   - Tooling fixed while doing this, in git-ignored `tools/`, so it appears in
     no diff: `cdp-watch.mjs` held HTTP response bodies in memory and wrote them
     only from an exit handler that a killed process on Windows never runs.
