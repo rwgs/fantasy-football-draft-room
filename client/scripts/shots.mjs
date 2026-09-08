@@ -270,6 +270,226 @@ async function yahooMock(browser, viewport) {
   return { page, errors };
 }
 
+/**
+ * Post a league snapshot the way the reader bookmarklet does.
+ *
+ * Yahoo's own envelope, invented managers, and real players off the live board
+ * so the cross-source join has real rows to find and the screenshot shows a
+ * roster rather than a column of misses. Through the app's own origin, so this
+ * knows no more about where the service runs than the browser does.
+ */
+async function postSnapshot(id, teams) {
+  const res = await fetch(APP + '/api/board?scoring=ppr&teams=12&adpSource=sleeper');
+  if (!res.ok) throw new Error('no board to build a snapshot from: ' + res.status);
+  const board = await res.json();
+  const list = (items) => {
+    const out = { count: items.length };
+    items.forEach((item, i) => { out[String(i)] = item; });
+    return out;
+  };
+  const key = '470.l.' + id;
+  const player = (p, n, slot) => ({
+    player: [
+      [
+        { player_key: '470.p.' + n }, { player_id: String(n) },
+        { name: { full: p.name } }, { editorial_team_abbr: p.team },
+        { display_position: p.position }, { primary_position: p.position },
+        { eligible_positions: [{ position: p.position }] },
+        { bye_weeks: { week: String(p.bye ?? 7) } },
+      ],
+      { selected_position: [{ position: slot }] },
+    ],
+  });
+
+  /*
+   * Nine each, and the last three benched.
+   *
+   * The bench rows are the point of going past the starting slots: they render
+   * differently, dimmed rather than hidden, and a fixture where every player is
+   * started would photograph a path the app does not usually take. Which
+   * position each is started at is left as their own, since the fixture is not
+   * trying to be a legal lineup — the slots panel above is what says what a
+   * legal one would be.
+   */
+  const HELD = 9;
+  const BENCHED = 3;
+  const rosters = Array.from({ length: teams }, (_, t) => ({
+    fantasy_content: {
+      team: [
+        [{ team_key: key + '.t.' + (t + 1) }],
+        {
+          roster: {
+            week: 3,
+            is_editable: 1,
+            0: {
+              players: list(board.players.slice(t * HELD, (t + 1) * HELD)
+                .map((p, i) => player(
+                  p,
+                  20000 + t * HELD + i,
+                  i >= HELD - BENCHED ? 'BN' : p.position,
+                ))),
+            },
+          },
+        },
+      ],
+    },
+  }));
+
+  const sent = await fetch(APP + '/api/yahoo/league/' + id + '/snapshot', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      settings: {
+        fantasy_content: {
+          league: [
+            {
+              league_key: key, league_id: id, name: 'The Sunday League', game_code: 'nfl',
+              season: '2026', num_teams: teams, scoring_type: 'head', current_week: 3,
+              start_week: '1', end_week: '18',
+            },
+            {
+              settings: [{
+                roster_positions: [
+                  { roster_position: { position: 'QB', count: 1, is_starting_position: 1 } },
+                  { roster_position: { position: 'RB', count: 2, is_starting_position: 1 } },
+                  { roster_position: { position: 'WR', count: 2, is_starting_position: 1 } },
+                  { roster_position: { position: 'TE', count: 1, is_starting_position: 1 } },
+                  { roster_position: { position: 'W/R/T', count: 1, is_starting_position: 1 } },
+                  { roster_position: { position: 'K', count: 1, is_starting_position: 1 } },
+                  { roster_position: { position: 'DEF', count: 1, is_starting_position: 1 } },
+                  { roster_position: { position: 'BN', count: 8, is_starting_position: 0 } },
+                  { roster_position: { position: 'IR', count: 2, is_starting_position: 0 } },
+                ],
+                stat_categories: {
+                  stats: [
+                    { stat: { stat_id: 4, name: 'Passing Yards', abbr: 'Yds', enabled: '1' } },
+                    { stat: { stat_id: 5, name: 'Passing Touchdowns', abbr: 'TD', enabled: '1' } },
+                    { stat: { stat_id: 11, name: 'Receptions', abbr: 'Rec', enabled: '1' } },
+                    { stat: { stat_id: 78, name: 'Targets', abbr: 'Tgt', enabled: '1' } },
+                  ],
+                },
+                stat_modifiers: {
+                  stats: [
+                    { stat: { stat_id: 4, value: '0.04' } },
+                    { stat: { stat_id: 5, value: '4' } },
+                    { stat: { stat_id: 11, value: '0.5' } },
+                  ],
+                },
+                waiver_type: 'FR', waiver_rule: 'continuous', uses_faab: '0',
+                trade_end_date: '2026-11-27',
+              }],
+            },
+          ],
+        },
+      },
+      teams: {
+        fantasy_content: {
+          league: [
+            { league_key: key },
+            {
+              teams: list(Array.from({ length: teams }, (_, t) => ({
+                team: [[
+                  { team_key: key + '.t.' + (t + 1) }, { team_id: String(t + 1) },
+                  { name: t === 1 ? 'Gridiron Gulls' : 'Team ' + (t + 1) },
+                  { waiver_priority: t + 1 }, { number_of_moves: t }, { number_of_trades: 0 },
+                  { managers: [{ manager: { guid: t === 1 ? 'GUID-MINE' : 'GUID-' + t } }] },
+                ]],
+              }))),
+            },
+          ],
+        },
+      },
+      rosters,
+      /*
+       * The second team is the user's, so the screenshot shows the own-team
+       * mark landing somewhere other than first. That is the whole point of
+       * matching on the guid rather than on a position in the list, and a
+       * fixture where the user happened to be first would photograph the same
+       * either way.
+       */
+      profile: { fantasy_content: { users: { count: 1, 0: { user: [{ guid: 'GUID-MINE' }] } } } },
+    }),
+  });
+  /*
+   * The reply is read, and not only for the status.
+   *
+   * Read because it says how much of the snapshot survived, which turns the
+   * post into a check: a screenshot of eight empty rosters would photograph
+   * perfectly. And read because leaving a response body unconsumed tripped
+   * Node's own HTTP parser here — `assert(!this.paused)` out of undici on
+   * socket close, which looks like nothing to do with this code.
+   */
+  const body = await sent.json().catch(() => ({}));
+  if (!sent.ok) throw new Error('the service refused the snapshot: ' + sent.status);
+  if ((body.rosters || []).length !== teams) {
+    throw new Error('posted ' + teams + ' rosters and the service read '
+      + (body.rosters || []).length);
+  }
+}
+
+/**
+ * The in-season league view, in both of its states.
+ *
+ * The empty one first and deliberately: "nothing read yet" is the state every
+ * user meets before they have run the bookmarklet, and the failure it has to
+ * avoid is looking like a league with no teams in it. Then the same screen with
+ * a league behind it.
+ */
+async function yahooSeason(browser, viewport) {
+  const id = String(Date.now()).slice(-9);
+  const page = await browser.newPage({ viewport });
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+
+  await page.addInitScript(([key, state]) => {
+    localStorage.setItem(key, JSON.stringify(state));
+  }, [STORE, {
+    mode: 'assistant',
+    activeLeagueId: id,
+    savedLeagues: [savedYahooLeague(id)],
+  }]);
+
+  await page.goto(APP, { waitUntil: 'domcontentloaded' });
+  const open = page.getByRole('button', { name: 'My league in season' });
+  await open.waitFor({ state: 'visible', timeout: 60000 });
+  await open.click();
+
+  /*
+   * ONE LEAGUE AND ONE PAGE, WHICH IS ALSO THE REAL JOURNEY.
+   *
+   * The empty state comes first because it is the one every user meets before
+   * they have run the bookmarklet, and the failure it exists to avoid is
+   * looking like a league with no teams in it. Then the snapshot is posted the
+   * way the bookmarklet posts one and the same screen is asked again, which is
+   * exactly what a user does: install, click, come back, press Read again.
+   *
+   * No reload and no reaching into storage between the two. `addInitScript`
+   * runs on every navigation, so a reload puts the seeded state back and
+   * silently undoes anything set since — which cost a run here.
+   */
+  await page.getByText('Nothing read yet').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await page.screenshot({ path: join(OUT, 'season-unread.png') });
+  console.log('  season-unread.png');
+
+  await postSnapshot(id, 8);
+  await page.getByRole('button', { name: 'Read again' }).click();
+  await page.getByText('The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+
+  /*
+   * The own-team mark is the acceptance criterion worth photographing, and the
+   * fixture puts it on the second roster on purpose, so the shot has to reach
+   * it. A failure here is the guid match having fallen back to a position.
+   */
+  await page.getByText('Gridiron Gulls').waitFor({ state: 'visible' });
+  const marks = await page.locator('.season-roster-head .chip').count();
+  if (marks !== 1) {
+    throw new Error('expected exactly one roster marked as yours, found ' + marks);
+  }
+
+  return { page, errors };
+}
+
 async function shoot(page, selector, name) {
   await page.locator(selector).screenshot({ path: join(OUT, name + '.png') });
   console.log('  ' + name + '.png');
@@ -361,6 +581,21 @@ async function main() {
     await page.close();
   } catch (err) {
     failures.push('yahoo-mock: ' + err.message);
+  }
+
+  console.log('yahoo-season:');
+  try {
+    const { page, errors } = await yahooSeason(browser, WIDE);
+    await page.screenshot({ path: join(OUT, 'season-full.png'), fullPage: true });
+    console.log('  season-full.png');
+    // The user's own roster rather than the first, since the fixture puts the
+    // two in different places on purpose.
+    await shoot(page, '.season-roster:has(.chip)', 'season-roster');
+
+    if (errors.length) failures.push('yahoo-season: ' + errors.join(' | '));
+    await page.close();
+  } catch (err) {
+    failures.push('yahoo-season: ' + err.message);
   }
 
   await browser.close();

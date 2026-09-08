@@ -1,6 +1,6 @@
 import type {
   Board, BridgeReport, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState,
-  NoteSet, Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState,
+  NoteSet, Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState, SeasonRead,
 } from './engine/types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -159,6 +159,29 @@ export async function fetchBridge(): Promise<BridgeReport> {
 export async function fetchRoomState(platform: Platform, leagueId: string): Promise<RoomState> {
   const res = await fetch(on(platform, '/room/' + encodeURIComponent(leagueId)),
     { cache: 'no-store' });
+  if (!res.ok) return fail(res);
+  return res.json();
+}
+
+/**
+ * A league in season: every roster, joined to the pool and the board.
+ *
+ * Answers rather than refusing when nothing has been read, exactly as
+ * `fetchRoomState` does and for the same reason: the app asks this when the
+ * screen opens, which is before the user has clicked the bookmarklet.
+ *
+ * Takes the board query because the cross-source join needs a board, and it has
+ * to be the same board the rest of the app is looking at.
+ */
+export async function fetchSeason(
+  platform: Platform,
+  leagueId: string,
+  q: BoardQuery,
+): Promise<SeasonRead> {
+  const res = await fetch(
+    on(platform, '/league/' + encodeURIComponent(leagueId) + '/season?' + query(q)),
+    { cache: 'no-store' },
+  );
   if (!res.ok) return fail(res);
   return res.json();
 }

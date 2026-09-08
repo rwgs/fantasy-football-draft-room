@@ -629,7 +629,15 @@ app.get('/api/:platform/league/:id/season', async (req, res) => {
   }
   try {
     res.set('cache-control', 'no-store');
-    res.json(await target.platform.readSeason(target.id, readQuery(req.query)));
+    res.json({
+      ...await target.platform.readSeason(target.id, readQuery(req.query)),
+      // Where to install the reader, said here rather than written into the
+      // client for the reason `/api/bridge/build` gives: the client knows this
+      // service only as a proxied `/api` and cannot name the port it is on. It
+      // rides on this answer because this is the answer that says nothing has
+      // been read, which is exactly when the address is worth having.
+      readerUrl: serviceOrigin(PORT) + '/league-reader',
+    });
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }

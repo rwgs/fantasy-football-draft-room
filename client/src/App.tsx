@@ -1,25 +1,33 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchBoard, fetchBridge, fetchDraftPicks, fetchLeague, fetchLeagueSetup, fetchRoomState,
-  matchNotes, matchRankings,
+  fetchSeason, matchNotes, matchRankings,
 } from './api';
 import { maskLeague } from './anon';
 import { keeperPicksIn } from './engine/order';
 import { livePresets, mergePresets, offBoardPlayer } from './engine/live';
 import DraftScreen from './components/DraftScreen';
 import ResultsScreen from './components/ResultsScreen';
+import SeasonScreen from './components/SeasonScreen';
 import SetupScreen from './components/SetupScreen';
 import { createDraft, runToUserTurn } from './engine/draft';
 import type { DraftEngine } from './engine/draft';
 import { YAHOO_MOCK_ROSTER, rosterSize } from './engine/roster';
 import type {
   AppMode, Board, BridgeStatus, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
-  NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague, SortKey,
+  NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague, SeasonRead,
+  SortKey,
 } from './engine/types';
 import type { RankingSource, Theme } from './storage';
 import { load, save } from './storage';
 
-type Screen = 'setup' | 'draft' | 'results';
+/**
+ * `season` is a fourth screen rather than a third mode, decided with the
+ * repository owner rather than assumed. The mode badge says how a *draft* runs,
+ * mock against assistant, and a league in season is not a draft, so the draft
+ * flow is untouched and this sits beside it.
+ */
+type Screen = 'setup' | 'draft' | 'results' | 'season';
 
 /** How often a Yahoo mock named before its room exists is asked about. */
 const ROOM_WAIT_MS = 5000;
@@ -156,6 +164,13 @@ export default function App() {
 
   const [engine, setEngine] = useState<DraftEngine | null>(null);
   const [screen, setScreen] = useState<Screen>('setup');
+
+  // The league in season, read only when the screen asking for it is open.
+  // Nothing in season is on a clock, so this is never polled: it changes when
+  // the user runs the bookmarklet, and pressing Read again is how they say so.
+  const [seasonRead, setSeasonRead] = useState<SeasonRead | null>(null);
+  const [seasonBusy, setSeasonBusy] = useState(false);
+  const [seasonError, setSeasonError] = useState<string | null>(null);
 
   // A different scoring format is a different board, and a different board can
   // match a different set of names. Run the file again rather than leave a
@@ -823,6 +838,31 @@ export default function App() {
     }
   }, [liveDraftId, activePlatform, league.scoring, league.teams, league.adpSource, league.year]);
 
+  /**
+   * Read the league in season, joined to the feeds behind it.
+   *
+   * A refusal is an error to show; "nothing read yet" is not, and comes back as
+   * an ordinary answer with `read: false`, which the screen turns into the
+   * bookmarklet instructions rather than a fault.
+   */
+  const loadSeason = useCallback(async () => {
+    if (!activeLeagueId) return;
+    setSeasonBusy(true);
+    setSeasonError(null);
+    try {
+      setSeasonRead(await fetchSeason(activePlatform, activeLeagueId, {
+        scoring: league.scoring,
+        teams: league.teams,
+        adpSource: league.adpSource,
+        year: league.year,
+      }));
+    } catch (err) {
+      setSeasonError('Your league could not be read. ' + String((err as Error).message));
+    } finally {
+      setSeasonBusy(false);
+    }
+  }, [activeLeagueId, activePlatform, league.scoring, league.teams, league.adpSource, league.year]);
+
   // How far along the draft is goes stale by the minute once it opens, so it is
   // read when you ask for it and whenever the league changes under it.
   useEffect(() => {
@@ -976,6 +1016,25 @@ export default function App() {
         <span className={'mode-badge' + (mode === 'assistant' ? ' is-live' : '')}>
           {mode === 'assistant' ? 'Draft assistant' : 'Mock'}
         </span>
+
+        {/*
+          * The way in to the league in season.
+          *
+          * On the setup screen only, and only for the platform that can be read
+          * in season. A draft under way is exactly when a navigation button is
+          * a hazard rather than a convenience, and leaving mid-draft is not a
+          * click anyone should make by accident.
+          */}
+        {screen === 'setup' && activePlatform === 'yahoo' && activeLeagueId && (
+          <button
+            type="button"
+            className="chip"
+            title="Your Yahoo league as it stands: every roster, the slots and the scoring."
+            onClick={() => { setScreen('season'); void loadSeason(); }}
+          >
+            My league in season
+          </button>
+        )}
 
         {/*
           * The bridge's own account of itself, shown whenever one is talking.
@@ -1313,6 +1372,17 @@ export default function App() {
           anonymous={anonymous}
           onRestart={restart}
           onNewSettings={() => setScreen('setup')}
+        />
+      )}
+
+      {screen === 'season' && (
+        <SeasonScreen
+          read={seasonRead}
+          loading={seasonBusy}
+          error={seasonError}
+          anonymous={anonymous}
+          onRefresh={() => { void loadSeason(); }}
+          onBack={() => setScreen('setup')}
         />
       )}
     </div>

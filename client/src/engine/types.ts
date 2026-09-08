@@ -806,3 +806,187 @@ export interface RoomAdvice {
     beforeCliff: number;
   }[];
 }
+
+/*
+ * A YAHOO LEAGUE IN SEASON, AS THE SERVICE HANDS IT BACK.
+ *
+ * The draft types above describe a board and a draft. These describe a league
+ * that already happened: rosters as they stand, the slots and scoring the
+ * commissioner set, and how old each feed behind them is.
+ *
+ * Nothing here is a projection or a recommendation. Phase 8 shows a league.
+ */
+
+/** One slot in a league's roster shape, and what the published vocabulary says it takes. */
+export interface SeasonSlot {
+  position: string;
+  count: number;
+  /** The league's own answer, from `is_starting_position`. */
+  starting: boolean;
+  /**
+   * The positions this slot accepts, resolved from Yahoo's published slot list.
+   *
+   * Null on bench and IR, which take anybody and have nothing to resolve, and
+   * null on a starting slot this app could not explain — which is what
+   * `unresolved` separates from the first case.
+   */
+  accepts: string[] | null;
+  unresolved: boolean;
+}
+
+/** One scoring rule: what is counted, and what it is worth. */
+export interface SeasonScoring {
+  statId: string;
+  name: string | null;
+  abbr: string | null;
+  group: string | null;
+  enabled: boolean;
+  /** Null where the league counts a stat and sets no value on it. */
+  points: number | null;
+}
+
+/** What Yahoo's public pool says about a player, or null where it never matched him. */
+export interface SeasonPoolRecord {
+  /**
+   * Yahoo's own status code, carried and never interpreted.
+   *
+   * NOT AN INJURY FLAG. `NA` is 44% of the pool and means unrostered, so which
+   * codes make a player unstartable is a question about a league's rules. See
+   * `server/src/sources/yahooPlayers.js` for the nine codes.
+   */
+  status: string | null;
+  statusFull: string | null;
+  injuryNote: string | null;
+  byeWeek: number | null;
+  percentOwned: number | null;
+  /** What ownership did over the last week, which is the part that is a signal. */
+  percentOwnedDelta: number | null;
+  percentOwnedWeek: number | null;
+}
+
+export interface SeasonPlayer {
+  playerKey: string;
+  playerId: string;
+  name: string | null;
+  team: string | null;
+  displayPosition: string | null;
+  primaryPosition: string | null;
+  /** Every position Yahoo says he is eligible at, kept whole. */
+  positions: string[];
+  /** What he is started in right now, bench and IR included. */
+  selectedPosition: string | null;
+  isFlex: boolean;
+  byeWeek: number | null;
+  isKeeper: boolean;
+  /** Which of the league's starting slots he may fill, by slot name. */
+  fills: string[];
+  /**
+   * The two joins, nested rather than spread.
+   *
+   * Null means this join never found him, which is a different thing from a
+   * field being empty: a spread record would leave "healthy" and "never found"
+   * both reading as null.
+   */
+  pool: SeasonPoolRecord | null;
+  board: Player | null;
+}
+
+export interface SeasonRoster {
+  teamKey: string | null;
+  week: number | null;
+  editable: boolean;
+  /** Whether this is the user's own team, from the guid and never from a seat. */
+  own: boolean;
+  players: SeasonPlayer[];
+  matched: { pool: number; board: number; of: number };
+  /** Named rather than counted, so a miss points at a player to go and look at. */
+  unmatched: { pool: string[]; board: string[] };
+}
+
+export interface SeasonTeam {
+  teamKey: string;
+  teamId: string;
+  name: string | null;
+  waiverPriority: number | null;
+  moves: number | null;
+  trades: number | null;
+  managers: { guid: string | null; nickname: string | null }[];
+}
+
+/** The league as the browser read it, before anything was joined to it. */
+export interface LeagueSnapshot {
+  leagueKey: string;
+  leagueId: string;
+  name: string | null;
+  gameCode: string | null;
+  season: string;
+  numTeams: number | null;
+  scoringType: string | null;
+  week: {
+    current: number | null;
+    start: number | null;
+    end: number | null;
+    matchup: number | null;
+    deadline: string | null;
+  };
+  slots: { position: string; count: number; starting: boolean }[];
+  scoring: SeasonScoring[];
+  waivers: { type: string | null; rule: string | null; days: string | null; usesFaab: boolean };
+  trades: { endDate: string | null; ratifyType: string | null };
+  ownGuid: string | null;
+  ownTeamKey: string | null;
+  teams: SeasonTeam[];
+  rosters: { teamKey: string | null; week: number | null; players: unknown[] }[];
+  /**
+   * Whether the copy of the reader that posted this can read every roster.
+   *
+   * A bookmarklet carries its whole source in the address it was dragged from
+   * and cannot update itself, so an old copy sends one roster. Said out loud,
+   * because one roster in an eight-team league otherwise looks like Yahoo
+   * having failed rather than like a bookmark to re-drag.
+   */
+  readerBehind: boolean;
+  readAt: number;
+}
+
+/** One feed's age, and whether it answered at all. */
+export interface SeasonFeed {
+  fetchedAt: number | null;
+  stale: boolean;
+  error: string | null;
+}
+
+export interface SeasonRead {
+  /** False before the bookmarklet has ever been run, which is not a fault. */
+  read: boolean;
+  hint?: string;
+  /**
+   * Where to install the reader bookmarklet.
+   *
+   * From the service, on the same reasoning as the bridge's `installUrl`: the
+   * client reaches the service as a proxied `/api` and cannot name the port it
+   * is really on, and `PORT` is a documented setting.
+   */
+  readerUrl: string;
+  snapshot?: LeagueSnapshot | null;
+  league: {
+    slots: SeasonSlot[];
+    /** Starting slots this app cannot reason about, named rather than counted. */
+    unresolvedSlots: string[];
+    rosters: SeasonRoster[];
+    matched: { pool: number; board: number; of: number; rosters: number };
+  } | null;
+  /**
+   * Per feed rather than one age for the lot.
+   *
+   * They are fetched apart, so a single age would report whichever happened to
+   * refresh last. `league` is dated by when the browser read it, since it was
+   * never a feed.
+   */
+  feeds: {
+    league: SeasonFeed;
+    pool: SeasonFeed;
+    vocabulary: SeasonFeed;
+    board: SeasonFeed;
+  } | null;
+}

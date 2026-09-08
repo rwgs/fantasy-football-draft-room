@@ -1346,7 +1346,9 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 ### Phase 8 tasks, in order
 
 Split from the contract in `PLAN.md`, "What discovery settled". **Phase 8 was
-authorized 2026-09-08; Y8.1, Y8.2 and Y8.3a are done, Y8.3b onward unstarted.** Each is
+authorized 2026-09-08; Y8.1 to Y8.3b are done and Y8.4 is unstarted. Phase 8 is
+not complete: Y8.3b's comparison against the owner's own league needs a
+signed-in browser and has not been done.** Each is
 one reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
 league, and nothing in it recommends anything.
 
@@ -1575,25 +1577,82 @@ are divided between them and none was dropped.
     this work beyond confirming no regression, exactly as Y8.1 and Y8.2.
   - Dependencies: Y8.2.
 
-- [ ] Y8.3b: The in-season screen.
-  - Scope: a fourth screen — `season`, alongside `setup`, `draft` and `results`
-    — reached from the setup screen, showing the league, the own team, every
-    roster, the roster slots, the scoring rules and the age of each feed. Read
-    only. No projections and no advice.
+- [x] Y8.3b: The in-season screen.
+  - Scope: new `client/src/components/SeasonScreen.tsx` and a fourth screen —
+    `season`, alongside `setup`, `draft` and `results` — reached from a masthead
+    button offered only on the setup screen and only for Yahoo. Shows the
+    league, the own team, every roster, the roster slots, the scoring rules and
+    the age of each feed. Read only. No projections and no advice.
   - Decided with the user rather than assumed: a fourth screen and not a third
     mode. The mode badge distinguishes how a *draft* runs, mock against
     assistant, which an in-season view is not, so the draft flow is untouched
-    and `SPEC.md`'s two-mode framing stands.
-  - Acceptance: the two criteria Y8.3a could not reach — every roster and
-    setting agrees with Yahoo, and a missing snapshot reads as "not read yet"
-    with the bookmarklet offered rather than as an empty league. A reader
-    reported as behind says so.
-  - Automated: `shots` extended to photograph the in-season view, including the
-    no-snapshot state, while keeping both draft modes.
-  - Manual: read the real league through the bookmarklet and compare all eight
-    rosters and every setting against Yahoo, in a browser, with screenshots.
-    **This is the run that has never happened for every roster** — the reader
-    only ever fetched one before Y8.3a.
+    and `SPEC.md`'s two-mode framing stands. The button is kept off the draft
+    screen deliberately — a draft under way is when a navigation button is a
+    hazard rather than a convenience.
+  - The design rule the whole screen is built on: **every absence says which
+    absence it is.** A player the pool never matched reads "not in the pool"
+    rather than showing a blank ownership column, a feed that failed says
+    "failed" rather than the age of its last good copy, and a league nobody has
+    read is offered the bookmarklet rather than rendered as a league with no
+    teams in it.
+  - Acceptance criteria met: a missing snapshot reads as "not read yet" with
+    the install link, and a reader reported as behind says so with the fix. The
+    fourth — every roster and setting agreeing with Yahoo — needs the owner's
+    own league in a signed-in browser and is **outstanding**, below.
+  - Built while doing it, since the route had nowhere to say it: the season
+    response carries `readerUrl`, from `serviceOrigin(PORT)` in the route rather
+    than a literal in the client, on the same reasoning as the bridge's
+    `installUrl` — the client knows the service only as a proxied `/api` and
+    cannot name the port it is really on, and `PORT` is a documented setting. A
+    dead install link offered at the moment the user has just been told to click
+    it is this repository's own recurring failure.
+  - Automated validation: `shots` extended with a `yahoo-season` scenario
+    photographing both states — `season-unread.png`, `season-full.png` and
+    `season-roster.png` — while keeping both draft modes and every existing
+    shot. It posts a snapshot the way the bookmarklet does, then presses Read
+    again, which is the real user journey rather than a reload. Two checks
+    inside it beyond the pictures: the post asserts the service read all eight
+    rosters, and exactly one roster must carry the own-team mark. Typecheck,
+    `server:test` 95, `bridge:test` 7, `engine:test` green, build clean, `shots`
+    clean with no console errors. Lint unchanged at 43.
+  - **Three faults found by running it, all fixed.** `addInitScript` re-runs on
+    every navigation, so the first scenario's `page.reload()` put the seeded
+    league id back and silently undid the one it had just set — the screen then
+    correctly said "nothing read yet" about a league nothing had been posted
+    for, which looked like the feature being broken. The scenario now uses one
+    league and no reload. An unconsumed response body tripped Node's own HTTP
+    parser, `assert(!this.paused)` out of undici on socket close, which looks
+    like nothing to do with this code; the reply is now read, and read for its
+    contents rather than only to drain it. And `.banner` is a flex row, so every
+    child gets a gap: the inline install link came out spaced away from the
+    comma after it until the sentence became one child, which is the shape the
+    bridge banners already used.
+  - Manual validation: **the pool-matched render path photographed by hand,
+    because `shots` cannot reach it.** The harness talks to the app and no
+    endpoint hands out Yahoo's own player ids, so its fixture invents them and
+    every row honestly reads "not in the pool" — which is correct and is a poor
+    illustration. Driven separately against the real pool with real player keys:
+    9 of 9 in the pool, 9 of 9 on the board, ownership at 100% on every row and
+    Yahoo's own codes spelt out, "Questionable" against three of them. The
+    stale-reader banner was photographed the same way, since forcing it needs a
+    snapshot posted in the old shape. Both runs clean of console errors.
+  - Also confirmed in the browser: the composite flex reads
+    `W/R/T (WR, RB or TE)` off the vocabulary the service fetched, the four feed
+    ages are separate with the league dated "read in your browser", bench rows
+    dim rather than vanish, and the own-team mark lands on the second roster
+    because the guid says so rather than the position in the list.
+  - **Outstanding, and it is the criterion this task exists to meet:** reading
+    the owner's real league through the bookmarklet and comparing all eight
+    rosters and every setting against Yahoo. Only the account holder can do it,
+    it needs a signed-in browser, and **it has never been done for every
+    roster** — the reader only ever fetched one before Y8.3a. Everything above
+    is synthetic or public data.
+  - Driven throughout against an isolated pair, a service on 5179 and a client
+    on 5180 pointed at it, rather than restarting 5178, which had been up for
+    hours and could have been mirroring a draft.
+  - Not built, and it belongs to Y8.4: `shots` coverage of the failure states.
+    The stale-reader banner and a failed feed are photographed by hand here and
+    are Y8.4's to make routine, along with a league switch and a restart.
   - Dependencies: Y8.3a.
 
 - [ ] Y8.4: Make the failure states of the view honest.

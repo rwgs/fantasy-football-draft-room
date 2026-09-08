@@ -2047,3 +2047,62 @@ input[type='range']::-moz-range-thumb {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The in-season league view. Reuses `.results` for its scroll and centring,
+   because it is the same kind of screen: read only, one column of panels. What
+   it needs of its own is a header row and a roster table. */
+.season-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.season-head b { font-size: 17px; }
+
+.season-roster + .season-roster {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.season-roster-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.season-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.season-table th {
+  text-align: left;
+  font-family: var(--narrow);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--chalk-3);
+  padding: 0 8px 5px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.season-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line-soft); }
+.season-table .num { text-align: right; padding-right: 14px; }
+
+/* A bench player is still on the roster and still worth reading, so this dims
+   rather than hides. The draft's roster panel dims an empty slot the same way. */
+.season-table tr[data-bench='true'] td { opacity: 0.55; }
+
+.season-scoring {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+.season-scoring b { color: var(--chalk); }
