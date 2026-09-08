@@ -9,6 +9,120 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-08 The service fetches Yahoo's public half; the browser keeps the league
+
+Status: Accepted. Narrows `The in-season reader is a bookmarklet, like the
+panel` below, which decided how a *league* is read and did not know this
+existed.
+
+### Decision
+
+Yahoo's API has two scopes, and this project treats them as two different
+sources.
+
+`/fantasy/v2/game/nfl/...` is public. **The service fetches it directly**, with
+its own module under `server/src/sources/`, cached on disk through
+`server/src/cache.js`, exactly as Fantasy Football Calculator, Sleeper and ESPN
+already are. No browser is involved and no click is needed.
+
+`/fantasy/v2/league/<key>/...` is not public. It stays exactly where the
+bookmarklet decision put it: read in the browser, on the user's own cookie,
+posted to the service, held in bounded memory and never written to the disk
+cache.
+
+### Why
+
+The scopes do not authenticate alike, which was measured rather than assumed.
+Asked with no cookie at all, from a shell, every league path answered `401`
+with "You must be logged in to view this league" and every game path answered
+`200`. Same league, same season, same minute. `docs/yahoo-in-season-data.md`
+records the reading and `docs/in-season-data-sources.md` places it against the
+other three feeds.
+
+What sits in the public half is most of what weekly advice needs about players:
+the 2888-player pool, injury status and detail, bye weeks, an ownership
+percentage carrying a weekly delta, ADP, the 108-stat vocabulary and the week
+dates. None of that is about anyone's league, so making a user click a
+bookmarklet to obtain it would be asking them to authorise a public fact.
+
+Three things follow, and they are the reason this is worth an entry:
+
+- **It is a feed, so it gets what feeds get.** One fetch serves every request
+  rather than one per snapshot, the existing disk cache and staleness handling
+  apply unchanged, and an in-season screen can render player data with no Yahoo
+  tab open anywhere.
+- **The privacy boundary gets sharper, not blurrier.** The rule was "no
+  credentials in the service". It now reads: the service fetches what needs no
+  credentials, and touches nothing that does. Public player data on disk,
+  private league data in memory only, which is what `SPEC.md` already asks for.
+- **The bookmarklet gets smaller.** It reads four league resources and does not
+  grow a fifth for the pool.
+
+### What was rejected, and what would reopen it
+
+Widening the bookmarklet to fetch the game scope too, keeping one transport.
+Rejected because it makes a public fetch depend on a click, a Yahoo tab and a
+session, and because it would put the same bytes through a per-snapshot path
+instead of a shared cache.
+
+Leaving the choice until a screen existed, which is how the
+bookmarklet-versus-userscript question was deliberately handled. Rejected here
+because that question turned on a cost only a consumer could weigh, and this one
+does not: the scope boundary is measured, and the cheaper side of it is already
+a solved pattern in this repository.
+
+What would reopen it is Yahoo putting the game scope behind a session. The
+symptom would be a `401` from a path that has never needed one, and the fallback
+is the rejected option above — the bookmarklet already runs where a cookie is.
+
+## 2026-09-08 Weekly projections come from two sources, and the disagreement shows
+
+Status: Accepted. Extends the reasoning in `espnRanks.js` from draft ranks to
+weekly projections.
+
+### Decision
+
+Weekly and remaining-season projections are taken from **both Sleeper and
+ESPN**, kept separately with their own source, week and update time, and the
+spread between them is shown rather than averaged away.
+
+Yahoo is not a projection source; it publishes none at any public path. Fantasy
+Football Calculator is not either; it has nothing weekly at all.
+
+### Why
+
+Both were measured to cover the full regular season — Sleeper weeks 1 to 18,
+ESPN weeks 0 to 18 where 0 is the season total, so ESPN answers
+rest-of-season directly rather than by summing. `docs/in-season-data-sources.md`
+has the evidence.
+
+Taking both is the same argument `espnRanks.js` already makes about the draft
+board, applied one level along. Sleeper's weekly numbers are Rotowire's, which
+it names in `company`. ESPN's are ESPN's own. Two independent desks disagreeing
+about a player in a given week is information about confidence, and a mean of
+the two destroys exactly that. The project already treats agreement between two
+measurements of the same thing as one number counted twice, and this is the
+opposite case: two genuinely separate opinions.
+
+It also removes a single point of failure from the first feature anyone would
+use. A week where one feed has not published is a week with an answer and a
+caveat rather than no answer.
+
+### What this does not decide, and the cost
+
+It does not say how the two are combined into one recommendation. Showing a
+range, preferring one as primary, or refusing to advise when they diverge past
+some width are all still open, and belong with the lineup calculation in Phase 9
+where there is something to test them against.
+
+**Nothing here claims the two agree.** No comparison between them has been run.
+How far apart they typically sit is unmeasured, and if it turns out to be wide
+enough that the spread swamps the advice, that is a finding for Phase 9 and may
+force this entry to be narrowed to one source.
+
+The cost is two feeds to keep working instead of one, and a reconciliation step
+that a single source would not need. Both were accepted with that in view.
+
 ## 2026-09-08 The in-season reader is a bookmarklet, like the panel
 
 Status: Accepted. Applies `The panel is a bookmarklet, not part of the bridge`

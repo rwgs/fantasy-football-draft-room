@@ -1286,7 +1286,7 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     so nothing here says which projection is better — only which exist. Rate
     limits were not found, which is not the same as absent.
 
-- [ ] Y7.4: Close discovery with a concrete implementation design.
+- [x] Y7.4: Close discovery with a concrete implementation design.
   - Scope: update PLAN.md with the observed reader approach, minimum snapshot
     contract, refresh/stale policy, identity mapping and source selection;
     create small Phase 8 tasks with automated and manual checks.
@@ -1299,15 +1299,138 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
     rollback and the outstanding real-league checks for implementation.
   - Dependency: Y7.1-Y7.3. Stop for a decision if the demonstrated approach
     requires changing an existing product or architecture boundary.
+  - Done, 2026-09-08. It did require a boundary decision, so it stopped and
+    asked rather than choosing: the two questions were where the public game
+    scope is fetched from, and which projection source the design names. Both
+    were answered by the repository owner and are recorded in `DECISIONS.md`
+    under this date.
+  - Decided: **the service fetches Yahoo's public half directly**, as an
+    ordinary source module cached on disk like Fantasy Football Calculator,
+    Sleeper and ESPN, while the league half stays in the browser and in bounded
+    memory. That sharpens the privacy boundary rather than blurring it — the
+    service fetches what needs no credentials and touches nothing that does,
+    which is what `SPEC.md` already asked for. And **weekly projections come
+    from both Sleeper and ESPN with the disagreement shown**, on the same
+    argument `espnRanks.js` already makes about draft ranks: two independent
+    desks disagreeing is information, and a mean destroys it.
+  - Written: `PLAN.md` gains "What discovery settled", which replaces the
+    guesses the plan had to make with the observed reader, the minimum snapshot
+    contract, the refresh and stale policy, the identity mapping and the source
+    selection — each traced to one of the two documents rather than asserted.
+    Phase 8 is split into four reviewable tasks above, Y8.1 to Y8.4, each with
+    its own automated and manual checks, ordered so the first needs neither a
+    league nor a browser.
+  - Held explicitly, with the dependent feature named rather than left implied:
+    availability blocks waiver advice, the FAAB balance blocks bid suggestions,
+    actual stat values block any comparison of advice to results, and the
+    unmeasured spread between the two projection sources blocks deciding how to
+    combine them. **None of them blocks Phase 8**, which displays a league
+    rather than advising on one. Availability is the one to close first, and it
+    needs a browser run.
+  - No credentials enter any service payload, which is unchanged and now
+    load-bearing in two directions: the league half posts Yahoo's JSON with no
+    cookie, token or crumb, and the game half needs none to begin with.
+  - Rollback: this task changed only documentation, so reverting it is reverting
+    three files. The Phase 8 tasks it wrote are unstarted, so nothing depends on
+    them yet.
+  - Reconciled: `SPEC.md` needed no change — its in-season requirements are
+    satisfied by this contract, including keeping private snapshots out of the
+    disk cache, which the two-scope split now enforces structurally.
+    `ROADMAP.md` Phase 7's exit asks for a reviewable minimum data contract and
+    access approach, which is what `PLAN.md` now carries. **Phase 7 is not
+    complete**: Y7.1's API application status and Y7.2's league-scope reads are
+    still open, and neither is closed by this task.
+  - Automated validation: none, and none is appropriate — documentation only.
+    Typecheck, lint, `server:test` and build were run anyway and are clean.
+
+### Phase 8 tasks, in order
+
+Split from the contract in `PLAN.md`, "What discovery settled". **None is
+started, and none should be until Phase 8 is authorized.** Each is one
+reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
+league, and nothing in it recommends anything.
+
+- [ ] Y8.1: Fetch Yahoo's public game scope as an ordinary source module.
+  - Scope: a new `server/src/sources/yahooPlayers.js` reading
+    `/fantasy/v2/game/nfl/players` with `;out=percent_owned`, plus the three
+    reference lists — `stat_categories`, `roster_positions`, `game_weeks`.
+    Cached on disk through `server/src/cache.js` on the pattern the other three
+    feeds use. No browser, no cookie, no UI.
+  - Acceptance: the pool pages to the end and stops, injuries read as absent
+    rather than as a shape fault, and the stat and slot vocabularies are
+    available to join against a league's settings.
+  - Automated: `server:test`, on a synthetic fixture — the empty `[]` past the
+    end of a list, a short final page, a player with no `status`, and a refusal
+    when the envelope is not what it should be. The suite must fail if the
+    end-of-list check is reverted to reading `.count`.
+  - Manual: none required; nothing is visible yet.
+  - Dependencies: none. This is the first Phase 8 task precisely because it
+    needs no league and no browser.
+
+- [ ] Y8.2: Join a league snapshot to the pool, keeping every eligibility.
+  - Scope: match the players on a league snapshot to the pool through
+    `server/src/names.js`, preserving the **whole** `eligible_positions` list
+    rather than a primary position, and carrying the slot vocabulary through so
+    a composite slot resolves to the set it accepts.
+  - Acceptance: a player who matches nothing stays visible and is named as
+    unmatched rather than dropped or silently zeroed. A flex slot resolves from
+    the published vocabulary, not from parsing its name.
+  - Automated: `server:test` on synthetic fixtures, including a generational
+    suffix mismatch — "Chris Godwin Jr." against "Chris Godwin" — which is the
+    one mismatch class discovery actually observed, a defence joining on team
+    abbreviation, and a player eligible at two positions.
+  - Manual: compare the joined roster against Yahoo for the real league, every
+    player, and record the count that matched.
+  - Dependencies: Y8.1.
+
+- [ ] Y8.3: An in-season view that shows the league and how old it is.
+  - Scope: a screen alongside the draft that shows the league, the own team,
+    every roster, the roster slots, the scoring rules, and the age of each feed
+    behind it. Read-only. No projections and no advice.
+  - Acceptance: every roster and setting agrees with Yahoo; the own team is the
+    one the `guid` matched, not a seat number; each panel says how old its data
+    is; a missing snapshot reads as "not read yet" with the bookmarklet offered,
+    rather than as an empty league.
+  - Automated: `engine:test` for the endpoint-visible behaviour, since that is
+    where a check meets the service as a caller does. `shots` extended to
+    photograph the in-season view, including the no-snapshot state, while
+    keeping both draft modes.
+  - Manual: read the real league through the bookmarklet and compare all eight
+    rosters and every setting against Yahoo, in a browser, with screenshots.
+  - Dependencies: Y8.2.
+
+- [ ] Y8.4: Make the failure states of the view honest.
+  - Scope: the cases `ROADMAP.md` names as Phase 8's exit criteria — switching
+    league or season, a service restart, an interrupted page, and a reader that
+    silently did nothing.
+  - Acceptance: switching leagues cannot show another league's state;
+    **an interrupted pool fetch cannot turn an owned player into an available
+    one**; a restart says the snapshot is gone rather than showing an empty
+    league; a stale feed is displayed with its age rather than hidden or
+    silently refreshed.
+  - Automated: `server:test` for the partial-response and eviction cases,
+    `engine:test` for what an endpoint reports after a restart, `shots` for each
+    visible failure state.
+  - Manual: switch between two real leagues if a second is available, and
+    restart the service mid-view. Record what could not be exercised.
+  - Dependencies: Y8.3. Note the memory rule that restarting the service wipes
+    a live draft room; do not exercise the restart case during one.
 
 ### Subsequent task planning
 
-Phases 8-11 remain roadmap outcomes until their input contracts are established.
+Phases 9-11 remain roadmap outcomes until their input contracts are established.
 Before implementing each phase, split it into reviewable tasks with explicit
 acceptance and validation, then record actual results rather than marking the
-phase done from a build alone. Order: league view, weekly lineup advice,
-waiver add/drop comparisons, trade evaluation, then trade targets and comparison
-with waivers. Other league platforms remain deferred.
+phase done from a build alone. Order: weekly lineup advice, waiver add/drop
+comparisons, trade evaluation, then trade targets and comparison with waivers.
+Other league platforms remain deferred.
+
+Phase 9 inherits two things it must settle rather than assume. How the two
+projection sources are combined is open on purpose — a range, a primary, or a
+refusal past some spread — and **how far apart they run has never been
+measured**, which is Phase 9's first job. And computing points from raw
+components against a league's 35 modifiers is the load-bearing work of that
+phase, not a refinement to it.
 
 ## Blocked
 

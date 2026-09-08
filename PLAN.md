@@ -140,6 +140,148 @@ contract checks. No separate repository, generic plugin framework, automatic
 transactions, hosted accounts, AI service dependency or dynasty draft-pick
 valuation is part of this plan.
 
+## What discovery settled, 2026-09-08
+
+Phase 7's study is done except for the league-scope reads only a signed-in
+browser can make. This section replaces the guesses the plan above had to make,
+and every claim in it traces to `docs/yahoo-in-season-data.md` or
+`docs/in-season-data-sources.md`. Two decisions were taken and are recorded in
+`DECISIONS.md` under the same date.
+
+### The reader, as observed
+
+Two scopes, authenticating differently, so two transports:
+
+| Scope | Path | Read by | Cached |
+| --- | --- | --- | --- |
+| League | `/fantasy/v2/league/<key>/...` | the browser, on the user's cookie | bounded service memory |
+| Game | `/fantasy/v2/game/nfl/...` | the service, directly | disk, like the other feeds |
+
+The league half is `userscript/league-reader.js`, already built and proven
+against the real league: four GETs, Yahoo's own JSON posted unread, all
+interpretation in `server/src/platforms/yahoo/league.js`. The game half needs no
+cookie — measured, `401` against every league path and `200` against every game
+path with no credentials at all — so it becomes an ordinary source module.
+
+This keeps `SPEC.md`'s requirement exactly: private league payloads never reach
+the disk feed cache, and public player data never needs a credential.
+
+### The minimum snapshot contract
+
+What an in-season screen needs, and where each part comes from. Everything
+listed as league-scope is already read and parsed today.
+
+| Part | Source | Scope |
+| --- | --- | --- |
+| League identity, season, current week | league object | L |
+| Own team, by `guid` against `managers[].manager.guid` | profile and teams | L |
+| Every team, standings, waiver priority, transaction counts | teams | L |
+| Roster slots, with `is_starting_position` | settings | L |
+| Scoring, as `stat_categories` joined to `stat_modifiers` on `stat_id` | settings | L |
+| Waiver method and trade window | settings | L |
+| Own roster, with `eligible_positions` and `selected_position` | team roster | L |
+| Player pool, injuries, byes, ownership percentage | game players | G |
+| Stat vocabulary, slot vocabulary, week dates | game reference lists | G |
+| Kickoff times and live game state | **ESPN**, the only source that has them | — |
+| Weekly and rest-of-season projections | **Sleeper and ESPN**, both | — |
+
+Three parts have exactly one possible source and cannot be traded away: a
+league's scoring and slots come only from Yahoo, and kickoff times come only
+from ESPN. Yahoo's `game_weeks` dates a week and is not a lock time.
+
+**Points are computed, never fetched.** No source publishes a custom league's
+points: Sleeper gives three preset formats, ESPN gives its own default, and the
+league read carried 38 categories against 35 modifiers. Both sources publish the
+raw components underneath, so the contract is components from a projection
+source multiplied by modifiers from the league. This is unavoidable work and
+Phase 9 owns it.
+
+### Refresh and stale policy
+
+Derived from what each source says about itself, and deliberately unlike the
+draft's durations:
+
+| Data | Refresh | Why |
+| --- | --- | --- |
+| League snapshot | on the user's click, never automatically | it costs a bookmarklet run; nothing is on a clock in season |
+| Game scope pool and reference lists | hours, like the existing feeds | vocabularies are static within a season; the pool moves slowly |
+| Ownership percentage | hours, but it carries a weekly `delta` | the delta is the signal, so the age of it must be shown |
+| Projections | hours, and always with `last_modified` shown | both sources timestamp their own records |
+| Kickoff times and game state | minutes near kickoff | a lock is a deadline, and a stale one is wrong in the direction that costs a week |
+
+`@refresh_rate: 30` appears on every Yahoo response and is **untested**; nothing
+should be built to trust it as a promise. Reference lists are static enough to
+cache for a season, but must still be re-read across seasons because the game
+key changes.
+
+The rule that matters more than any interval: a snapshot carries its own capture
+time and per-feed age, and half of a new reading is never combined with half of
+an old one.
+
+### Identity mapping
+
+**Name matching, as today, and the shortcut does not work.** Sleeper's
+`/v1/players/nfl` carries `yahoo_id` on 6750 players, which looks like the
+authoritative join the 2026-09-05 FantasyPros decision wanted. It is a legacy
+field: 0 of 317 rookies, 2% at one year, roughly 100% at six years and up.
+Chase, Gibbs, Robinson and Nacua are all present, active and `null`.
+
+So `server/src/names.js` keeps its six tiers, defences keep joining on team
+abbreviation, and the one concrete improvement discovery found is narrow and
+real: every name disagreement observed was a generational suffix, Yahoo's
+"Chris Godwin Jr." against Sleeper's "Chris Godwin".
+
+Two eligibility rules the draft path does not need. A Yahoo player's
+`eligible_positions` is a list and **all of it must be preserved** — taking the
+first is enough to draft a player and not enough to know what slot he may fill.
+And a flex slot's eligible set can be read rather than parsed: the 21-slot
+vocabulary is published, including `W/T`, `W/R`, `W/R/T` and `Q/W/R/T`.
+
+### Source selection
+
+| Need | Chosen | Rejected, and why |
+| --- | --- | --- |
+| League rules, rosters, ownership | Yahoo league scope | nothing else has them |
+| Player pool, injuries, byes, ownership % | Yahoo game scope | works with no click; ESPN and Sleeper duplicate parts of it |
+| Weekly and rest-of-season projections | **Sleeper and ESPN, both, spread shown** | either alone is a single desk and a single point of failure |
+| Kickoff and live state | ESPN | Yahoo has week dates only; Sleeper's schedule has a date and no time |
+| Draft ADP | Fantasy Football Calculator, unchanged | **has nothing weekly**; its paths for it are 404 |
+| Consensus rankings | FantasyPros still excluded | ten rows on the free tier, per 2026-09-05 |
+
+### Missing-data behaviour the implementation must carry
+
+Each was observed, and each has a wrong answer that looks right:
+
+- A player with no projection is dropped, not zeroed. 463 of 3304 weekly records
+  carried points.
+- **A missing projection does not say why.** A bye and an unprojected bench
+  player are the same absence: 109 players idle in week 8, none projected. The
+  schedule is what tells them apart.
+- An absent injury field means healthy, on both Yahoo and ESPN.
+- The injury vocabularies differ between sources and need mapping, not string
+  comparison.
+- An absent weekly actual may be a bye rather than a zero performance.
+- Past the end of a Yahoo list, `players` is a bare `[]` rather than the
+  index-keyed object every other list is, so a pager reading `.count` gets
+  `undefined` instead of zero.
+- Weeks 19 and up return rows with no points. A response that parses is not an
+  answer.
+
+### Held, with the dependent feature named
+
+| Held | Blocks | Why |
+| --- | --- | --- |
+| Availability: free agent against waiver against taken | waiver advice | league scope; needs a browser run |
+| FAAB balance | FAAB bid suggestions | on no response seen, and the available league uses priority |
+| A set `weekly_deadline` | lock rules from Yahoo's own field | was `null`; ESPN kickoff times cover the need meanwhile |
+| Actual stat values | anything comparing advice to results | nothing had kicked off; every value read was zero |
+| Whether the two projection sources agree | how to combine them | unmeasured, and Phase 9's to measure |
+| A keeper or past-season league | those league types | unread; a past season is unreachable by construction |
+
+None of these blocks Phase 8, which displays a league rather than advising on
+one. Availability blocks Phase 10, and that is the one to close first with a
+browser run.
+
 ## Validation, sequencing and stop points
 
 Each phase depends on the preceding phase's exit criteria in ROADMAP.md. Split
