@@ -9,16 +9,23 @@
 // mirroring picks perfectly while writing no queue at all. The reading below is
 // the only thing that would have caught it.
 //
-// Nothing here reaches the network or the filesystem beyond reading the
-// userscript the repository already holds.
+// Nothing here reaches the network or the filesystem beyond reading the two
+// files the repository already holds and hands out.
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
-  BRIDGE_MARK, bridgeBuild, bridgeSource, bridgeStatus, currentBridge, forgetBridge,
-  lastBridge, noteBridge, stampedBridge,
+  BRIDGE_MARK, SERVED_ORIGIN, atServiceOrigin, bridgeBuild, bridgeSource, bridgeStatus,
+  currentBridge, forgetBridge, lastBridge, noteBridge, serviceOrigin, stampedBridge,
 } from './bridge.js';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const panelSource = () =>
+  readFileSync(join(HERE, '..', '..', 'userscript', 'draft-panel.js'), 'utf8');
 
 test('the served copy carries a build where the mark was', () => {
   const current = currentBridge();
@@ -40,6 +47,47 @@ test('both ends hash the same bytes', () => {
   // instead would make every install look stale the moment it was installed.
   assert.equal(bridgeBuild(bridgeSource()), currentBridge().build);
   assert.notEqual(bridgeBuild(stampedBridge()), currentBridge().build);
+});
+
+test('a copy served on the default port is the file on disk', () => {
+  // The common case, and the reason this rewrites rather than fills a mark: a
+  // service on 5178 must hand out exactly what a repository checkout runs.
+  const source = bridgeSource();
+  assert.equal(atServiceOrigin(source, 5178), source);
+  assert.equal(atServiceOrigin(panelSource(), 5178), panelSource());
+});
+
+test('a copy served on another port names it everywhere it says an address', () => {
+  const served = atServiceOrigin(stampedBridge(), 6000);
+
+  assert.equal(served.includes(SERVED_ORIGIN), false,
+    'a copy still naming 5178 posts to a port this service is not on');
+  for (const line of ['@downloadURL', '@updateURL', 'const SERVICE']) {
+    const said = served.split('\n').find((l) => l.includes(line));
+    assert.ok(said.includes(serviceOrigin(6000)), line + ' was left on the old port');
+  }
+  assert.equal(atServiceOrigin(panelSource(), 6000).includes(SERVED_ORIGIN), false);
+});
+
+test('both handed-out files carry the address this rewrites', () => {
+  // Not a tautology: the rewrite matches one literal, so a file that came to
+  // spell its origin any other way would go on being served pointing at 5178
+  // and nothing here or anywhere else would say so.
+  assert.ok(bridgeSource().includes(SERVED_ORIGIN));
+  assert.ok(panelSource().includes(SERVED_ORIGIN));
+});
+
+test('moving the port does not make an install look stale', () => {
+  // The trap. The build is hashed from the source before either substitution,
+  // so the copy running on a moved port reports the build the service compares
+  // against. Hashing what was served instead would call every install on a
+  // non-default port out of date the moment it was installed.
+  const current = currentBridge();
+  const served = atServiceOrigin(stampedBridge(), 6000);
+
+  assert.ok(served.includes(current.build));
+  const status = bridgeStatus({ version: current.version, build: current.build }, true, 1);
+  assert.equal(status.stale, false);
 });
 
 test('the mark appears once, so the substitution cannot land wrong', () => {

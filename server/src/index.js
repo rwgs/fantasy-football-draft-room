@@ -16,7 +16,9 @@ import { fileURLToPath } from 'node:url';
 import { ADP_FEEDS, ADP_RULES, FORMATS, buildBoard, nearestSize } from './board.js';
 import { parseRankings } from './rankings.js';
 import { PLATFORM_NAMES, platformFor } from './platforms/index.js';
-import { currentBridge, lastBridge, stampedBridge } from './bridge.js';
+import {
+  atServiceOrigin, currentBridge, lastBridge, serviceOrigin, stampedBridge,
+} from './bridge.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -174,7 +176,14 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/bridge/build', (_req, res) => {
   res.set('cache-control', 'no-store');
   // `running` is what is installed; the rest is what this build expects.
-  res.json({ ...currentBridge(), running: lastBridge() });
+  // `installUrl` is where to get the current one, said here rather than written
+  // into the client, which knows this service only as a proxied `/api` and so
+  // cannot name the port it is really on.
+  res.json({
+    ...currentBridge(),
+    running: lastBridge(),
+    installUrl: serviceOrigin(PORT) + '/userscript/yahoo-draft-bridge.user.js',
+  });
 });
 
 app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
@@ -183,7 +192,7 @@ app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
   // download or a page.
   res.type('text/javascript; charset=utf-8');
   res.set('cache-control', 'no-store');
-  res.send(stampedBridge());
+  res.send(atServiceOrigin(stampedBridge(), PORT));
 });
 
 /*
@@ -231,7 +240,9 @@ app.get('/api/panel/build', (_req, res) => {
 app.get('/panel.js', (_req, res) => {
   res.type('text/javascript; charset=utf-8');
   res.set('cache-control', 'no-store');
-  res.sendFile(join(HERE, '..', '..', 'userscript', 'draft-panel.js'));
+  // Sent rather than served off disk, because the copy that leaves has to name
+  // the port this service is on. See `atServiceOrigin`.
+  res.send(atServiceOrigin(panelSource(), PORT));
 });
 
 app.get('/panel', (_req, res) => {
@@ -241,7 +252,7 @@ app.get('/panel', (_req, res) => {
   // to be suspicious of.
   const source = panelSource();
   const href = 'javascript:' + encodeURIComponent(
-    source.replace(PANEL_MARK, panelBuild(source)),
+    atServiceOrigin(source.replace(PANEL_MARK, panelBuild(source)), PORT),
   );
   res.type('html').set('cache-control', 'no-store').send(`<!doctype html>
 <html><head><meta charset="utf-8"><title>Draft panel</title><style>

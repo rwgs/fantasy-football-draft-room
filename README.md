@@ -593,7 +593,7 @@ The data service reads three of its own, and needs none of them:
 
 | Variable | What it does |
 |---|---|
-| `PORT` | The port the data service binds. Default 5178 |
+| `PORT` | The port the data service binds. Default 5178. What it hands out follows it: the bridge userscript, the panel and the app's reinstall link are all written to this port |
 | `HOST` | The address it binds. Default `127.0.0.1`, the loopback only |
 | `DRAFT_YEAR` | Draft a different season. Defaults to the current year |
 

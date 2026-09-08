@@ -2709,6 +2709,17 @@ async function yahooRoom() {
     typeof after.bridge?.heardAt === 'number' && Date.now() - after.bridge.heardAt < 60000,
     JSON.stringify(after.bridge));
 
+  // Where the app sends you to reinstall, which has to be the port this service
+  // is actually on rather than the one written into the userscript. `PORT` is a
+  // setting and the client cannot see it: it meets the service as a proxied
+  // `/api` and never learns which port answered. So the service says.
+  const built = await (await fetch(API + '/api/bridge/build')).json() as { installUrl?: string };
+  const ownPort = new URL(API).port;
+  check('the service says where to install the current bridge from, on its own port',
+    typeof built.installUrl === 'string'
+      && built.installUrl.endsWith(':' + ownPort + '/userscript/yahoo-draft-bridge.user.js'),
+    String(built.installUrl));
+
   /*
    * Yahoo's own ADP is the one thing here no feed this service can reach will
    * tell it, so it has to survive the trip from the bridge intact and land

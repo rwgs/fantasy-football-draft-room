@@ -588,16 +588,65 @@ Phase 4: prove the platform seam against real leagues.
     printed only when nothing had gone wrong. Both are fixed, and the panel is a
     bookmarklet that no manager stands in front of.
 
+- [x] Point what the service hands out at the port the service is on.
+  - Scope: `atServiceOrigin` in `server/src/bridge.js` rewrites
+    `http://127.0.0.1:5178` to the port this process bound, and every copy the
+    service hands out goes through it -- the bridge userscript, `/panel.js` and
+    the bookmarklet `/panel` builds. `/api/bridge/build` gained `installUrl`,
+    and the app's stale-bridge banner links to that instead of to a literal.
+  - Why: `PORT` is a documented setting and nothing downstream of it moved.
+    Set it and the bridge posts to a port nothing is listening on, so it reaches
+    the service never; the manager checks a closed port for updates, so the copy
+    can never refresh itself; the panel reads nothing; and the app's "reinstall
+    from the service" link is dead at the moment the user has just been told to
+    click it. That last one is this repository's own recurring failure -- a copy
+    going stale in silence -- arriving by the one route the build stamp cannot
+    see, because a bridge that never reaches the service reports no build to
+    compare.
+  - The approach, and why not a placeholder: the file keeps a working default
+    and the service rewrites on the way out. So a copy run straight from the
+    repository still works unmodified, which is a supported way to run this and
+    is what `bridge:test` loads; and a copy served on the default port is byte
+    for byte the file on disk, so the common case cannot be broken by this.
+  - Acceptance criteria: a copy served on the default port is unchanged; a copy
+    served on another port names it in `@downloadURL`, `@updateURL` and
+    `SERVICE` alike; the build is unaffected, so a moved port never reads as a
+    stale install; the app's install link follows the service. All four met.
+  - Automated validation: four checks in `npm run server:test` under
+    `bridge.test.js`, 14 passing, and one in `npm run engine:test`. **Two of the
+    four confirmed by failing** -- neutering the rewrite reddens the moved-port
+    check, and hashing the served bytes instead of the source reddens the
+    staleness guard, which is the regression that guard is for. One is a drift
+    guard rather than a behaviour check: the rewrite matches one literal, so a
+    file that came to spell its origin any other way would go on being served
+    pointing at 5178 with nothing to say so.
+  - **The whole self-test was run against a service on 5179**, which is worth
+    more than the single check: every Yahoo suite passed end to end against a
+    service on a port nothing was written for. Typecheck clean, lint unchanged
+    at 43 warnings, `bridge:test` 7/7, build clean, `shots` clean with no
+    console errors against 5178 restarted onto this code.
+  - Manual validation: **done.** The served bridge on 5179 names 5179 on all
+    three lines and reports build `e7a163fa`, the same as the file on disk, so
+    it is not called stale. `/panel.js` on 5179 names 5179 and on 5178 diffs
+    clean against `userscript/draft-panel.js`. The banner was photographed in a
+    real browser twice, reading its link from the real service each time: 5178
+    gives a 5178 link and 5179 gives a 5179 one.
+  - Left where it was: the README documents 5178 throughout, which is the
+    default and is what a reader following the instructions will be on. The
+    `PORT` row now says what follows it rather than every mention being hedged.
+  - Dependencies or blockers: none. This was the concrete half of the release
+    question below, taken on its own because it is a defect either way.
+
 - [ ] Decide whether the service should serve the userscript in a release.
   - Now serves three things, not one: the bridge userscript, `/panel.js`, and
-    `/panel`, the page that installs the panel as a bookmarklet. The same
-    hard-coded `127.0.0.1:5178` question applies to all three.
+    `/panel`, the page that installs the panel as a bookmarklet.
   - Added while validating: `GET /userscript/yahoo-draft-bridge.user.js`, so a
     manager installs from an address and can pick up later versions instead of
     the user re-pasting a file. It is the install path the README now documents.
   - Worth a second look before release: it is the first static asset the service
-    serves, and `@downloadURL` in the script hard-codes `127.0.0.1:5178`, which
-    is wrong for anyone who moves the port.
+    serves. The hard-coded `127.0.0.1:5178` part of this is now fixed -- see the
+    task above -- so what is left is the product question of whether serving
+    them at all is right for a release, not a defect.
 
 - [x] Offer Yahoo's ADP whenever the room has one, follow a Yahoo room at its
       own pace, and settle where the player pool opens.

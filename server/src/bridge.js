@@ -64,6 +64,47 @@ export function stampedBridge() {
 }
 
 /**
+ * The origin the copies this service hands out are written to talk to.
+ *
+ * The bridge and the panel both run in a page this service does not serve, so
+ * neither can work out where to post from where it finds itself. Each carries
+ * the address in its own source, and this is the address they carry.
+ */
+export const SERVED_ORIGIN = 'http://127.0.0.1:5178';
+
+/** The same, on the port this service is actually on. */
+export function serviceOrigin(port) {
+  return 'http://127.0.0.1:' + port;
+}
+
+/**
+ * A handed-out copy, pointed at that port instead of the one it was written for.
+ *
+ * `PORT` is a documented setting and nothing downstream of it moved with it: a
+ * service on 6000 handed out a bridge that posted to 5178 and so reached
+ * nothing, and told a manager to check a closed port for updates. That is this
+ * file's own failure -- a copy going stale in silence -- arriving by the one
+ * route the stamp cannot see, because a bridge that never reaches the service
+ * never reports a build to compare.
+ *
+ * Rewritten on the way out rather than marked, and the difference matters twice
+ * over. A copy run straight from the repository is a supported way to run this,
+ * and it keeps working unmodified because what it carries is a working default
+ * rather than a placeholder. And a copy served on the default port is byte for
+ * byte the file on disk, so the common case cannot be broken by this at all.
+ *
+ * Every occurrence, comments included: the install instructions written inside
+ * the file are as wrong as its code once the port has moved.
+ *
+ * Always the loopback. `HOST` can be `0.0.0.0` for a container, which is not an
+ * address any browser can post to, and both of these readers run in a browser
+ * on this machine.
+ */
+export function atServiceOrigin(source, port) {
+  return source.replaceAll(SERVED_ORIGIN, serviceOrigin(port));
+}
+
+/**
  * The last bridge to say anything, to anyone.
  *
  * Held per service rather than per room because the question the user asks is

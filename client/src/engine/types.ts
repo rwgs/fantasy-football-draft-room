@@ -713,6 +713,15 @@ export interface BridgeReport {
   version: string | null;
   build: string;
   running: BridgeStatus | null;
+  /**
+   * Where to install the current copy from.
+   *
+   * Said by the service rather than written into the client, which reaches it
+   * as a proxied `/api` and so cannot name the port it is really on. `PORT` is
+   * a setting, and a reinstall link pointing at a port nobody is listening on
+   * is offered exactly when the user has been told to use it.
+   */
+  installUrl: string;
 }
 
 export interface RoomState {

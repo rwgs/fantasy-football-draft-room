@@ -270,6 +270,16 @@ export default function App() {
   const [silence, setSilence] = useState<string | null>(null);
 
   /**
+   * Where the stale-bridge banner sends you to reinstall.
+   *
+   * Kept rather than written into the banner because `PORT` is a setting and
+   * this half cannot see it: the client meets the service as a proxied `/api`
+   * and never learns which port answered. Null only before the first answer,
+   * which is also before there is any reading to raise a banner about.
+   */
+  const [installUrl, setInstallUrl] = useState<string | null>(null);
+
+  /**
    * Asked whenever Yahoo is the platform, on any screen and in either mode.
    *
    * The first version of this asked only while an assistant draft was being
@@ -291,6 +301,7 @@ export default function App() {
       if (!alive || !report) return;
       setBridge(report.running);
       setSilence(quiet(report.running));
+      setInstallUrl(report.installUrl);
     };
     void ask();
     const timer = setInterval(() => { void ask(); }, ROOM_WAIT_MS);
@@ -1118,7 +1129,7 @@ export default function App() {
             {' Picks will still mirror, but your queue will not be written.'}
             {' Reinstall from '}
             <a
-              href="http://127.0.0.1:5178/userscript/yahoo-draft-bridge.user.js"
+              href={installUrl ?? undefined}
               style={{ color: 'var(--chalk-2)' }}
             >
               the service
