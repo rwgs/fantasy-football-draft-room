@@ -3416,8 +3416,106 @@ async function yahooSeason() {
   const sleeper = await fetch(API + '/api/sleeper/league/1234567890123456789/season');
   check('a platform with no in-season reading is refused the route',
     sleeper.status === 404, String(sleeper.status));
+
+  /*
+   * WHAT A CALLER SEES WHEN THE SERVICE HAS FORGOTTEN A LEAGUE.
+   *
+   * Snapshots are held in memory and bounded at eight, so the ninth evicts the
+   * oldest. From outside, an evicted league and a league lost to a restart are
+   * the same answer, which is what makes this the endpoint-visible version of
+   * the restart case: the service cannot tell them apart, and the app is the
+   * only thing that can, because it was holding the reading.
+   */
+  const spare = Array.from({ length: 9 }, (_, i) => String(Date.now() + 10 + i).slice(-9));
+  for (const id of spare) {
+    const put = await fetch(API + '/api/yahoo/league/' + id + '/snapshot', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(forLeague(id)),
+    });
+    if (!put.ok) throw new Error('the service refused snapshot ' + id + ': ' + put.status);
+    await put.json();
+  }
+
+  const evicted = await (await fetch(
+    API + '/api/yahoo/league/' + spare[0] + '/season?' + boardQuery)).json();
+  check('a league the service has forgotten reads as not read, not as empty',
+    evicted.read === false && evicted.league === null && !!evicted.hint,
+    JSON.stringify({ read: evicted.read, league: evicted.league }).slice(0, 80));
+  check('and it still says where the reader is installed from, which is the fix',
+    typeof evicted.readerUrl === 'string' && evicted.readerUrl.includes('/league-reader'),
+    String(evicted.readerUrl));
+
+  const kept = await (await fetch(
+    API + '/api/yahoo/league/' + spare[8] + '/season?' + boardQuery)).json();
+  check('while the newest is still held', kept.read === true);
+
+  /*
+   * A snapshot filed under the wrong league is refused rather than stored,
+   * which is the service's half of "switching leagues cannot show another
+   * league's state". The app checks the same thing again on the way in, because
+   * this being unreachable is the reason to check it rather than not to.
+   */
+  const crossed = await fetch(API + '/api/yahoo/league/' + spare[0] + '/snapshot', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(forLeague(spare[1])),
+  });
+  const crossedBody = await crossed.json();
+  check('a snapshot for another league is refused rather than filed under this one',
+    crossed.status === 400 && /not/.test(String(crossedBody.error)),
+    crossed.status + ' ' + String(crossedBody.error).slice(0, 70));
+
+  // And the refusal left nothing behind: the league it was aimed at is still
+  // forgotten rather than now holding somebody else's rosters.
+  const after = await (await fetch(
+    API + '/api/yahoo/league/' + spare[0] + '/season?' + boardQuery)).json();
+  check('and the refusal leaves the target league still unread',
+    after.read === false, JSON.stringify(after.read));
 }
 
+/** The smallest snapshot the service will take, for a league of a given number. */
+function forLeague(id: string) {
+  const key = '470.l.' + id;
+  const list = (items: unknown[]) => {
+    const out: Record<string, unknown> = { count: items.length };
+    items.forEach((item, i) => { out[String(i)] = item; });
+    return out;
+  };
+  return {
+    settings: {
+      fantasy_content: {
+        league: [
+          { league_key: key, league_id: id, name: 'Spare League', game_code: 'nfl', season: '2026' },
+          {
+            settings: [{
+              roster_positions: [
+                { roster_position: { position: 'QB', count: 1, is_starting_position: 1 } },
+              ],
+              stat_categories: { stats: [{ stat: { stat_id: 4, name: 'Passing Yards', enabled: '1' } }] },
+              stat_modifiers: { stats: [{ stat: { stat_id: 4, value: '0.04' } }] },
+            }],
+          },
+        ],
+      },
+    },
+    teams: {
+      fantasy_content: {
+        league: [
+          { league_key: key },
+          {
+            teams: list([
+              { team: [[{ team_key: key + '.t.1' }, { team_id: '1' }, { name: 'Spare' },
+                { managers: [{ manager: { guid: 'GUID-SPARE' } }] }]] },
+            ]),
+          },
+        ],
+      },
+    },
+    rosters: [],
+    profile: { fantasy_content: { users: { count: 1, 0: { user: [{ guid: 'GUID-SPARE' }] } } } },
+  };
+}
 /** The average distance between where a player went and their ADP. */
 function reachSpread(e: ReturnType<typeof runDraft>): number {
   const gaps = e.state.picks.map((p) => {

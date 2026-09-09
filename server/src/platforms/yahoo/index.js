@@ -505,11 +505,20 @@ export async function readSeason(leagueId, boardQuery) {
     asked(buildBoard(boardQuery)),
   ]);
 
+  /*
+   * A FEED THAT FAILED IS PASSED AS NULL, NOT AS AN EMPTY LIST.
+   *
+   * `?? []` was the first version and it is the bug Y8.4 exists to catch: an
+   * empty pool joins to nobody, so every rostered player came back reported as
+   * one Yahoo has never heard of. That reads as a finding about the league
+   * rather than as a fetch that failed, and the same mistake on the vocabulary
+   * blamed the league for having slots this app cannot read.
+   */
   const league = joinLeague({
     snapshot: held.snapshot,
-    pool: pool.value?.players ?? [],
-    vocabulary: vocabulary.value?.rosterPositions ?? [],
-    board: board.value?.players ?? [],
+    pool: pool.value ? pool.value.players : null,
+    vocabulary: vocabulary.value ? vocabulary.value.rosterPositions : null,
+    board: board.value ? board.value.players : null,
   });
 
   return {

@@ -831,7 +831,14 @@ export interface SeasonSlot {
    * `unresolved` separates from the first case.
    */
   accepts: string[] | null;
-  unresolved: boolean;
+  /**
+   * Whether this is a starting slot the app cannot reason about.
+   *
+   * Null where the published slot list never arrived, because then nothing is
+   * known either way and calling it unresolved would blame the league for the
+   * network.
+   */
+  unresolved: boolean | null;
 }
 
 /** One scoring rule: what is counted, and what it is worth. */
@@ -898,9 +905,19 @@ export interface SeasonRoster {
   /** Whether this is the user's own team, from the guid and never from a seat. */
   own: boolean;
   players: SeasonPlayer[];
-  matched: { pool: number; board: number; of: number };
-  /** Named rather than counted, so a miss points at a player to go and look at. */
-  unmatched: { pool: string[]; board: string[] };
+  /**
+   * How many joined, per feed, and **null where that join could not run**.
+   *
+   * Null and not zero. A feed that did not answer has said nothing about
+   * anybody, so a count of zero would be a false claim that reads as a finding
+   * about the league rather than as a failed fetch.
+   */
+  matched: { pool: number | null; board: number | null; of: number };
+  /**
+   * Named rather than counted, so a miss points at a player to go and look at.
+   * Null on the same rule as `matched`: not a list of everybody.
+   */
+  unmatched: { pool: string[] | null; board: string[] | null };
 }
 
 export interface SeasonTeam {
@@ -971,10 +988,18 @@ export interface SeasonRead {
   snapshot?: LeagueSnapshot | null;
   league: {
     slots: SeasonSlot[];
-    /** Starting slots this app cannot reason about, named rather than counted. */
-    unresolvedSlots: string[];
+    /**
+     * Starting slots this app cannot reason about, named rather than counted.
+     *
+     * Null where the published slot list never arrived. An empty list is the
+     * positive statement that every slot was explained, so it must not be what
+     * a failed fetch produces.
+     */
+    unresolvedSlots: string[] | null;
     rosters: SeasonRoster[];
-    matched: { pool: number; board: number; of: number; rosters: number };
+    matched: { pool: number | null; board: number | null; of: number; rosters: number };
+    /** Which joins ran at all, so a caller can tell no count from a count of zero. */
+    joined: { pool: boolean; vocabulary: boolean; board: boolean };
   } | null;
   /**
    * Per feed rather than one age for the lot.

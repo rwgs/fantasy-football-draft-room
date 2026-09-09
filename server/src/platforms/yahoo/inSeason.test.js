@@ -408,3 +408,99 @@ test('a league whose own team never resolved claims no roster as yours', () => {
 test('there is no joining without a snapshot', () => {
   assert.throws(() => joinLeague({}), /no snapshot/);
 });
+
+// --- A feed that did not answer ----------------------------------------------
+//
+// THE DISTINCTION THESE CHECKS EXIST FOR: a feed that answered with nothing and
+// a feed that never answered are different facts, and the second one dressed as
+// the first is a plausible lie. An empty pool joins to nobody, so every player
+// on every roster comes back reported as one Yahoo has never heard of -- which
+// reads as a finding about the league rather than as a fetch that failed.
+//
+// `null` is the feed that did not answer. `[]` is one that answered with
+// nothing. The pair of checks under each heading is the point: the same input
+// shape either way, and two different answers.
+
+test('a pool that did not answer claims neither a match nor a miss', () => {
+  const joined = joinLeague({ snapshot: snapshot(), pool: null, vocabulary: vocabulary() });
+
+  assert.equal(joined.joined.pool, false);
+  assert.equal(joined.matched.pool, null);
+  assert.equal(joined.rosters[0].matched.pool, null);
+  // Not a list of every player, which is the shape that reads as a finding.
+  assert.equal(joined.rosters[0].unmatched.pool, null);
+  // The player is still there, and still has no pool record, because there is
+  // none to have. What has gone is the claim that this means anything.
+  assert.equal(joined.rosters[0].players[0].pool, null);
+  assert.equal(joined.rosters[0].matched.of, 1);
+});
+
+test('and a pool that answered with nothing does report the miss', () => {
+  const joined = joinLeague({ snapshot: snapshot(), pool: [], vocabulary: vocabulary() });
+
+  assert.equal(joined.joined.pool, true);
+  assert.equal(joined.matched.pool, 0);
+  assert.deepEqual(joined.rosters[0].unmatched.pool, ['Ada Halfback']);
+});
+
+test('a board that did not answer claims neither a match nor a miss', () => {
+  const joined = joinLeague({ snapshot: snapshot(), board: null, vocabulary: vocabulary() });
+
+  assert.equal(joined.joined.board, false);
+  assert.equal(joined.matched.board, null);
+  assert.equal(joined.rosters[0].unmatched.board, null);
+  assert.equal(joined.rosters[0].players[0].board, null);
+});
+
+test('one feed failing leaves the other reporting normally', () => {
+  const joined = joinLeague({
+    snapshot: snapshot(), pool: null, board: [boardRow()], vocabulary: vocabulary(),
+  });
+
+  assert.equal(joined.matched.pool, null);
+  assert.equal(joined.matched.board, 1);
+  assert.deepEqual(joined.rosters[0].unmatched.board, []);
+});
+
+/*
+ * The same rule for the slot list, where getting it wrong blames the league.
+ * A league with a flex it cannot explain and a league whose vocabulary failed to
+ * download are the same on screen unless this distinction is kept, and the
+ * first is a real thing to warn about while the second is a network error.
+ */
+test('a slot list that did not answer leaves every slot unclaimed', () => {
+  const joined = joinLeague({ snapshot: snapshot(), vocabulary: null });
+
+  assert.equal(joined.joined.vocabulary, false);
+  assert.equal(joined.unresolvedSlots, null);
+  for (const slot of joined.slots) {
+    assert.equal(slot.accepts, null, slot.position);
+    assert.equal(slot.unresolved, null, slot.position);
+  }
+  // And nothing is said about which slots a player fills, since nothing is
+  // known about what any slot takes.
+  assert.deepEqual(joined.rosters[0].players[0].fills, []);
+});
+
+test('and a slot list that answered says which slots it could not explain', () => {
+  const joined = joinLeague({
+    snapshot: snapshot({ slots: [...slots(), { position: 'OFF', count: 1, starting: true }] }),
+    vocabulary: vocabulary(),
+  });
+
+  assert.equal(joined.joined.vocabulary, true);
+  assert.deepEqual(joined.unresolvedSlots, ['OFF']);
+});
+
+test('every feed absent at once is still a readable league', () => {
+  const joined = joinLeague({
+    snapshot: snapshot(), pool: null, vocabulary: null, board: null,
+  });
+
+  assert.deepEqual(joined.joined, { pool: false, vocabulary: false, board: false });
+  assert.deepEqual(joined.matched, { pool: null, board: null, of: 1, rosters: 1 });
+  // The league itself is untouched, because it never came from a feed: it came
+  // from the browser, and that is the whole point of the two-scope split.
+  assert.equal(joined.rosters[0].players[0].name, 'Ada Halfback');
+  assert.equal(joined.slots.length, 8);
+});

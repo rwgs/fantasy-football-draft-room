@@ -19,7 +19,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { readSnapshot } from './league.js';
+import { forgetSnapshots, getSnapshot, putSnapshot, readSnapshot } from './league.js';
 
 /** Yahoo's list: keyed by stringified index, with a count beside it. */
 const list = (items) => {
@@ -156,6 +156,15 @@ const profileResponse = () => ({
     users: { count: 1, 0: { user: [{ guid: 'GUID-MINE' }, { profile: { display_name: 'Me' } }] } },
   },
 });
+
+/** The same settings response, for a league of a given number. */
+const forLeague = (id) => {
+  const body = settingsResponse();
+  const meta = body.fantasy_content.league[0];
+  meta.league_key = '470.l.' + id;
+  meta.league_id = id;
+  return body;
+};
 
 const full = () => readSnapshot({
   settings: settingsResponse(),
@@ -314,4 +323,85 @@ test('a resource missing the half that was asked for is refused', () => {
   const settings = settingsResponse();
   settings.fantasy_content.league[1] = { something_else: {} };
   assert.throws(() => readSnapshot({ settings }), /No settings in the second half/);
+});
+
+// --- Keeping snapshots, and losing them ---------------------------------------
+//
+// Held in memory only, never on disk, because a league snapshot is somebody's
+// private league and a restart costs one click to replace. That choice has two
+// consequences a caller meets, and both are checked here: a bound on how many
+// are kept at once, and a league that was read reading afterwards as one that
+// was not.
+
+test('a snapshot posted comes back, stamped with when it was read', () => {
+  forgetSnapshots();
+  const before = Date.now();
+  const stored = putSnapshot('111', {
+    settings: settingsResponse(), teams: teamsResponse(), profile: profileResponse(),
+  });
+  assert.equal(stored.leagueId, '111');
+  assert.ok(stored.readAt >= before);
+  assert.equal(getSnapshot('111').read, true);
+  assert.equal(getSnapshot('111').snapshot.leagueId, '111');
+});
+
+/*
+ * The reader takes the league out of the page it ran on and the route takes it
+ * out of the address, so a disagreement means one of them is looking at
+ * something the other is not. Filed under the wrong key it would be one
+ * league's rosters shown under another's name, which is the failure Phase 8's
+ * exit criteria single out and which nothing on screen could reveal.
+ */
+test('a snapshot for another league is refused rather than filed under this one', () => {
+  forgetSnapshots();
+  assert.throws(
+    () => putSnapshot('222', {
+      settings: settingsResponse(), teams: teamsResponse(), profile: profileResponse(),
+    }),
+    /for league 111, not 222/,
+  );
+  assert.equal(getSnapshot('222').read, false);
+});
+
+test('a league nobody has read answers "not yet" rather than refusing', () => {
+  forgetSnapshots();
+  const answer = getSnapshot('999');
+  assert.equal(answer.read, false);
+  assert.equal(answer.snapshot, null);
+  assert.ok(answer.hint);
+});
+
+test('past the bound the oldest goes, and reads as unread rather than empty', () => {
+  forgetSnapshots();
+  const post = (id) => putSnapshot(id, {
+    settings: forLeague(id), teams: teamsResponse(), profile: profileResponse(),
+  });
+  for (let i = 1; i <= 9; i += 1) post(String(100 + i));
+
+  // Nine posted, eight kept. The evicted one is indistinguishable from a league
+  // never read, which is exactly what a restart looks like too -- and it is the
+  // reason the app has to say which of the two it is.
+  assert.equal(getSnapshot('101').read, false);
+  assert.equal(getSnapshot('101').snapshot, null);
+  assert.equal(getSnapshot('109').read, true);
+  for (let i = 2; i <= 9; i += 1) {
+    assert.equal(getSnapshot(String(100 + i)).read, true, 'league 1' + (100 + i));
+  }
+});
+
+test('reading a league again moves it out of the way of the bound', () => {
+  forgetSnapshots();
+  const post = (id) => putSnapshot(id, {
+    settings: forLeague(id), teams: teamsResponse(), profile: profileResponse(),
+  });
+  for (let i = 1; i <= 8; i += 1) post(String(200 + i));
+
+  // The oldest, read again, so it is now the newest.
+  post('201');
+  post('209');
+
+  // 202 goes rather than 201, which is what makes the bound safe to have: the
+  // league you are actually looking at cannot be evicted from under you.
+  assert.equal(getSnapshot('201').read, true);
+  assert.equal(getSnapshot('202').read, false);
 });

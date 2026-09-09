@@ -22,6 +22,14 @@ import type { SeasonFeed, SeasonRead, SeasonRoster, SeasonSlot } from '../engine
 
 interface Props {
   read: SeasonRead | null;
+  /**
+   * Whether the service has forgotten a league this app had already read.
+   *
+   * The app's answer, not the service's: snapshots live in memory alone, so a
+   * restart loses them, and the service cannot tell a league never read from
+   * one it read and forgot.
+   */
+  forgotten: boolean;
   loading: boolean;
   error: string | null;
   anonymous: boolean;
@@ -65,7 +73,17 @@ function FeedRow({ label, feed, note }: { label: string; feed: SeasonFeed; note?
 function slotLine(slot: SeasonSlot): string {
   const count = slot.count > 1 ? ' ×' + slot.count : '';
   if (!slot.starting) return slot.position + count;
-  if (!slot.accepts) return slot.position + count + ' (this app cannot say what it takes)';
+  if (!slot.accepts) {
+    /*
+     * `unresolved` is null where the published slot list never arrived, and the
+     * banner above says that once. Repeating it against every slot is noise,
+     * and against `QB` it reads as this app not knowing what a quarterback slot
+     * takes rather than as a feed that did not answer. The clause is for the
+     * other case: a slot the list did arrive and could not explain.
+     */
+    return slot.position + count
+      + (slot.unresolved ? ' (this app cannot say what it takes)' : '');
+  }
   if (slot.accepts.length === 1) return slot.position + count;
   // A composite is named and then explained, because "W/R/T" is Yahoo's label
   // and "WR, RB or TE" is what it means.
@@ -74,8 +92,10 @@ function slotLine(slot: SeasonSlot): string {
     + list.slice(0, -1).join(', ') + ' or ' + list[list.length - 1] + ')';
 }
 
-function Roster({ roster, name, anonymous, index }: {
+function Roster({ roster, name, anonymous, index, pooled }: {
   roster: SeasonRoster; name: string; anonymous: boolean; index: number;
+  /** Whether the pool answered at all, which decides what a miss may be called. */
+  pooled: boolean;
 }) {
   const held = roster.players.length;
   return (
@@ -91,8 +111,12 @@ function Roster({ roster, name, anonymous, index }: {
             * hide one team having matched nothing, which is exactly the shape
             * a broken join takes.
             */}
-          {' · ' + roster.matched.pool + '/' + roster.matched.of + ' in the pool'}
-          {' · ' + roster.matched.board + '/' + roster.matched.of + ' on the board'}
+          {roster.matched.pool == null
+            ? ' · pool not read'
+            : ' · ' + roster.matched.pool + '/' + roster.matched.of + ' in the pool'}
+          {roster.matched.board == null
+            ? ' · board not read'
+            : ' · ' + roster.matched.board + '/' + roster.matched.of + ' on the board'}
         </span>
       </div>
 
@@ -130,7 +154,9 @@ function Roster({ roster, name, anonymous, index }: {
                   // read as an injury: `NA` is 44% of the pool and means
                   // unrostered rather than hurt.
                   ? (p.pool.statusFull || p.pool.status || 'nothing reported')
-                  : 'not in the pool'}
+                  // "Not in the pool" is a claim about the player, and it can
+                  // only be made when the pool actually answered.
+                  : pooled ? 'not in the pool' : ''}
               </td>
             </tr>
           ))}
@@ -143,7 +169,7 @@ function Roster({ roster, name, anonymous, index }: {
 }
 
 export default function SeasonScreen({
-  read, loading, error, anonymous, onRefresh, onBack,
+  read, forgotten, loading, error, anonymous, onRefresh, onBack,
 }: Props) {
   const snapshot = read?.snapshot ?? null;
   const league = read?.league ?? null;
@@ -186,14 +212,28 @@ export default function SeasonScreen({
         <div className="results-inner">
           {header}
           <section className="panel">
-            <div className="panel-head"><h2 className="eyebrow">Nothing read yet</h2></div>
+            <div className="panel-head">
+              <h2 className="eyebrow">{forgotten ? 'The reading is gone' : 'Nothing read yet'}</h2>
+            </div>
             <div className="setup-body">
               {error && <p className="banner is-bad">{error}</p>}
+              {/*
+                * "Nothing read yet" about a league read five minutes ago reads
+                * as this app having lost it. The service cannot tell the two
+                * apart -- a snapshot it has forgotten and one it never had look
+                * identical from there -- but the app was holding the reading,
+                * so it says which this is.
+                */}
               <p className="hint">
-                {read?.hint
-                  || 'This league has not been read yet. Yahoo answers your browser’s own '
-                  + 'session, which this app never holds, so a league is read by a bookmarklet '
-                  + 'you run on the league page.'}
+                {forgotten
+                  ? 'This league was read, and the service is no longer holding it. That is '
+                    + 'what a restart does: snapshots are kept in memory only, never on disk, '
+                    + 'so nothing of your league is left behind when the service stops. '
+                    + 'Running the bookmarklet again is the whole of the fix.'
+                  : read?.hint
+                    || 'This league has not been read yet. Yahoo answers your browser’s own '
+                    + 'session, which this app never holds, so a league is read by a bookmarklet '
+                    + 'you run on the league page.'}
               </p>
               {read?.readerUrl && (
                 <p className="hint">
@@ -249,7 +289,24 @@ export default function SeasonScreen({
           </p>
         )}
 
-        {!!league?.unresolvedSlots.length && (
+        {/*
+          * A slot list that never arrived is not a league with odd slots in it.
+          * Two banners rather than one, because the first blames Yahoo's feed
+          * and the second describes the league, and printing the second for the
+          * first would blame the league for the network.
+          */}
+        {league && !league.joined.vocabulary && (
+          <p className="banner is-bad">
+            <b>Yahoo&rsquo;s slot list could not be read.</b>
+            <span>
+              So nothing below says what a shared slot such as a flex accepts. The league,
+              its rosters and its scoring are unaffected &mdash; they came from your browser,
+              not from that feed.
+            </span>
+          </p>
+        )}
+
+        {!!league?.unresolvedSlots?.length && (
           <p className="banner is-bad">
             {'This league has ' + (league.unresolvedSlots.length === 1 ? 'a slot' : 'slots')
               + ' this app cannot read: ' + league.unresolvedSlots.join(', ')
@@ -277,13 +334,25 @@ export default function SeasonScreen({
               {feeds && <FeedRow label="Slot list" feed={feeds.vocabulary} />}
               {feeds && <FeedRow label="Draft board" feed={feeds.board} />}
             </div>
+            {/*
+              * A COUNT IS ONLY PRINTED FOR A JOIN THAT RAN.
+              *
+              * "0 of 72 matched Yahoo's pool" after a failed fetch is the exact
+              * sentence Y8.4 exists to prevent: it reads as a league full of
+              * players nobody has heard of. Null comes back from the service for
+              * that case and is said as what it is.
+              */}
             {league && (
               <p className="hint">
-                {league.matched.pool + ' of ' + league.matched.of
-                  + ' rostered players matched Yahoo’s pool, and '
-                  + league.matched.board + ' matched the draft board. '}
-                A player who matched neither is still shown, with the columns he has no
-                source for left blank rather than filled in.
+                {league.matched.pool == null
+                  ? 'How many rostered players Yahoo’s pool holds is unknown, because that feed did not answer. '
+                  : league.matched.pool + ' of ' + league.matched.of
+                    + ' rostered players matched Yahoo’s pool. '}
+                {league.matched.board == null
+                  ? 'The draft board did not answer either, so nothing here is matched against it.'
+                  : league.matched.board + ' of ' + league.matched.of
+                    + ' matched the draft board. A player who matched neither is still shown, '
+                    + 'with the columns he has no source for left blank rather than filled in.'}
               </p>
             )}
           </div>
@@ -368,6 +437,7 @@ export default function SeasonScreen({
                   name={teamNames.get(roster.teamKey ?? '') || 'Team ' + (at + 1)}
                   anonymous={anonymous}
                   index={at}
+                  pooled={league.joined.pool}
                 />
               ))
               : (

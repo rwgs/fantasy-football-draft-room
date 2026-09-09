@@ -93,8 +93,17 @@ export function slotAcceptance(vocabulary = []) {
  * anybody and there is nothing about them to resolve. Reporting them as
  * unresolved would put every ordinary league in the state reserved for a league
  * this app cannot read, and then the state would mean nothing.
+ *
+ * A NULL VOCABULARY IS A FEED THAT DID NOT ANSWER, and it is not the same thing
+ * as one that answered and explained nothing. Without the distinction a failed
+ * fetch reports every slot in an ordinary league as one this app cannot read,
+ * which blames the league for the network. So nothing is claimed either way:
+ * `accepts` is null as it must be, and `unresolved` is null rather than true.
  */
 export function resolveSlots(slots = [], vocabulary = []) {
+  if (vocabulary === null) {
+    return slots.map((slot) => ({ ...slot, accepts: null, unresolved: null }));
+  }
   const accepted = slotAcceptance(vocabulary);
   return slots.map((slot) => {
     const accepts = accepted.get(slot.position) ?? null;
@@ -160,9 +169,23 @@ function joinRoster(roster, { byPlayerKey, byBoardKey, starting, ownTeamKey }) {
   const players = roster.players.map((player) => ({
     ...player,
     fills: fills(player, starting),
-    pool: byPlayerKey.get(player.playerKey) ?? null,
-    board: boardMatch(player, byBoardKey),
+    pool: byPlayerKey ? byPlayerKey.get(player.playerKey) ?? null : null,
+    board: byBoardKey ? boardMatch(player, byBoardKey) : null,
   }));
+
+  /*
+   * A JOIN THAT COULD NOT RUN REPORTS NEITHER A MATCH NOR A MISS.
+   *
+   * Null, not zero and not a list of every player. A feed that did not answer
+   * has said nothing about anybody, so "0 of 17 matched" and a roster of names
+   * under "not in the pool" are both false claims — and the plausible-looking
+   * one is worse, because it reads as a league of players nobody has heard of
+   * rather than as a fetch that failed. Null is not a number and not a list, so
+   * a caller that prints it without checking prints something visibly wrong
+   * instead of something quietly wrong.
+   */
+  const count = (has, held) => (held ? players.filter(has).length : null);
+  const names = (has, held) => (held ? players.filter(has).map(nameFor) : null);
 
   return {
     ...roster,
@@ -172,16 +195,16 @@ function joinRoster(roster, { byPlayerKey, byBoardKey, starting, ownTeamKey }) {
     own: !!ownTeamKey && roster.teamKey === ownTeamKey,
     players,
     matched: {
-      pool: players.filter((p) => p.pool).length,
-      board: players.filter((p) => p.board).length,
+      pool: count((p) => p.pool, byPlayerKey),
+      board: count((p) => p.board, byBoardKey),
       of: players.length,
     },
     // Named, not counted. A count says a join went wrong somewhere and a name
     // says where, which is the difference between a number to worry about and
     // a player to go and look at.
     unmatched: {
-      pool: players.filter((p) => !p.pool).map(nameFor),
-      board: players.filter((p) => !p.board).map(nameFor),
+      pool: names((p) => !p.pool, byPlayerKey),
+      board: names((p) => !p.board, byBoardKey),
     },
   };
 }
@@ -189,10 +212,18 @@ function joinRoster(roster, { byPlayerKey, byBoardKey, starting, ownTeamKey }) {
 /**
  * A snapshot, its slots resolved and every roster in it joined.
  *
- * `pool`, `vocabulary` and `board` all default to empty, and an empty one gives
- * rosters that matched nobody rather than an error. That is the state before
- * anything has been fetched, and it reads as what it is: every player present,
- * every join `null`, every name in `unmatched`.
+ * THREE FEEDS, EACH OF WHICH MAY BE ABSENT, AND ABSENT IS ITS OWN ANSWER.
+ *
+ * `null` means the feed did not answer and nothing is claimed from it: the
+ * counts go null, the misses go null, and `joined` says which joins actually
+ * ran. `[]` means it answered with nothing, which is a real if unlikely state
+ * and reports honestly as everybody missing. They default to `[]` rather than
+ * null because that is the state before anything has been fetched, and it reads
+ * as what it is.
+ *
+ * The distinction is the whole of this function's contribution to Y8.4: without
+ * it a failed pool fetch reports every rostered player as one Yahoo has never
+ * heard of, which looks like a finding rather than like a network error.
  */
 export function joinLeague({ snapshot, pool = [], vocabulary = [], board = [] } = {}) {
   if (!snapshot) throw new Error('There is no snapshot to join.');
@@ -200,15 +231,15 @@ export function joinLeague({ snapshot, pool = [], vocabulary = [], board = [] } 
   const slots = resolveSlots(snapshot.slots, vocabulary);
   const starting = slots.filter((slot) => slot.starting && slot.accepts);
 
-  const byPlayerKey = new Map();
-  for (const player of pool) {
+  const byPlayerKey = pool === null ? null : new Map();
+  for (const player of pool ?? []) {
     if (player?.playerKey && !byPlayerKey.has(player.playerKey)) {
       byPlayerKey.set(player.playerKey, player);
     }
   }
 
-  const byBoardKey = new Map();
-  for (const player of board) {
+  const byBoardKey = board === null ? null : new Map();
+  for (const player of board ?? []) {
     if (player?.key && !byBoardKey.has(player.key)) byBoardKey.set(player.key, player);
   }
 
@@ -216,19 +247,32 @@ export function joinLeague({ snapshot, pool = [], vocabulary = [], board = [] } 
     byPlayerKey, byBoardKey, starting, ownTeamKey: snapshot.ownTeamKey,
   }));
 
+  const total = (part) => (rosters.every((r) => r.matched[part] !== null)
+    ? rosters.reduce((n, r) => n + r.matched[part], 0)
+    : null);
+
   return {
     slots,
-    // The slots a lineup check must refuse to reason about. Empty for every
-    // league read so far, and named rather than counted for the same reason an
-    // unmatched player is.
-    unresolvedSlots: slots.filter((slot) => slot.unresolved).map((slot) => slot.position),
+    /*
+     * The slots a lineup check must refuse to reason about, and null where the
+     * vocabulary that would have explained them never arrived. An empty list is
+     * a positive statement — every slot was explained — so it must not be what
+     * a failed fetch produces.
+     */
+    unresolvedSlots: vocabulary === null
+      ? null
+      : slots.filter((slot) => slot.unresolved).map((slot) => slot.position),
     rosters,
+    // Which joins ran at all, so a caller can tell a count of zero from no
+    // count. Named for the feed rather than for the field, because that is the
+    // thing that was or was not there.
+    joined: { pool: pool !== null, vocabulary: vocabulary !== null, board: board !== null },
     // The league-wide totals, which is the number the manual comparison against
     // Yahoo is recorded as. Summed from the rosters rather than counted again,
     // so the parts cannot disagree with the whole.
     matched: {
-      pool: rosters.reduce((n, r) => n + r.matched.pool, 0),
-      board: rosters.reduce((n, r) => n + r.matched.board, 0),
+      pool: total('pool'),
+      board: total('board'),
       of: rosters.reduce((n, r) => n + r.matched.of, 0),
       rosters: rosters.length,
     },

@@ -1346,9 +1346,10 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 ### Phase 8 tasks, in order
 
 Split from the contract in `PLAN.md`, "What discovery settled". **Phase 8 was
-authorized 2026-09-08; Y8.1 to Y8.3b are done and Y8.4 is unstarted. Phase 8 is
-not complete: Y8.3b's comparison against the owner's own league needs a
-signed-in browser and has not been done.** Each is
+authorized 2026-09-08 and every task in it is built. Phase 8 is **not
+complete**: two checks need the owner's own signed-in browser and have not been
+done — comparing every roster and setting against Yahoo, and switching between
+two real leagues.** Each is
 one reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
 league, and nothing in it recommends anything.
 
@@ -1655,22 +1656,91 @@ are divided between them and none was dropped.
     are Y8.4's to make routine, along with a league switch and a restart.
   - Dependencies: Y8.3a.
 
-- [ ] Y8.4: Make the failure states of the view honest.
-  - Scope: the cases `ROADMAP.md` names as Phase 8's exit criteria — switching
-    league or season, a service restart, an interrupted page, and a reader that
-    silently did nothing.
-  - Acceptance: switching leagues cannot show another league's state;
-    **an interrupted pool fetch cannot turn an owned player into an available
-    one**; a restart says the snapshot is gone rather than showing an empty
-    league; a stale feed is displayed with its age rather than hidden or
-    silently refreshed.
-  - Automated: `server:test` for the partial-response and eviction cases,
-    `engine:test` for what an endpoint reports after a restart, `shots` for each
-    visible failure state.
-  - Manual: switch between two real leagues if a second is available, and
-    restart the service mid-view. Record what could not be exercised.
-  - Dependencies: Y8.3b. Note the memory rule that restarting the service wipes
-    a live draft room; do not exercise the restart case during one.
+- [x] Y8.4: Make the failure states of the view honest.
+  - Scope: three real conflations found by reading the code against the exit
+    criteria, not a screenshot pass. Each had a wrong answer that looked right.
+  - **A feed that failed read as a feed that answered with nothing.**
+    `readSeason` passed `?? []` for a failure, so an empty pool joined to nobody
+    and every rostered player came back reported as one Yahoo has never heard
+    of — which reads as a finding about the league rather than as a fetch that
+    failed. `joinLeague` now takes `null` for "did not answer" and reports
+    `matched` and `unmatched` as **null rather than zero or a list of
+    everybody**: null is neither a number nor a list, so a caller that prints it
+    without checking prints something visibly wrong instead of quietly wrong.
+    `joined` says which joins ran.
+  - The same fault on the slot list, where it blamed the league: an absent
+    vocabulary marked every starting slot `unresolved`, so an ordinary league
+    read as one this app cannot understand. `unresolved` is now null where
+    nothing is known, `unresolvedSlots` is null rather than a list of every
+    slot, and the screen says the feed failed instead.
+  - **A league switch left the last league's rosters on screen.** The reading
+    and the league it is for are now one piece of state, so they cannot
+    disagree; a switch drops what is held before the fetch rather than after,
+    which also fixes the worse case — a *failed* fetch left the previous
+    league's rosters up for good, since a failure sets the error and does not
+    clear the reading. A ticket counter drops a slow answer that a faster switch
+    has overtaken, and the answer's own league id is checked against the one
+    asked for. That last one should be unreachable, which is the reason to check
+    it rather than not to.
+  - **A forgotten snapshot read as one never taken.** The service cannot tell
+    the two apart — snapshots are memory only, and memory is memory — but the
+    app can, because it was holding the reading. So a league that was read and
+    now is not says "The reading is gone", names a restart as the cause and says
+    running the bookmarklet again is the whole fix, rather than "nothing has
+    been read yet" about a league read five minutes ago.
+  - Already met by Y8.3b and left alone: a stale feed is displayed with its age.
+  - Automated validation: **12 new checks in `server:test`, taking it to 107** —
+    seven on the absent-feed distinction, each paired with its `[]` contrast so
+    the two answers are checked against each other rather than in isolation, and
+    five on snapshot storage, which had none: the read-back, the wrong-league
+    refusal, the bound at eight, and that reading a league again moves it out of
+    the way of the bound so the one you are looking at cannot be evicted from
+    under you. **Five new in `engine:test`**, taking that block to 19: what a
+    caller sees for a league the service has forgotten, which is the
+    endpoint-visible form of the restart case, and that a cross-filed snapshot
+    is refused and leaves the target league still unread.
+  - **The suite bites, checked by breaking both new rules.** Treating an absent
+    pool or board as an empty one reddens exactly the four absent-feed checks;
+    treating an absent vocabulary as an empty one reddens exactly two. Nothing
+    else moved either time.
+  - `shots` gains a `yahoo-season-failures` scenario photographing three states:
+    `season-reader-behind.png`, `season-forgotten.png` and
+    `season-switched.png`. The switch is driven through the real controls, and
+    it asserts the negatives that matter — the previous league's name must be
+    absent, and a league never read must not be called one the service forgot.
+  - **Two things that scenario cost a run each to learn, both now written down
+    where they bit.** A Yahoo league becomes the active one only when its
+    settings import, and importing needs a room the bridge has posted; and the
+    platform has to be Yahoo first, because a Sleeper league id is eighteen
+    digits and a nine-digit one is refused. Neither failure looks like a
+    failure: the active league simply does not move, which reads as the switch
+    working and the screen being wrong.
+  - Manual validation: **the failed-feed state photographed for real**, which
+    `shots` cannot force. Produced by pointing the game-scope base URL at a dead
+    address and at cache keys with no file behind them, on a service of its own:
+    the pool and slot list both read `failed` with `fetch failed` under them in
+    red, the banner said Yahoo's slot list could not be read and that the league
+    and its rosters are unaffected, the summary said how many players the pool
+    holds is *unknown* rather than zero, the roster line said "pool not read ·
+    5/5 on the board", and **the status column was blank rather than "not in the
+    pool"** — which is the whole point. The board still joined 5 of 5, so one
+    feed failing did not take the others.
+  - Fixed by looking at that photograph: with the slot list absent, every slot
+    printed "(this app cannot say what it takes)", which is noise after the
+    banner and, against `QB`, reads as this app not knowing what a quarterback
+    slot takes. The clause is now kept for the case it is about — a slot the
+    list did arrive and could not explain.
+  - **Not done, and it needs the owner:** switching between two *real* leagues,
+    and restarting the service under a live view. The second is deliberately not
+    attempted here — 5178 had been up for hours and restarting it wipes any
+    Yahoo draft room it is holding, which is a recorded rule. The eviction path
+    exercises the same code the restart does, from the same side, so what is
+    untested is the restart itself rather than the answer it produces.
+  - Local gate: typecheck clean, `server:test` 107, `bridge:test` 7,
+    `engine:test` green, build clean, `shots` clean with no console errors, lint
+    unchanged at 43. Driven against an isolated service and client on 5179 and
+    5180, and the broken-feed run on 5181 and 5182, never by restarting 5178.
+  - Dependencies: Y8.3b.
 
 ### Subsequent task planning
 

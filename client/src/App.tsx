@@ -165,12 +165,41 @@ export default function App() {
   const [engine, setEngine] = useState<DraftEngine | null>(null);
   const [screen, setScreen] = useState<Screen>('setup');
 
-  // The league in season, read only when the screen asking for it is open.
-  // Nothing in season is on a clock, so this is never polled: it changes when
-  // the user runs the bookmarklet, and pressing Read again is how they say so.
-  const [seasonRead, setSeasonRead] = useState<SeasonRead | null>(null);
+  /*
+   * The league in season, read only when the screen asking for it is open.
+   *
+   * Nothing in season is on a clock, so this is never polled: it changes when
+   * the user runs the bookmarklet, and pressing Read again is how they say so.
+   *
+   * THE LEAGUE IT IS FOR IS HELD WITH IT, in one piece of state rather than
+   * two. Kept apart, a league switched on the setup screen left the last
+   * league's rosters on screen until a fetch returned -- and left them there
+   * for good if it failed, since a failure sets the error and does not clear
+   * the reading.
+   */
+  const [season, setSeason] = useState<{ leagueId: string; read: SeasonRead } | null>(null);
   const [seasonBusy, setSeasonBusy] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
+  /**
+   * Whether the service has forgotten a league it had read.
+   *
+   * Snapshots live in the service's memory alone, so a restart loses them, and
+   * the service cannot tell "never read" from "read and then forgotten" --
+   * memory is memory. The app can, because it was holding the reading. Worth
+   * saying: "nothing has been read yet" about a league read five minutes ago
+   * reads as the app having lost it rather than as a bookmarklet to run again.
+   */
+  const [seasonForgotten, setSeasonForgotten] = useState(false);
+  /** The last league a read actually succeeded for, which is the evidence above. */
+  const seasonEverRead = useRef<string | null>(null);
+  /**
+   * Which read is the current one.
+   *
+   * Two can be in flight after a switch and the slower must not win. Counted
+   * rather than compared against the league, because the callback closes over
+   * the league it was made for and cannot see a later one.
+   */
+  const seasonAsked = useRef(0);
 
   // A different scoring format is a different board, and a different board can
   // match a different set of names. Run the file again rather than leave a
@@ -846,20 +875,55 @@ export default function App() {
    * bookmarklet instructions rather than a fault.
    */
   const loadSeason = useCallback(async () => {
-    if (!activeLeagueId) return;
+    const asked = activeLeagueId;
+    if (!asked) return;
+    const ticket = seasonAsked.current + 1;
+    seasonAsked.current = ticket;
+
+    // A different league is a different league. What is held goes now rather
+    // than when the answer arrives, so nothing of the last one is ever on
+    // screen under this one's name. The same league is left alone, so pressing
+    // Read again does not blink through the empty state.
+    setSeason((held) => (held && held.leagueId === asked ? held : null));
     setSeasonBusy(true);
     setSeasonError(null);
     try {
-      setSeasonRead(await fetchSeason(activePlatform, activeLeagueId, {
+      const got = await fetchSeason(activePlatform, asked, {
         scoring: league.scoring,
         teams: league.teams,
         adpSource: league.adpSource,
         year: league.year,
-      }));
+      });
+      if (ticket !== seasonAsked.current) return;
+
+      /*
+       * The answer has to be about the league that was asked for.
+       *
+       * `putSnapshot` already refuses a snapshot filed under the wrong league,
+       * so this should be unreachable -- which is the reason to check it rather
+       * than not to. Showing one league's rosters under another's name is the
+       * failure Phase 8's exit criteria single out, and it would be invisible.
+       */
+      const answered = got.snapshot?.leagueId;
+      if (answered && answered !== asked) {
+        setSeason(null);
+        setSeasonError('The service answered about league ' + answered + ', not '
+          + asked + '. Nothing is shown rather than the wrong league.');
+        return;
+      }
+
+      // A league that was read and now is not is a service that has forgotten
+      // it, which a restart does. Held in a ref because the answer has to be
+      // compared with what came before it, and a callback closes over a state
+      // value as it was when the callback was made.
+      if (got.read) seasonEverRead.current = asked;
+      setSeasonForgotten(!got.read && seasonEverRead.current === asked);
+      setSeason({ leagueId: asked, read: got });
     } catch (err) {
+      if (ticket !== seasonAsked.current) return;
       setSeasonError('Your league could not be read. ' + String((err as Error).message));
     } finally {
-      setSeasonBusy(false);
+      if (ticket === seasonAsked.current) setSeasonBusy(false);
     }
   }, [activeLeagueId, activePlatform, league.scoring, league.teams, league.adpSource, league.year]);
 
@@ -1377,7 +1441,10 @@ export default function App() {
 
       {screen === 'season' && (
         <SeasonScreen
-          read={seasonRead}
+          // Rendered only where the reading is for the league now selected. The
+          // pair is held together for this reason, so the two cannot disagree.
+          read={season?.leagueId === activeLeagueId ? season.read : null}
+          forgotten={seasonForgotten}
           loading={seasonBusy}
           error={seasonError}
           anonymous={anonymous}

@@ -278,7 +278,7 @@ async function yahooMock(browser, viewport) {
  * roster rather than a column of misses. Through the app's own origin, so this
  * knows no more about where the service runs than the browser does.
  */
-async function postSnapshot(id, teams) {
+async function postSnapshot(id, teams, { old = false } = {}) {
   const res = await fetch(APP + '/api/board?scoring=ppr&teams=12&adpSource=sleeper');
   if (!res.ok) throw new Error('no board to build a snapshot from: ' + res.status);
   const board = await res.json();
@@ -399,7 +399,9 @@ async function postSnapshot(id, teams) {
           ],
         },
       },
-      rosters,
+      // `rosters` normally, and the singular `roster` for the shape a
+      // bookmarklet too old to send every roster posts.
+      ...(old ? { roster: rosters[0] } : { rosters }),
       /*
        * The second team is the user's, so the screenshot shows the own-team
        * mark landing somewhere other than first. That is the whole point of
@@ -421,8 +423,9 @@ async function postSnapshot(id, teams) {
    */
   const body = await sent.json().catch(() => ({}));
   if (!sent.ok) throw new Error('the service refused the snapshot: ' + sent.status);
-  if ((body.rosters || []).length !== teams) {
-    throw new Error('posted ' + teams + ' rosters and the service read '
+  const want = old ? 1 : teams;
+  if ((body.rosters || []).length !== want) {
+    throw new Error('posted ' + want + ' rosters and the service read '
       + (body.rosters || []).length);
   }
 }
@@ -486,6 +489,119 @@ async function yahooSeason(browser, viewport) {
   if (marks !== 1) {
     throw new Error('expected exactly one roster marked as yours, found ' + marks);
   }
+
+  return { page, errors };
+}
+
+/**
+ * The in-season view's failure states, which are the ones worth photographing.
+ *
+ * The happy path above shows a league. These are what the same screen says when
+ * it cannot, and each has a wrong answer that looks right: a stale bookmarklet
+ * reading as Yahoo having failed, a service that forgot a league reading as one
+ * never read, and a league switch leaving the last league's rosters on screen
+ * under the new one's name.
+ *
+ * One page and no reloads. `addInitScript` runs on every navigation, so a reload
+ * puts the seeded state back and undoes anything the page has done since.
+ */
+async function yahooSeasonFailures(browser, viewport) {
+  const stale = String(Date.now()).slice(-9);
+  const fresh = String(Date.now() + 1).slice(-9);
+  const page = await browser.newPage({ viewport });
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+
+  await page.addInitScript(([key, state]) => {
+    localStorage.setItem(key, JSON.stringify(state));
+  }, [STORE, {
+    mode: 'assistant',
+    activeLeagueId: stale,
+    savedLeagues: [savedYahooLeague(stale)],
+  }]);
+
+  // A bookmarklet too old to send every roster, which is the likeliest failure
+  // this reader has: a bookmarklet carries its source in the address it was
+  // dragged from and can never update itself.
+  await postSnapshot(stale, 8, { old: true });
+
+  await page.goto(APP, { waitUntil: 'domcontentloaded' });
+  const open = page.getByRole('button', { name: 'My league in season' });
+  await open.waitFor({ state: 'visible', timeout: 60000 });
+  await open.click();
+
+  await page.getByText('The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  const behind = page.locator('.banner.is-bad').filter({ hasText: 'old copy' });
+  if (!await behind.count()) {
+    throw new Error('an old reader sent one roster and the screen did not say so');
+  }
+  await page.screenshot({ path: join(OUT, 'season-reader-behind.png') });
+  console.log('  season-reader-behind.png');
+
+  /*
+   * NOW THE SERVICE FORGETS IT, WHICH IS WHAT A RESTART DOES.
+   *
+   * Snapshots are memory only and bounded at eight, so eight more evict this
+   * one. From the service's side an evicted league and one lost to a restart
+   * are the same answer; the app is the only thing that can tell them from a
+   * league never read, because it was holding the reading.
+   */
+  for (let i = 0; i < 8; i += 1) {
+    await postSnapshot(String(Date.now() + 100 + i).slice(-9), 1);
+  }
+  await page.getByRole('button', { name: 'Read again' }).click();
+  await page.getByText('The reading is gone').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await page.screenshot({ path: join(OUT, 'season-forgotten.png') });
+  console.log('  season-forgotten.png');
+
+  /*
+   * AND A LEAGUE SWITCH, WHICH MUST NOT SHOW THE LAST LEAGUE'S STATE.
+   *
+   * Read one league, switch to another that has never been read, and the screen
+   * has to be empty. Left to itself the reading outlives the switch, and a
+   * failed fetch would leave it up for good.
+   */
+  await postSnapshot(stale, 8);
+  await page.getByRole('button', { name: 'Read again' }).click();
+  await page.getByText('The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+
+  /*
+   * Two things this needs before the switch will happen at all, and both cost a
+   * run to find. Yahoo has to be the chosen platform, because the platform
+   * decides what a valid league ID looks like and a Sleeper one is eighteen
+   * digits. And the new league needs a room posted, because a Yahoo league
+   * becomes the active one only when its settings import, and importing needs
+   * something the bridge has posted. Neither failure looks like a failure: the
+   * active league simply does not move, which reads as the switch working and
+   * the screen being wrong.
+   */
+  await postRoom(fresh, 12, 15, MY_SEAT);
+  await page.getByRole('button', { name: 'Back to setup' }).click();
+  await page.getByRole('button', { name: 'Yahoo', exact: true }).click();
+  await page.locator('#leagueId').fill(fresh);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.waitForFunction(
+    ([key, want]) => JSON.parse(localStorage.getItem(key)).activeLeagueId === want,
+    [STORE, fresh],
+    { timeout: ROOM_WAIT },
+  );
+
+  const again = page.getByRole('button', { name: 'My league in season' });
+  await again.waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await again.click();
+
+  await page.getByText('Nothing read yet').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  if (await page.getByText('The Sunday League').count()) {
+    throw new Error('switching leagues left the last one on screen');
+  }
+  // And it is not called forgotten either: this league was never read, and the
+  // two states have different fixes.
+  if (await page.getByText('The reading is gone').count()) {
+    throw new Error('a league never read was reported as one the service forgot');
+  }
+  await page.screenshot({ path: join(OUT, 'season-switched.png') });
+  console.log('  season-switched.png');
 
   return { page, errors };
 }
@@ -596,6 +712,15 @@ async function main() {
     await page.close();
   } catch (err) {
     failures.push('yahoo-season: ' + err.message);
+  }
+
+  console.log('yahoo-season-failures:');
+  try {
+    const { page, errors } = await yahooSeasonFailures(browser, WIDE);
+    if (errors.length) failures.push('yahoo-season-failures: ' + errors.join(' | '));
+    await page.close();
+  } catch (err) {
+    failures.push('yahoo-season-failures: ' + err.message);
   }
 
   await browser.close();
