@@ -155,6 +155,16 @@ check, and a bridge that logs no version banner has not run at all.
 data service has to be running or every check fails at the first fetch. Bring
 one up with `npm run serve`, or use `npm run dev` for both halves.
 
+**Point it at a service nobody is using.** It posts nine league snapshots to
+prove the in-season store is bounded at eight, so a service holding somebody's
+real league loses it: eight `Spare League` fixtures and nothing else. That
+happened on 2026-09-08, to the owner mid-test. The check cannot tell a fixture
+from a league, and a restart is the only cleanup, which costs the real one too.
+So bring up a second service — `cd server && PORT=5179 node src/index.js` — and
+run `API=http://127.0.0.1:5179 npx tsx src/engine/selftest.ts` from `client/`.
+That is already the habit because 5178 may be mirroring a live draft; this is a
+second reason for it.
+
 Two of its suites — "Following a real draft" and "Reading a real league" — skip
 unless `client/fixtures.local.json` exists. They are the only checks that
 exercise `server/src/platforms/`, so a green run without that file says nothing

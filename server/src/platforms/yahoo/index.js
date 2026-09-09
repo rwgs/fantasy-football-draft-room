@@ -27,7 +27,7 @@ import {
   applyPost, getAdvice, getRoom, queuePlan, roundCount, setAdvice, setWanted, teamCount,
 } from './room.js';
 import { bridgeStatus } from '../../bridge.js';
-import { getSnapshot, putSnapshot } from './league.js';
+import { getSnapshot, listSnapshots, putSnapshot } from './league.js';
 import { joinLeague } from './inSeason.js';
 import { fetchPlayerPool, fetchReference } from '../../sources/yahooPlayers.js';
 
@@ -597,6 +597,7 @@ export default {
   roomAdpByKey,
   putSnapshot,
   getSnapshot,
+  listSnapshots,
   readSeason,
   isValidId: (id) => IS_ID.test(id),
   idHint: 'A Yahoo league ID is the number in your draft room address.',

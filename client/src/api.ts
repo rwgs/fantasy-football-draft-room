@@ -1,6 +1,6 @@
 import type {
   Board, BridgeReport, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState,
-  NoteSet, Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState, SeasonRead,
+  NoteSet, Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState, SeasonLeagueList, SeasonRead,
 } from './engine/types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -182,6 +182,18 @@ export async function fetchSeason(
     on(platform, '/league/' + encodeURIComponent(leagueId) + '/season?' + query(q)),
     { cache: 'no-store' },
   );
+  if (!res.ok) return fail(res);
+  return res.json();
+}
+
+/**
+ * Which leagues the service is holding a reading of.
+ *
+ * How the in-season screen offers a league without being told a number. The
+ * reader posts a snapshot; this is how the app learns it exists.
+ */
+export async function fetchSeasonLeagues(platform: Platform): Promise<SeasonLeagueList> {
+  const res = await fetch(on(platform, '/leagues'), { cache: 'no-store' });
   if (!res.ok) return fail(res);
   return res.json();
 }

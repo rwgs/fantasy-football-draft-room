@@ -609,6 +609,36 @@ app.get('/api/:platform/league/:id/snapshot', async (req, res) => {
 });
 
 /**
+ * Which leagues this service is holding a reading of.
+ *
+ * How the in-season screen finds out which league to show, and it exists
+ * because the first answer was wrong: the screen borrowed the app's *active*
+ * league, which is a draft setting. A Yahoo league becomes active only once its
+ * draft settings import, and importing them needs a room the bridge has posted
+ * — so in season, when there is no room, the screen could not reach the one
+ * case it was built for.
+ *
+ * No `:id`, so it takes no league from the caller and cannot be asked about one
+ * it is not holding.
+ */
+app.get('/api/:platform/leagues', async (req, res) => {
+  const platform = platformFor(req.params.platform);
+  if (!platform) {
+    res.status(404).json({
+      error: 'No league platform by that name. This service reads: '
+        + PLATFORM_NAMES.join(', ') + '.',
+    });
+    return;
+  }
+  if (!platform.listSnapshots) {
+    res.status(404).json({ error: 'That platform is read from its own feed, not posted to.' });
+    return;
+  }
+  res.set('cache-control', 'no-store');
+  res.json({ leagues: platform.listSnapshots() });
+});
+
+/**
  * The league in season, with every roster joined to the feeds.
  *
  * The snapshot route above hands back what the browser read, unjoined. This is

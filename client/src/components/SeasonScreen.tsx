@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { maskLeague, maskTeam } from '../anon';
-import type { SeasonFeed, SeasonRead, SeasonRoster, SeasonSlot } from '../engine/types';
+import type {
+  SeasonFeed, SeasonLeagueHeld, SeasonRead, SeasonRoster, SeasonSlot,
+} from '../engine/types';
 
 /**
  * A Yahoo league in season, read only.
@@ -22,6 +25,16 @@ import type { SeasonFeed, SeasonRead, SeasonRoster, SeasonSlot } from '../engine
 
 interface Props {
   read: SeasonRead | null;
+  /** The Yahoo league being looked at, or null before one has been chosen. */
+  leagueId: string | null;
+  /**
+   * The leagues the service is holding a reading of.
+   *
+   * So a league can be chosen rather than typed. The reader posts a snapshot
+   * and the app finds out from this, which is what makes the screen reachable
+   * without anything borrowed from the draft settings.
+   */
+  held: SeasonLeagueHeld[];
   /**
    * Whether the service has forgotten a league this app had already read.
    *
@@ -33,7 +46,8 @@ interface Props {
   loading: boolean;
   error: string | null;
   anonymous: boolean;
-  onRefresh: () => void;
+  /** Read a league. Given one, it becomes the league this screen is looking at. */
+  onRead: (leagueId: string) => void;
   onBack: () => void;
 }
 
@@ -169,8 +183,9 @@ function Roster({ roster, name, anonymous, index, pooled }: {
 }
 
 export default function SeasonScreen({
-  read, forgotten, loading, error, anonymous, onRefresh, onBack,
+  read, leagueId, held, forgotten, loading, error, anonymous, onRead, onBack,
 }: Props) {
+  const [typed, setTyped] = useState(leagueId ?? '');
   const snapshot = read?.snapshot ?? null;
   const league = read?.league ?? null;
   const feeds = read?.feeds ?? null;
@@ -187,16 +202,88 @@ export default function SeasonScreen({
           {snapshot.scoringType ? ' · ' + snapshot.scoringType : ''}
         </span>
       )}
-      <button
-        type="button"
-        className="chip"
-        style={{ marginLeft: 'auto' }}
-        disabled={loading}
-        onClick={onRefresh}
-      >
-        {loading ? 'Reading…' : 'Read again'}
-      </button>
+      {leagueId && (
+        <button
+          type="button"
+          className="chip"
+          style={{ marginLeft: 'auto' }}
+          disabled={loading}
+          onClick={() => onRead(leagueId)}
+        >
+          {loading ? 'Reading…' : 'Read again'}
+        </button>
+      )}
     </div>
+  );
+
+  /*
+   * WHICH LEAGUE, ASKED HERE RATHER THAN BORROWED.
+   *
+   * Two ways in, because they suit different moments. The leagues the service is
+   * already holding are offered as buttons, so after running the bookmarklet
+   * there is nothing to type. And the number can be typed, which is what you
+   * need the first time, or when the service has been restarted and is holding
+   * nothing at all.
+   *
+   * It is not taken from the app's active league, which is what it did at first
+   * and is the defect this replaces: that is a *draft* setting, only set once
+   * draft settings import, and importing them needs a posted draft room. In
+   * season there is none, so the screen could not reach the case it exists for.
+   */
+  const picker = (
+    <section className="panel">
+      <div className="panel-head">
+        <h2 className="eyebrow">Which league</h2>
+        <span className="hint mono">{held.length ? held.length + ' read' : ''}</span>
+      </div>
+      <div className="setup-body">
+        {!!held.length && (
+          <div className="season-held">
+            {held.map((one) => (
+              <button
+                key={one.leagueId}
+                type="button"
+                className="chip"
+                aria-pressed={one.leagueId === leagueId}
+                onClick={() => { setTyped(one.leagueId); onRead(one.leagueId); }}
+              >
+                {maskLeague(one.name || one.leagueId, 0, anonymous)}
+                {one.season ? ' · ' + one.season : ''}
+                {one.numTeams != null ? ' · ' + one.numTeams + ' teams' : ''}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <form
+          className="season-pick"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const id = typed.trim();
+            if (id) onRead(id);
+          }}
+        >
+          <label className="hint" htmlFor="seasonLeagueId">Yahoo league ID</label>
+          <input
+            id="seasonLeagueId"
+            className="input"
+            inputMode="numeric"
+            value={typed}
+            placeholder="123456"
+            onChange={(e) => setTyped(e.target.value)}
+          />
+          <button type="submit" className="chip" disabled={loading || !typed.trim()}>
+            {loading ? 'Reading…' : 'Read this league'}
+          </button>
+        </form>
+        <p className="hint">
+          The number in your Yahoo league address, after
+          {' '}
+          <code>/f1/</code>
+          . Only Yahoo can be read in season.
+        </p>
+      </div>
+    </section>
   );
 
   /*
@@ -211,6 +298,8 @@ export default function SeasonScreen({
       <div className="results">
         <div className="results-inner">
           {header}
+          {picker}
+          {leagueId && (
           <section className="panel">
             <div className="panel-head">
               <h2 className="eyebrow">{forgotten ? 'The reading is gone' : 'Nothing read yet'}</h2>
@@ -246,6 +335,7 @@ export default function SeasonScreen({
               )}
             </div>
           </section>
+          )}
         </div>
       </div>
     );
@@ -262,6 +352,7 @@ export default function SeasonScreen({
     <div className="results">
       <div className="results-inner">
         {header}
+        {picker}
 
         {/*
           * A reader that cannot send every roster, said before anything else.

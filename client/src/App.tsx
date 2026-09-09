@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchBoard, fetchBridge, fetchDraftPicks, fetchLeague, fetchLeagueSetup, fetchRoomState,
-  fetchSeason, matchNotes, matchRankings,
+  fetchSeason, fetchSeasonLeagues, matchNotes, matchRankings,
 } from './api';
 import { maskLeague } from './anon';
 import { keeperPicksIn } from './engine/order';
@@ -15,8 +15,8 @@ import type { DraftEngine } from './engine/draft';
 import { YAHOO_MOCK_ROSTER, rosterSize } from './engine/roster';
 import type {
   AppMode, Board, BridgeStatus, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
-  NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague, SeasonRead,
-  SortKey,
+  NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague,
+  SeasonLeagueHeld, SeasonRead, SortKey,
 } from './engine/types';
 import type { RankingSource, Theme } from './storage';
 import { load, save } from './storage';
@@ -177,6 +177,19 @@ export default function App() {
    * for good if it failed, since a failure sets the error and does not clear
    * the reading.
    */
+  /**
+   * Which Yahoo league the in-season view is looking at.
+   *
+   * ITS OWN SETTING, AND NOT `activeLeagueId`, which was the first answer and
+   * was wrong. That one is a draft setting: a Yahoo league becomes active only
+   * once its *draft* settings import, and importing them needs a room the
+   * bridge has posted. In season there is no room, so the view could not reach
+   * the one case it exists for. Reported by the repository owner, who could not
+   * select a league at all.
+   */
+  const [seasonLeagueId, setSeasonLeagueId] = useState<string | null>(saved.seasonLeagueId);
+  /** The leagues the service is holding, so one can be chosen rather than typed. */
+  const [seasonHeld, setSeasonHeld] = useState<SeasonLeagueHeld[]>([]);
   const [season, setSeason] = useState<{ leagueId: string; read: SeasonRead } | null>(null);
   const [seasonBusy, setSeasonBusy] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
@@ -211,11 +224,11 @@ export default function App() {
     save({
       league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
       cpuPreset: preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock,
-      poolSort, queueWrite, queuePriority,
+      poolSort, queueWrite, queuePriority, seasonLeagueId,
     });
   }, [league, cpu, rankings, rankingSource, noteSource, overrides, savedLeagues, activeLeagueId,
     preset, pace, mode, anonymous, theme, myManager, resumeLive, yahooMock, poolSort,
-    queueWrite, queuePriority]);
+    queueWrite, queuePriority, seasonLeagueId]);
 
   /*
    * The resolved theme goes on <html> rather than into the tree, because what
@@ -874,9 +887,10 @@ export default function App() {
    * an ordinary answer with `read: false`, which the screen turns into the
    * bookmarklet instructions rather than a fault.
    */
-  const loadSeason = useCallback(async () => {
-    const asked = activeLeagueId;
+  const loadSeason = useCallback(async (leagueId?: string) => {
+    const asked = leagueId ?? seasonLeagueId;
     if (!asked) return;
+    setSeasonLeagueId(asked);
     const ticket = seasonAsked.current + 1;
     seasonAsked.current = ticket;
 
@@ -888,7 +902,10 @@ export default function App() {
     setSeasonBusy(true);
     setSeasonError(null);
     try {
-      const got = await fetchSeason(activePlatform, asked, {
+      // Always Yahoo: it is the only platform with an in-season reading, and
+      // the platform of whatever league is set up for a *draft* has nothing to
+      // do with which league is being looked at here.
+      const got = await fetchSeason('yahoo', asked, {
         scoring: league.scoring,
         teams: league.teams,
         adpSource: league.adpSource,
@@ -925,7 +942,12 @@ export default function App() {
     } finally {
       if (ticket === seasonAsked.current) setSeasonBusy(false);
     }
-  }, [activeLeagueId, activePlatform, league.scoring, league.teams, league.adpSource, league.year]);
+  }, [seasonLeagueId, league.scoring, league.teams, league.adpSource, league.year]);
+
+  /** Which leagues the service holds, asked when the screen opens and after a read. */
+  const loadSeasonHeld = useCallback(async () => {
+    setSeasonHeld(await fetchSeasonLeagues('yahoo').then((r) => r.leagues).catch(() => []));
+  }, []);
 
   // How far along the draft is goes stale by the minute once it opens, so it is
   // read when you ask for it and whenever the league changes under it.
@@ -1084,17 +1106,24 @@ export default function App() {
         {/*
           * The way in to the league in season.
           *
-          * On the setup screen only, and only for the platform that can be read
-          * in season. A draft under way is exactly when a navigation button is
-          * a hazard rather than a convenience, and leaving mid-draft is not a
-          * click anyone should make by accident.
+          * On the setup screen and nothing else, because a draft under way is
+          * exactly when a navigation button is a hazard rather than a
+          * convenience. It used also to require a Yahoo league already active
+          * for a *draft*, which made the whole screen unreachable in season:
+          * that only happens once draft settings import, and importing them
+          * needs a posted draft room. So it is offered unconditionally now and
+          * the screen says what it needs.
           */}
-        {screen === 'setup' && activePlatform === 'yahoo' && activeLeagueId && (
+        {screen === 'setup' && (
           <button
             type="button"
             className="chip"
             title="Your Yahoo league as it stands: every roster, the slots and the scoring."
-            onClick={() => { setScreen('season'); void loadSeason(); }}
+            onClick={() => {
+              setScreen('season');
+              void loadSeasonHeld();
+              if (seasonLeagueId) void loadSeason();
+            }}
           >
             My league in season
           </button>
@@ -1443,12 +1472,14 @@ export default function App() {
         <SeasonScreen
           // Rendered only where the reading is for the league now selected. The
           // pair is held together for this reason, so the two cannot disagree.
-          read={season?.leagueId === activeLeagueId ? season.read : null}
+          read={season?.leagueId === seasonLeagueId ? season.read : null}
+          leagueId={seasonLeagueId}
+          held={seasonHeld}
           forgotten={seasonForgotten}
           loading={seasonBusy}
           error={seasonError}
           anonymous={anonymous}
-          onRefresh={() => { void loadSeason(); }}
+          onRead={(id) => { void loadSeason(id); void loadSeasonHeld(); }}
           onBack={() => setScreen('setup')}
         />
       )}

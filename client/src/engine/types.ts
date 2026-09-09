@@ -1015,3 +1015,24 @@ export interface SeasonRead {
     board: SeasonFeed;
   } | null;
 }
+
+/** One league the service is holding a reading of, enough to name it on a button. */
+export interface SeasonLeagueHeld {
+  leagueId: string;
+  name: string | null;
+  season: string;
+  numTeams: number | null;
+  readAt: number;
+}
+
+/**
+ * The leagues the service has snapshots for, newest first.
+ *
+ * How the in-season screen offers a league without being told a number, and it
+ * exists because the first answer was wrong: the screen borrowed the app's
+ * *active* league, which is a draft setting and needs a posted draft room to be
+ * set at all. In season there is none.
+ */
+export interface SeasonLeagueList {
+  leagues: SeasonLeagueHeld[];
+}

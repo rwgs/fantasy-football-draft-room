@@ -98,6 +98,17 @@ export interface Saved {
    * The control over the list is unaffected; this only says where it starts.
    */
   poolSort: SortKey;
+  /**
+   * The Yahoo league the in-season view is looking at.
+   *
+   * ITS OWN FIELD, AND NOT `activeLeagueId`. That one is a draft setting: a
+   * Yahoo league only becomes the active one once its *draft* settings import,
+   * and importing them needs a room the bridge has posted. In season there is
+   * no room, so borrowing it made the in-season view unreachable for the one
+   * case it exists for. A league in season and a league to mock-draft are
+   * different questions and now have different answers.
+   */
+  seasonLeagueId: string | null;
 }
 
 /** The leagues this copy ships knowing about, blank until one is loaded. */
@@ -163,6 +174,7 @@ export function defaults(): Saved {
     // What the pool opened on before this was settable: your own ranking where
     // you have one, and ADP where you do not.
     poolSort: 'mine',
+    seasonLeagueId: null,
   };
 }
 
@@ -204,6 +216,7 @@ export function load(): Saved {
       queueWrite: saved.queueWrite ?? 'off',
       queuePriority: saved.queuePriority ?? 'app',
       poolSort: saved.poolSort ?? base.poolSort,
+      seasonLeagueId: saved.seasonLeagueId ?? null,
       // Older saves predate the per league fields. Fill them rather than let a
       // missing array reach a component that maps over it.
       savedLeagues: leagues.map((l) => ({

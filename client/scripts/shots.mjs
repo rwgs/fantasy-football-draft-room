@@ -271,6 +271,18 @@ async function yahooMock(browser, viewport) {
 }
 
 /**
+ * The league the screen is showing, by name.
+ *
+ * Not `getByText`, which now matches twice: the header says which league is on
+ * screen and a picker chip says which leagues have been read. Waiting on the
+ * chip would pass while the screen showed nothing at all, which is exactly the
+ * failure the switch check below exists to catch.
+ */
+function shownLeague(page, name) {
+  return page.locator('.season-head b', { hasText: name });
+}
+
+/**
  * Post a league snapshot the way the reader bookmarklet does.
  *
  * Yahoo's own envelope, invented managers, and real players off the live board
@@ -445,13 +457,16 @@ async function yahooSeason(browser, viewport) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 
+  /*
+   * `seasonLeagueId` and nothing else. The in-season league is its own setting,
+   * because borrowing the draft's active league made the screen unreachable in
+   * season: a Yahoo league becomes active only once its draft settings import,
+   * and importing them needs a posted draft room. Nothing about a draft is
+   * seeded here, which is the point.
+   */
   await page.addInitScript(([key, state]) => {
     localStorage.setItem(key, JSON.stringify(state));
-  }, [STORE, {
-    mode: 'assistant',
-    activeLeagueId: id,
-    savedLeagues: [savedYahooLeague(id)],
-  }]);
+  }, [STORE, { mode: 'assistant', savedLeagues: [], activeLeagueId: null, seasonLeagueId: id }]);
 
   await page.goto(APP, { waitUntil: 'domcontentloaded' });
   const open = page.getByRole('button', { name: 'My league in season' });
@@ -477,7 +492,14 @@ async function yahooSeason(browser, viewport) {
 
   await postSnapshot(id, 8);
   await page.getByRole('button', { name: 'Read again' }).click();
-  await page.getByText('The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await shownLeague(page, 'The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+
+  // And the league now appears in the picker as something to click rather than
+  // type, which is how the app learns a league exists at all.
+  const offered = page.locator('.season-held .chip');
+  if (!await offered.count()) {
+    throw new Error('a league that has been read was not offered in the picker');
+  }
 
   /*
    * The own-team mark is the acceptance criterion worth photographing, and the
@@ -516,9 +538,7 @@ async function yahooSeasonFailures(browser, viewport) {
   await page.addInitScript(([key, state]) => {
     localStorage.setItem(key, JSON.stringify(state));
   }, [STORE, {
-    mode: 'assistant',
-    activeLeagueId: stale,
-    savedLeagues: [savedYahooLeague(stale)],
+    mode: 'assistant', savedLeagues: [], activeLeagueId: null, seasonLeagueId: stale,
   }]);
 
   // A bookmarklet too old to send every roster, which is the likeliest failure
@@ -531,7 +551,7 @@ async function yahooSeasonFailures(browser, viewport) {
   await open.waitFor({ state: 'visible', timeout: 60000 });
   await open.click();
 
-  await page.getByText('The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await shownLeague(page, 'The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
   const behind = page.locator('.banner.is-bad').filter({ hasText: 'old copy' });
   if (!await behind.count()) {
     throw new Error('an old reader sent one roster and the screen did not say so');
@@ -564,35 +584,20 @@ async function yahooSeasonFailures(browser, viewport) {
    */
   await postSnapshot(stale, 8);
   await page.getByRole('button', { name: 'Read again' }).click();
-  await page.getByText('The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await shownLeague(page, 'The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
 
   /*
-   * Two things this needs before the switch will happen at all, and both cost a
-   * run to find. Yahoo has to be the chosen platform, because the platform
-   * decides what a valid league ID looks like and a Sleeper one is eighteen
-   * digits. And the new league needs a room posted, because a Yahoo league
-   * becomes the active one only when its settings import, and importing needs
-   * something the bridge has posted. Neither failure looks like a failure: the
-   * active league simply does not move, which reads as the switch working and
-   * the screen being wrong.
+   * The switch, on the screen's own picker rather than through the draft's
+   * league control. It used to need a posted draft room and the Yahoo platform
+   * chosen first, because the screen borrowed the active league and that only
+   * moves when draft settings import -- which is the defect the picker
+   * replaced. Typing a number is now the whole of it.
    */
-  await postRoom(fresh, 12, 15, MY_SEAT);
-  await page.getByRole('button', { name: 'Back to setup' }).click();
-  await page.getByRole('button', { name: 'Yahoo', exact: true }).click();
-  await page.locator('#leagueId').fill(fresh);
-  await page.getByRole('button', { name: 'Add', exact: true }).click();
-  await page.waitForFunction(
-    ([key, want]) => JSON.parse(localStorage.getItem(key)).activeLeagueId === want,
-    [STORE, fresh],
-    { timeout: ROOM_WAIT },
-  );
-
-  const again = page.getByRole('button', { name: 'My league in season' });
-  await again.waitFor({ state: 'visible', timeout: ROOM_WAIT });
-  await again.click();
+  await page.locator('#seasonLeagueId').fill(fresh);
+  await page.getByRole('button', { name: 'Read this league' }).click();
 
   await page.getByText('Nothing read yet').waitFor({ state: 'visible', timeout: ROOM_WAIT });
-  if (await page.getByText('The Sunday League').count()) {
+  if (await shownLeague(page, 'The Sunday League').count()) {
     throw new Error('switching leagues left the last one on screen');
   }
   // And it is not called forgotten either: this league was never read, and the

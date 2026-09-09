@@ -1346,10 +1346,10 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 ### Phase 8 tasks, in order
 
 Split from the contract in `PLAN.md`, "What discovery settled". **Phase 8 was
-authorized 2026-09-08 and every task in it is built. Phase 8 is **not
-complete**: two checks need the owner's own signed-in browser and have not been
-done — comparing every roster and setting against Yahoo, and switching between
-two real leagues.** Each is
+authorized 2026-09-08 and every task in it is built, Y8.5 added after the owner
+found the screen unreachable. Phase 8 is **not complete**: comparing every
+roster and setting against Yahoo, player by player, still needs doing, and no
+second real league has been tried.** Each is
 one reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
 league, and nothing in it recommends anything.
 
@@ -1741,6 +1741,74 @@ are divided between them and none was dropped.
     unchanged at 43. Driven against an isolated service and client on 5179 and
     5180, and the broken-feed run on 5181 and 5182, never by restarting 5178.
   - Dependencies: Y8.3b.
+
+- [x] Y8.5: Let the in-season screen reach a league at all.
+  - **Reported from the app, and it made the whole of Phase 8 unusable.** The
+    repository owner restarted the service to test and could find no way to
+    select a league. The screen was reachable in `shots` and by hand and not in
+    the app, which is the gap between driving a fixture and driving the thing.
+  - The fault: the screen borrowed `activeLeagueId`, and the masthead button
+    required it. That is a **draft** setting — it is set only by `applyImport`,
+    which runs only when `pullLeague` succeeds, and Yahoo's `importLeague`
+    refuses unless the bridge has posted a **draft room**. In season there is no
+    room. So the one case the screen exists for was the one case it could not
+    reach, and a Sleeper-shaped assumption had been carried into an in-season
+    feature without being noticed.
+  - **I had already been told this and read it as something else.** Writing the
+    `shots` scenario, the switch case would not work until a room was posted,
+    and I recorded that as a harness quirk — "a Yahoo league becomes active only
+    when its settings import, and importing needs a posted room". It was the
+    defect describing itself.
+  - Scope, and the owner chose both halves: a league ID that can be typed, and
+    a league that can be clicked. `seasonLeagueId` is now its own saved setting
+    rather than the draft's; new `listSnapshots` and `GET
+    /api/:platform/leagues` say which leagues the service is holding, so after
+    one read the league is a button rather than a number; the masthead button is
+    offered unconditionally on the setup screen, since anything narrower is
+    what hid the feature; and the read always asks Yahoo, because the platform
+    a *draft* is configured for has nothing to do with which league is being
+    looked at.
+  - What the list deliberately does not carry: rosters, scoring, teams. Enough
+    to name a league on a button and no more — a menu that carried the contents
+    would answer every held league in full to anyone who asked for the menu.
+  - Automated validation: five checks in `server:test` under `league.test.js`
+    (empty rather than a refusal, the fields it carries, the fields it does not,
+    newest first, bounded with the store), taking it to 112. Five in
+    `engine:test`, taking that block to 24, including that a Sleeper caller has
+    no list either. `shots` reseeded to drive the screen from `seasonLeagueId`
+    with **no saved league and no active league at all**, which is the state
+    that was broken, plus a check that a league once read is offered in the
+    picker.
+  - **The suite bites:** reversing the newest-first order reddens exactly two
+    checks and nothing else.
+  - Simplified by the fix, which is a good sign: the `shots` switch case no
+    longer needs a posted draft room or the Yahoo platform chosen first. It
+    types a number into the screen's own field. Both of those workarounds
+    existed only because of the defect.
+  - Also fixed while running it: the league name now appears twice, in the
+    header and on a picker chip, so `getByText` matched both. A `shownLeague`
+    helper targets the header, which matters beyond tidiness — waiting on the
+    chip would pass while the screen showed nothing, which is the exact failure
+    the switch check exists to catch.
+  - Manual validation: **done, by the owner, against their real league.** The
+    chain worked end to end after installing the current bookmarklet: reader to
+    service to screen. Verified by me in a browser first, from the broken state
+    exactly — no saved league, no active league — that the button appears, the
+    picker shows, typing an ID gives the reader instructions, and the ID is
+    written to storage so it is typed once.
+  - **My own mistake, and it cost the owner a step mid-test:** I ran
+    `engine:test` against the service they were using. Its eviction check posts
+    nine snapshots on purpose to prove the bound at eight, so it filled all
+    eight slots with `Spare League` fixtures and threw away the league they had
+    just read. Restarting cleared the fixtures. Now recorded in `AGENTS.md` and
+    in the self-test's own header: point it at a second service, which was
+    already the habit because 5178 may be mirroring a live draft.
+  - Local gate: typecheck clean, `server:test` 112, `bridge:test` 7,
+    `engine:test` green, build clean, `shots` clean with no console errors.
+    Lint 44, **up one**: `useState(saved.seasonLeagueId)` carries the same
+    `react(refs)` advisory as the twenty-one other saved settings in `App.tsx`,
+    and doing it differently for one of twenty-two would be the worse choice.
+  - Dependencies: Y8.4.
 
 ### Subsequent task planning
 

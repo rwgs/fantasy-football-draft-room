@@ -3261,6 +3261,14 @@ async function yahooQueue() {
  * The snapshot is synthetic — Yahoo's envelope, invented people — except for the
  * names, which are taken off the live board so the cross-source join has a real
  * row to find. That is the point of doing it here rather than on a fixture.
+ *
+ * RUN THIS AGAINST A SERVICE NOBODY IS USING. The eviction check below posts
+ * nine snapshots on purpose, to prove the store is bounded at eight, and a
+ * store already holding somebody real loses them: eight `Spare League`
+ * fixtures and nothing else, which is what happened on 2026-09-08 to the owner
+ * mid-test. The check cannot tell a fixture from a league, and a restart is the
+ * only cleanup, which costs the real one too. Bring up a second service --
+ * `cd server && PORT=5179 node src/index.js` -- and point `API` at it.
  */
 async function yahooSeason() {
   console.log('\nReading a Yahoo league in season');
@@ -3412,6 +3420,35 @@ async function yahooSeason() {
     String(oldPut.status) + ' ' + JSON.stringify(oldBody.rosters?.length));
   check('and it is named as behind rather than left to look like an empty league',
     oldBody.readerBehind === true, JSON.stringify(oldBody.readerBehind));
+
+  /*
+   * HOW THE APP FINDS OUT WHICH LEAGUE TO SHOW.
+   *
+   * The screen first borrowed the app's *active* league, which is a draft
+   * setting: a Yahoo league becomes active only once its draft settings import,
+   * and importing them needs a room the bridge has posted. In season there is
+   * no room, so the screen could not reach the one case it exists for. This is
+   * the replacement -- the reader posts a snapshot, and this is how the app
+   * learns a league exists without being told a number.
+   */
+  const listed = await (await fetch(API + '/api/yahoo/leagues')).json();
+  const names = new Map(listed.leagues.map((l: { leagueId: string; name: string }) => [
+    l.leagueId, l.name,
+  ]));
+  check('a league that has been read is listed', names.has(LEAGUE),
+    JSON.stringify(listed.leagues.map((l: { leagueId: string }) => l.leagueId)).slice(0, 90));
+  check('and it is named, so it can be offered as a button rather than a number',
+    names.get(LEAGUE) === 'Self Test League', String(names.get(LEAGUE)));
+  check('the list carries no rosters, only enough to name a league',
+    listed.leagues.every((l: object) => !('rosters' in l) && !('scoring' in l)));
+
+  // The newest read is first, so the league just read is the one offered.
+  check('the newest read is first', listed.leagues[0].leagueId === OLD,
+    String(listed.leagues[0].leagueId) + ' vs ' + OLD);
+
+  const noList = await fetch(API + '/api/sleeper/leagues');
+  check('a platform with no in-season reading has no list either',
+    noList.status === 404, String(noList.status));
 
   const sleeper = await fetch(API + '/api/sleeper/league/1234567890123456789/season');
   check('a platform with no in-season reading is refused the route',

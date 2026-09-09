@@ -19,7 +19,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { forgetSnapshots, getSnapshot, putSnapshot, readSnapshot } from './league.js';
+import {
+  forgetSnapshots, getSnapshot, listSnapshots, putSnapshot, readSnapshot,
+} from './league.js';
 
 /** Yahoo's list: keyed by stringified index, with a count beside it. */
 const list = (items) => {
@@ -404,4 +406,70 @@ test('reading a league again moves it out of the way of the bound', () => {
   // league you are actually looking at cannot be evicted from under you.
   assert.equal(getSnapshot('201').read, true);
   assert.equal(getSnapshot('202').read, false);
+});
+
+// --- Which leagues have been read -------------------------------------------
+//
+// The way in to an in-season league, and it exists because the first way in was
+// wrong: the screen borrowed the app's *active* league, which is a draft
+// setting. A Yahoo league becomes active only once its draft settings import,
+// and importing them needs a room the bridge has posted -- so in season, with
+// no room, the screen could not reach the one case it was built for. Reported
+// from the app, where no league could be selected at all.
+
+test('nothing read means an empty list rather than a refusal', () => {
+  forgetSnapshots();
+  assert.deepEqual(listSnapshots(), []);
+});
+
+test('a league that has been read is listed, with enough to name it', () => {
+  forgetSnapshots();
+  putSnapshot('111', {
+    settings: settingsResponse(), teams: teamsResponse(), profile: profileResponse(),
+  });
+  const [one] = listSnapshots();
+  assert.equal(one.leagueId, '111');
+  assert.equal(one.name, 'A League');
+  assert.equal(one.season, '2026');
+  assert.equal(one.numTeams, 8);
+  assert.ok(one.readAt > 0);
+});
+
+/*
+ * Enough to put on a button and no more. A list carrying the rosters would
+ * answer every held league's full contents to anyone who asked for a menu, and
+ * the rosters are what `getSnapshot` is for.
+ */
+test('the list carries no rosters, scoring or teams', () => {
+  forgetSnapshots();
+  putSnapshot('111', {
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    profile: profileResponse(),
+  });
+  const [one] = listSnapshots();
+  assert.deepEqual(Object.keys(one).sort(), ['leagueId', 'name', 'numTeams', 'readAt', 'season']);
+});
+
+test('newest first, so the league just read is the first offered', () => {
+  forgetSnapshots();
+  for (const id of ['301', '302', '303']) {
+    putSnapshot(id, {
+      settings: forLeague(id), teams: teamsResponse(), profile: profileResponse(),
+    });
+  }
+  assert.deepEqual(listSnapshots().map((l) => l.leagueId), ['303', '302', '301']);
+});
+
+test('the list is bounded with the store, so it cannot grow without limit', () => {
+  forgetSnapshots();
+  for (let i = 1; i <= 11; i += 1) {
+    const id = String(400 + i);
+    putSnapshot(id, {
+      settings: forLeague(id), teams: teamsResponse(), profile: profileResponse(),
+    });
+  }
+  assert.equal(listSnapshots().length, 8);
+  assert.equal(listSnapshots()[0].leagueId, '411');
 });

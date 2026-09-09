@@ -277,6 +277,38 @@ export function getSnapshot(leagueId) {
   return { read: true, snapshot: stored, heardAt: stored.readAt };
 }
 
+/**
+ * Which leagues have been read, newest first.
+ *
+ * The way in to an in-season league, and the reason it exists is a mistake
+ * worth recording. The screen first borrowed the app's *active* league, which
+ * is a draft setting: a Yahoo league becomes active only when its draft
+ * settings import, and importing them needs a room the bridge has posted. In
+ * season there is no room, so the one case the screen was built for was the one
+ * case it could not reach.
+ *
+ * So the reader is what says which league. Run the bookmarklet and the service
+ * is holding a league; this is how the app finds out, without being told a
+ * number and without anything borrowed from the draft.
+ *
+ * Enough to name a league on a button and no more. The rosters and the rules
+ * are what `getSnapshot` is for, and a list that carried them would be every
+ * held league's full contents answered to anyone who asked for a menu.
+ */
+export function listSnapshots() {
+  return [...snapshots.values()]
+    .map((held) => ({
+      leagueId: held.leagueId,
+      name: held.name,
+      season: held.season,
+      numTeams: held.numTeams,
+      readAt: held.readAt,
+    }))
+    // Newest first. Insertion order is oldest first, because that is the end
+    // the bound evicts from.
+    .reverse();
+}
+
 /** Drop everything held. For tests, which must not inherit each other's state. */
 export function forgetSnapshots() {
   snapshots.clear();

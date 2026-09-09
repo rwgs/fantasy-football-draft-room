@@ -2106,3 +2106,25 @@ input[type='range']::-moz-range-thumb {
 }
 
 .season-scoring b { color: var(--chalk); }
+
+/* Choosing which league the in-season view is looking at: the ones already read
+   as buttons, and a field for the first time or after a restart. */
+.season-held {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.season-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* The shared `.input` is full width, which is right in a settings column and
+   wrong on a row beside a button. Narrowed here and nowhere else. */
+.season-pick .input {
+  width: 10em;
+  font-family: var(--mono);
+}
