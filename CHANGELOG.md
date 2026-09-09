@@ -160,6 +160,26 @@ written down as unknowable and which Yahoo publishes outright.
 
 ### Fixed
 
+**A player the advice moves is moved, not benched and started.** The third
+round of one defect, reported from a real board each time, and the last two
+were fixes that did not go far enough. Where the best lineup keeps a player but
+wants him in a different slot - a back at `RB` that belongs in the flex - the
+swap table named him twice, once as benched and once as started, which reads as
+a bug in the one place that tells you what to do.
+
+Whether a player starts and which seat he sits in are two questions, and every
+version of this until now answered them as one. The swaps are now worked out
+over the whole lineup, so they only ever name a player entering or leaving it,
+and a player who stays and shifts slot is reported separately as the relocation
+it is: "Move Justin Jefferson from WR to W/R/T. Still starting either way - a
+slot change, not a swap." Both the app's screen and the panel over Yahoo's
+league page say it.
+
+Where nobody comes out of the lineup for an incoming player, the bench column
+now says `nobody` rather than `empty`. Either the seat was empty or a
+relocation freed one; both are a lineup that gains a starter rather than
+exchanging one, and only the first was ever an empty seat.
+
 **The desks disagree about players, not about seats.** Reported twice from a
 real board on 2026-09-09, the second time as a partial fix. First: a lineup
 with two `RB` seats showed Christian McCaffrey started by Sleeper in one and by

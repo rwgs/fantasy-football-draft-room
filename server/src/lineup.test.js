@@ -748,6 +748,86 @@ test('a player who keeps his slot is not reported as moving within it', () => {
   assert.ok(!named.includes('lamb'), 'a player who stays put is not advised about');
 });
 
+test('a player the answer moves to another slot is moved, not benched and started', () => {
+  /*
+   * SEEN ON A REAL BOARD TOO, and it is the same defect one slot further out.
+   * Grouping by slot fixed two seats of one slot and did nothing for a player
+   * whose slot changes: a back at `RB` that the best lineup wants in the flex
+   * came out as "bench Travis Etienne Jr." against "start Travis Etienne Jr."
+   * in two rows of the table that tells the user what to do.
+   *
+   * Two backs start at `RB` and a tight end holds the flex. Dowdle outprojects
+   * all three, and the flex is the only seat left for the back he displaces, so
+   * the answer is one swap and one relocation: Loveland comes out for Dowdle,
+   * and Etienne -- who was already starting and still is -- shifts to the flex.
+   *
+   * The relocation has to be forced to be worth checking. With one `RB` seat
+   * the matching simply seats Dowdle in the flex and leaves Etienne alone,
+   * because a back fills either and `seat`'s current-seat preference declines
+   * to invent motion. It is the second `RB` seat that leaves it no choice.
+   */
+  const slots = [slot('RB', 2, ['RB']), slot('W/R/T', 1, FLEX)];
+  const players = [
+    player('etienne', ['RB'], 'RB'),
+    player('barkley', ['RB'], 'RB'),
+    player('loveland', ['TE'], 'W/R/T'),
+    player('dowdle', ['RB'], 'BN'),
+  ];
+  const points = pointsOf({
+    dowdle: 18, etienne: 12, barkley: 11, loveland: 5,
+  });
+
+  const advice = lineupAdvice({ slots, players, sources: { sleeper: points } });
+  const { moves, moved, points: best } = advice.desks.sleeper;
+
+  // One swap, and the slot on it is where the incoming player goes.
+  assert.equal(moves.length, 1, JSON.stringify(moves));
+  assert.equal(moves[0].slot, 'RB');
+  assert.equal(moves[0].out.name, 'loveland');
+  assert.equal(moves[0].in.name, 'dowdle');
+
+  // And the relocation, which the user still has to make: Yahoo will not.
+  assert.deepEqual(moved.map((m) => [m.name, m.from, m.to]), [['etienne', 'RB', 'W/R/T']]);
+
+  /*
+   * The invariant behind both reports, and it is the one worth keeping: nobody
+   * is on both sides of the swap table. A player being started in place of
+   * himself is advice that reads as a bug.
+   */
+  const benched = moves.map((move) => move.out?.name).filter(Boolean);
+  const started = moves.map((move) => move.in.name);
+  assert.deepEqual(benched.filter((name) => started.includes(name)), []);
+
+  // And Barkley, who keeps an `RB` seat throughout, is in neither list.
+  assert.ok(![...benched, ...started, ...moved.map((m) => m.name)].includes('barkley'));
+
+  assert.equal(best, 41);
+});
+
+test('a relocation with nobody coming in or out is still reported', () => {
+  /*
+   * The relocation on its own, which is a lineup change with no swap in it at
+   * all. `moves` is empty here and the advice is not "leave it as it is": the
+   * two players start either way and the flex has to hold the receiver, because
+   * the back cannot play there.
+   */
+  const slots = [slot('RB', 1, ['RB']), slot('W/R/T', 1, FLEX)];
+  const players = [
+    // Started in the flex, which is legal and is not where he has to be.
+    player('back', ['RB'], 'W/R/T'),
+    player('wr', ['WR'], 'BN'),
+  ];
+  const points = pointsOf({ back: 14, wr: 9 });
+
+  const { moves, moved } = lineupAdvice({
+    slots, players, sources: { sleeper: points },
+  }).desks.sleeper;
+
+  assert.deepEqual(moves.map((m) => [m.slot, m.out?.name ?? null, m.in.name]),
+    [['W/R/T', null, 'wr']], JSON.stringify(moves));
+  assert.deepEqual(moved.map((m) => [m.name, m.from, m.to]), [['back', 'W/R/T', 'RB']]);
+});
+
 test('a slot losing a player it cannot refill is not a move to nobody', () => {
   // The leftover case. Nothing can replace him, so `benched` names the reason
   // and no move is invented -- "bench him, start nobody" says less than "he is

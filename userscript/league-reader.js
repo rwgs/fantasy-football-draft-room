@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo league reader
 // @namespace    fantasy-football-draft-room
-// @version      1.1.0
+// @version      1.2.0
 // @description  Read your own Yahoo league in season - settings, scoring, teams and rosters - and hand it to the draft room running on your machine. Reads only; never writes to Yahoo.
 // @match        https://*.fantasysports.yahoo.com/f1/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
@@ -209,17 +209,28 @@
        */
       const gain = desk.gain === null || desk.gain === undefined ? 'gain unknown'
         : desk.gain > 0 ? '+' + points(desk.gain) : 'no change';
+      /*
+       * A RELOCATION IS NOT A SWAP, and it is listed apart from them for the
+       * reason the app's screen does it: the player starts either way, so
+       * nobody is coming out of the lineup for him and both halves of a swap
+       * line would be wrong about him. He was on both sides of this list twice
+       * before the swaps were computed over the whole lineup.
+       */
+      const moved = (desk.moved || []).map((move) => line(
+        'move <b style="color:#e8e6e3">' + esc(move.name) + '</b> '
+          + esc(move.from) + ' → ' + esc(move.to),
+      )).join('');
       const moves = desk.moves.length
         ? desk.moves.map((move) => line(
           '<span style="color:#6b7370">' + esc(move.slot) + '</span> '
             + (move.out ? 'bench ' + esc(move.out.name) + ' → ' : 'start ')
             + '<b style="color:#e8e6e3">' + esc(move.in.name) + '</b>',
         )).join('')
-        : line('leaves the lineup as it is', '#6b7370');
+        : moved ? '' : line('leaves the lineup as it is', '#6b7370');
       return '<div style="margin-top:6px">'
         + line('<b style="color:#e8e6e3">' + esc(DESK_LABEL[key] || key) + '</b> '
           + points(desk.currentPoints) + ' now · ' + points(desk.points) + ' best · ' + gain)
-        + moves + '</div>';
+        + moves + moved + '</div>';
     }).join('');
 
     // Who both desks start, and who they do not. The second is the decision;

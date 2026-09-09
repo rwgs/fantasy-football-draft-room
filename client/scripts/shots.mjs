@@ -566,6 +566,35 @@ async function yahooSeason(browser, viewport) {
   console.log('  season-advice.png');
 
   /*
+   * NOBODY IS BENCHED AND STARTED IN THE SAME TABLE.
+   *
+   * Read off the rendered rows rather than the endpoint, because this defect
+   * has twice been visible on screen while every check passed. It is the one
+   * place that tells the user what to do, and a player started in place of
+   * himself reads as a bug in the app.
+   *
+   * This fixture is why the check is here and not in `engine:test`: it starts a
+   * receiver at `WR` that the best lineup wants in the flex, so the slot change
+   * is real on live projections. `engine:test`'s own fixture produces no
+   * relocation and the same assertion passes there against the pre-fix code.
+   */
+  for (const block of await page.locator('.season-desk').all()) {
+    const out = [];
+    const going = [];
+    for (const row of await block.locator('.season-table tbody tr').all()) {
+      const cells = (await row.locator('td').allInnerTexts()).map((cell) => cell.trim());
+      if (cells.length < 3) continue;
+      // The screen's word for nobody coming out, which is not a player.
+      if (cells[1] && cells[1] !== 'nobody') out.push(cells[1]);
+      if (cells[2]) going.push(cells[2]);
+    }
+    const both = out.filter((name) => going.includes(name));
+    if (both.length) {
+      throw new Error('a desk benches and starts the same player: ' + both.join(', '));
+    }
+  }
+
+  /*
    * A kicker and a defence slot get no advice at all, and the screen has to say
    * so rather than leave two seats quietly missing from a nine-slot lineup.
    * Y9.1 could not reproduce either position's components against a feed's own

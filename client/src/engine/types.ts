@@ -1051,10 +1051,36 @@ export interface LineupSeat {
 
 /** A move from the current lineup to the best one, as a seat the user edits. */
 export interface LineupMove {
+  /**
+   * Where the incoming player goes, which is the seat the user opens and sets.
+   *
+   * Not necessarily where the outgoing player sat: once a relocation is in play
+   * the arrangement shifts, and the only thing to do with whoever leaves the
+   * lineup is bench him.
+   */
   slot: string;
-  /** Null where the seat was empty, which is a start rather than a swap. */
+  /**
+   * Null where nobody comes out of the lineup for this player, which is a
+   * start rather than a swap. Either the seat was empty, or a relocation freed
+   * one: both are a lineup that gains a starter rather than exchanging one.
+   */
   out: { playerKey: string; name: string } | null;
   in: { playerKey: string; name: string };
+}
+
+/**
+ * A player the answer keeps but seats somewhere else.
+ *
+ * Not a swap, and kept apart from one because conflating them put the same
+ * player on both sides of the swap table: he starts before and after, so
+ * nobody is coming out of the lineup for him. The user still has to do it —
+ * Yahoo will not move him.
+ */
+export interface LineupRelocation {
+  playerKey: string;
+  name: string;
+  from: string;
+  to: string;
 }
 
 /** Why a player in a starting slot cannot be counted or kept there. */
@@ -1079,6 +1105,8 @@ export interface LineupDesk {
   gain: number | null;
   seats: LineupSeat[];
   moves: LineupMove[];
+  /** Players it keeps in the lineup but seats elsewhere. */
+  moved: LineupRelocation[];
   /** Starting seats nothing could legally fill. */
   empty: string[];
   /** Starting slots this app could not read, so it refused to reason about them. */

@@ -68,8 +68,8 @@ const ROSTER = { fantasy_content: { team: [[{ team_key: 'nfl.l.1.t.1' }], { rost
  * Trimmed to the fields the panel reads and no further, so a field it stops
  * reading shows up here as a field nothing needs.
  */
-const desk = (now, best, gain, moves) => ({
-  currentPoints: now, points: best, gain, moves,
+const desk = (now, best, gain, moves, moved = []) => ({
+  currentPoints: now, points: best, gain, moves, moved,
 });
 const ADVICE = {
   read: true,
@@ -82,8 +82,12 @@ const ADVICE = {
         out: { playerKey: 'p1', name: 'Saquon Barkley' },
         in: { playerKey: 'p2', name: 'Omarion Hampton' },
       }]),
-      // No moves and no gain, which is the other thing a desk can say.
-      espn: desk(9.5, 9.5, 0, []),
+      // No swap, and a relocation instead: the other shape a desk's answer
+       // takes, and the one that used to come out as a player benched and
+       // started at once.
+      espn: desk(9.5, 10.2, 0.7, [], [{
+        playerKey: 'p3', name: 'Travis Etienne Jr.', from: 'RB', to: 'W/R/T',
+      }]),
     },
     agreed: [{ player: 'Chase Brown', slot: 'RB' }],
     disputed: [{
@@ -266,8 +270,17 @@ test('it paints the advice the app would show, off the same endpoint', async () 
   assert.match(said, /Omarion Hampton/);
   // Both desks, with what each makes of the lineup as it stands.
   assert.match(said, /Sleeper<\/b> 8\.9 now · 12\.5 best · \+3\.6/);
-  assert.match(said, /ESPN<\/b> 9\.5 now · 9\.5 best · no change/);
-  assert.match(said, /leaves the lineup as it is/);
+  assert.match(said, /ESPN<\/b> 9\.5 now · 10\.2 best · \+0\.7/);
+
+  /*
+   * A relocation, said as one. The player starts either way, so he must not
+   * appear as benched or started -- which is what he did until the swaps were
+   * computed over the whole lineup rather than slot by slot.
+   */
+  assert.match(said, /move <b[^>]*>Travis Etienne Jr\.<\/b> RB → W\/R\/T/);
+  assert.doesNotMatch(said, /bench Travis Etienne Jr\./);
+  // And a desk with a relocation is not reported as leaving the lineup alone.
+  assert.doesNotMatch(said, /leaves the lineup as it is/);
   // And the two halves of the disagreement, the same way the screen puts them.
   assert.match(said, /Both desks start Chase Brown/);
   assert.match(said, /disagree about Omarion Hampton RB or Ashton Jeanty W\/R\/T/);

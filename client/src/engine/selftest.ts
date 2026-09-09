@@ -3784,6 +3784,33 @@ async function yahooLineup() {
       answer.moves.some((m: { in: { name: string } }) => m.in.name === wrStrong.name),
       answer.moves.map((m: { in: { name: string } }) => m.in.name).join(', '));
 
+    /*
+     * NOBODY IS BENCHED AND STARTED IN THE SAME TABLE.
+     *
+     * A player started in place of himself is advice that reads as a bug, in
+     * the one place that tells the user what to do. It is what a slot change
+     * looked like until the swaps were computed over the whole lineup rather
+     * than slot by slot: this fixture starts a receiver at `WR` that the best
+     * lineup wants in the flex, so it was doing it in a screenshot.
+     */
+    type Move = { slot: string; out: { name: string } | null; in: { name: string } };
+    const benched = answer.moves
+      .map((move: Move) => move.out?.name)
+      .filter((name: string | undefined): name is string => !!name);
+    const started = answer.moves.map((move: Move) => move.in.name);
+    check(desk + ': nobody is benched and started in the same breath',
+      !benched.some((name: string) => started.includes(name)),
+      'bench ' + (benched.join(', ') || 'nobody') + ' · start ' + (started.join(', ') || 'nobody'));
+
+    /*
+     * And a relocation is reported as one. Every player the answer moves was
+     * already starting and still is, so he belongs in neither column above.
+     */
+    const relocated: { name: string; from: string; to: string }[] = answer.moved || [];
+    check(desk + ': a player moved to another slot is not in the swaps',
+      !relocated.some((m) => benched.includes(m.name) || started.includes(m.name)),
+      relocated.map((m) => m.name + ' ' + m.from + '→' + m.to).join(', ') || 'nothing moved');
+
     // Nobody is in two seats, and everybody seated can fill the seat he is in.
     const seated = answer.lineup.map((e: { player: { playerKey: string } }) => e.player.playerKey);
     check(desk + ': no player is seated twice',

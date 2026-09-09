@@ -278,17 +278,45 @@ function DeskAdvice({ desk, name }: { desk: LineupDesk; name: string }) {
             {desk.moves.map((move) => (
               <tr key={move.slot + move.in.playerKey}>
                 <td className="mono">{move.slot}</td>
-                <td>{move.out ? move.out.name : <span className="hint">empty</span>}</td>
+                <td>{move.out ? move.out.name : <span className="hint">nobody</span>}</td>
                 <td><b>{move.in.name}</b></td>
               </tr>
             ))}
           </tbody>
         </table>
-      ) : (
+      ) : !desk.moved.length && (
         <p className="hint">
           {desk.gain == null
             ? 'No move can be recommended, because a player in this lineup has no projection.'
             : 'This desk would leave the lineup exactly as it is.'}
+        </p>
+      )}
+
+      {/*
+        * A PLAYER MOVED RATHER THAN SWAPPED, and its own block rather than a
+        * row of the table above. He starts either way, so nobody is coming out
+        * of the lineup for him and both of that table's columns would be wrong
+        * about him -- which is exactly what they were, twice, until the swaps
+        * were computed over the whole lineup instead of slot by slot.
+        *
+        * Not a `.season-table`, deliberately: `shots` reads the rows of that
+        * table to prove nobody is benched and started at once, and a relocation
+        * showing up there would be the thing it is checking for.
+        */}
+      {!!desk.moved.length && (
+        <p className="hint">
+          {'Move '}
+          {desk.moved.map((move, at) => (
+            <span key={move.playerKey}>
+              {at > 0 && ', '}
+              <b>{move.name}</b>
+              {' from '}
+              <span className="mono">{move.from}</span>
+              {' to '}
+              <span className="mono">{move.to}</span>
+            </span>
+          ))}
+          {'. Still starting either way — a slot change, not a swap.'}
         </p>
       )}
 

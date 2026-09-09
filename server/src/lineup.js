@@ -309,53 +309,84 @@ export function bestLineup({
 }
 
 /**
- * What the user would have to do, seat by seat.
+ * What the user would have to do: the swaps, and the relocations.
  *
- * Reported per seat rather than as a set of players in and out, because a seat
- * is what the user actually edits and because the pairing is the useful half of
- * the advice. "Bench him, start her" is actionable; "these three are out and
- * those three are in" leaves the reader to work out which goes where, which is
- * the same matching problem over again.
+ * Reported as pairs rather than as two lists of players, because the pairing is
+ * the useful half. "Bench him, start her" is actionable; "these three are out
+ * and those three are in" leaves the reader to work out which goes where, which
+ * is the same matching problem over again.
+ *
+ * TWO KINDS OF THING AND NOT ONE, which is the correction that made this right.
+ * Whether a player starts is one question; which seat he sits in is another.
+ * `moves` answers the first -- somebody out of the lineup, somebody into it --
+ * and `moved` answers the second, for a player the answer keeps and reseats.
+ * Folding them together put the same player on both sides of `moves`, first per
+ * seat and then per slot, and both times it read as a bug on the one part of
+ * the screen that tells the user what to do.
  */
 export function lineupMoves({ lineup, seats }, players = []) {
   const now = seatedNow(seats, players);
   const named = (player) => ({ playerKey: player.playerKey, name: nameFor(player) });
 
   /*
-   * GROUPED BY SLOT AND NOT BY SEAT, because the seats of one slot are
-   * interchangeable and comparing them individually invents moves. A league
-   * starting two receivers has two `WR` seats; a receiver the matching happens
-   * to seat in the other one has not moved, and reporting it per seat produced
-   * "bench CeeDee Lamb" and "start CeeDee Lamb" in the same table, which was
-   * seen on a real board and is worse than useless -- it is advice that reads
-   * as a bug, in the one place on the screen that tells the user what to do.
+   * WHO STARTS IS ONE QUESTION AND WHERE THEY SIT IS ANOTHER, and conflating
+   * them is what put the same player on both sides of this table twice.
    *
-   * So a player who was starting in a slot and still is does not appear at all,
-   * and what is left over pairs up as the swaps that actually have to be made.
+   * A player starting before and starting after is not being swapped, whatever
+   * seat or slot he ends up in -- he is already in the lineup and stays in it.
+   * Comparing seats individually said otherwise, and grouping by slot said
+   * otherwise too as soon as the slot changed: a back at `RB` that the best
+   * lineup wants in the flex came out as "bench Travis Etienne Jr." against
+   * "start Travis Etienne Jr." in two rows. Reported from a real board, and the
+   * fixture had been doing it in a screenshot nobody read closely.
+   *
+   * So the swaps are computed over the whole lineup: out is whoever starts now
+   * and does not start in the answer, in is whoever starts in the answer and
+   * does not start now, and a slot change for somebody who was already starting
+   * is reported separately as the relocation it is.
    */
-  const moves = [];
-  for (const slot of new Set(seats.map((s) => s.slot))) {
-    const before = [...now].filter(([s]) => s.slot === slot).map(([, player]) => player);
-    const after = lineup.filter((entry) => entry.seat.slot === slot).map((entry) => entry.player);
-    const staying = new Set(after
-      .filter((player) => before.some((was) => was.playerKey === player.playerKey))
-      .map((player) => player.playerKey));
+  const slotNow = new Map();
+  for (const [seat, player] of now) slotNow.set(player.playerKey, seat.slot);
+  const slotNext = new Map();
+  for (const entry of lineup) slotNext.set(entry.player.playerKey, entry.seat.slot);
 
-    const out = before.filter((player) => !staying.has(player.playerKey));
-    const going = after.filter((player) => !staying.has(player.playerKey));
-
-    going.forEach((player, at) => {
-      moves.push({ slot, out: out[at] ? named(out[at]) : null, in: named(player) });
-    });
-    /*
-     * A player left over with nobody to replace him is not a move, because
-     * there is nothing to start in his place. It happens only to a player who
-     * was never a candidate -- on bye, on IR, or nobody projected him -- and
-     * `benched` already names him with the reason, which is the actionable half.
-     * A move reading "bench him, start nobody" would say less.
-     */
+  /*
+   * A player the answer keeps but seats elsewhere. Named because the user has
+   * to do it -- Yahoo will not move him -- and separated from the swaps because
+   * nobody is coming out of the lineup for him.
+   */
+  const moved = [];
+  for (const entry of lineup) {
+    const was = slotNow.get(entry.player.playerKey);
+    if (was !== undefined && was !== entry.seat.slot) {
+      moved.push({ ...named(entry.player), from: was, to: entry.seat.slot });
+    }
   }
-  return { moves, current: [...now.values()] };
+
+  const out = [...now.values()].filter((player) => !slotNext.has(player.playerKey));
+  const going = lineup
+    .map((entry) => entry.player)
+    .filter((player) => !slotNow.has(player.playerKey));
+
+  /*
+   * `slot` is where the incoming player goes, which is the seat the user opens
+   * and sets. It is not necessarily where the outgoing player sat: once a
+   * relocation is in play the arrangement shifts, and the only thing to do with
+   * whoever leaves is bench him.
+   *
+   * A player left over with nobody to replace him is not a move, because there
+   * is nothing to start in his place. It happens only to a player who was never
+   * a candidate -- on bye, on IR, or nobody projected him -- and `benched`
+   * already names him with the reason, which is the actionable half. A move
+   * reading "bench him, start nobody" would say less.
+   */
+  const moves = going.map((player, at) => ({
+    slot: slotNext.get(player.playerKey),
+    out: out[at] ? named(out[at]) : null,
+    in: named(player),
+  }));
+
+  return { moves, moved, current: [...now.values()] };
 }
 
 /**
@@ -391,11 +422,12 @@ export function lineupAdvice({
     // not fill rather than as a desk nobody asked.
     if (points === null || points === undefined) continue;
     const best = bestLineup({ slots, players, points, locked, week });
-    const { moves, current } = lineupMoves(best, players);
+    const { moves, moved, current } = lineupMoves(best, players);
     const currentPoints = current.reduce((sum, p) => sum + (points.get(p.playerKey) ?? 0), 0);
     desks[name] = {
       ...best,
       moves,
+      moved,
       currentPoints,
       /*
        * Null, not zero, where a player in the lineup now has no projection. The

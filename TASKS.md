@@ -2339,6 +2339,56 @@ calculation and need neither a browser nor a real league.
     is absent here.
   - Dependencies or blockers: none.
 
+- [x] Y9.3c: A player the answer moves is moved, not benched and started.
+  - **The third report of one defect, and the second fix that had not gone far
+    enough.** Reported from the owner's board with a screenshot: ESPN's swap
+    table read "bench Travis Etienne Jr." on the `RB` row and "start Travis
+    Etienne Jr." on the `W/R/T` row. Y9.3a grouped `lineupMoves` by slot, which
+    settled two seats of one slot; a player whose *slot* changes was still
+    reported as leaving the lineup and entering it.
+  - The correction is the same one Y9.3b made to the disputed table, applied to
+    the swaps: **whether a player starts and which seat he sits in are two
+    questions.** `moves` now answers the first, computed over the whole lineup,
+    so it names only players entering or leaving it. `moved` answers the second,
+    for a player the answer keeps and reseats. `slot` on a swap is where the
+    incoming player goes, which is the seat the user opens.
+  - Both surfaces report the relocation rather than dropping it: the app's
+    screen as its own line under the swap table, deliberately not a
+    `.season-table` so the `shots` check below cannot read it as a swap, and the
+    Yahoo panel as a `move X RB → W/R/T` line. A desk with a relocation and no
+    swap is no longer described as leaving the lineup alone.
+  - `nobody` replaces `empty` in the bench column. Null there used to mean the
+    seat was empty; it now also means a relocation freed one, and both are a
+    lineup that gains a starter rather than exchanging one.
+  - **The check that catches it is in `shots`, and it bites.** Run against the
+    pre-fix service it fails with `a desk benches and starts the same player:
+    Justin Jefferson` -- read off the rendered rows, because this defect has
+    twice been visible on screen while every check passed. That fixture starts a
+    receiver at `WR` the best lineup wants in the flex, so it is real on live
+    projections.
+    - **The same assertion in `engine:test` does not bite**, and is kept anyway
+      as an invariant on the endpoint. Its fixture produces no relocation, so it
+      passed against the pre-fix code. Said here rather than left to look like
+      coverage, as with Y9.3b's three.
+    - Two unit checks in `server/src/lineup.test.js` do bite: the relocation
+      with a swap, and a relocation with nothing coming in or out at all.
+  - **The first version of the unit check was wrong and the code told me.** With
+    one `RB` seat the matching seats the incoming back in the flex and leaves the
+    incumbent alone, because a back fills either and `seat`'s current-seat
+    preference declines to invent motion -- so there was no relocation to check.
+    It takes a second `RB` seat to force one. That preference is Y9.2's and is
+    working; the test was asserting against advice that was already right.
+  - Rendered evidence on both surfaces, from the same live payload: the app's
+    screen shows three swaps and `Move Justin Jefferson from WR to W/R/T`, and
+    the panel shows the same. Neither names anybody twice.
+  - Local gate: `server:test` 187, `reader:test` 11, `bridge:test` 7, typecheck
+    clean, `engine:test` green, build clean, `shots` clean with no console
+    errors, lint unchanged. Isolated service and client on 5179 and 5180.
+  - Manual validation outstanding: the owner's own board and their own Yahoo
+    page. The reader needs its `@version` raised again for an installed copy to
+    pick the panel change up.
+  - Dependencies or blockers: none.
+
 - [x] Y9.4: The same reading over Yahoo's own league pages.
   - **Delivered in the reader's own panel rather than a panel of its own**, on
     the owner's decision, which is the one thing below that does not match the
