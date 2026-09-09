@@ -213,6 +213,159 @@ kickoff.
 | Playoffs, weeks 19+ | **no** | Sleeper returns records with no points; ESPN stops at 18 |
 | A past season | ESPN only | 2025 weekly actuals present; Yahoo cannot address a past league at all |
 
+## Do the two projection sources agree? Measured, 2026-09-08
+
+`PLAN.md` held this as "unmeasured, and Phase 9's to measure", because how the
+two are combined cannot be decided without it. It is measured now. The short
+answer: **they agree to about a point and a quarter in the middle, and they
+reverse a start/sit ordering in one close pair in twelve.** Both halves of that
+matter, and they point the same way — worth showing together, never worth
+averaging.
+
+### How, and why not on the points either publishes
+
+One ruleset over **both** sources' raw components, rather than Sleeper's
+`pts_ppr` against ESPN's `appliedTotal`. Comparing published totals measures the
+two presets disagreeing as well as the two desks, and the presets do disagree,
+so the desks could not be seen through it. PPR was the ruleset, since it is the
+one format both publish, which gives the basis something to be checked against.
+
+Two checks make that basis established rather than asserted. Each source's
+components were scored under that source's **own** preset and compared with the
+points it publishes for the same player and week:
+
+| Check, week 1 | Within 0.05 | Median gap |
+| --- | --- | --- |
+| Sleeper components against Sleeper's `pts_ppr` | 389 of 397, **98.0%** | 0.018 |
+| ESPN components against ESPN's `appliedTotal` | 429 of 430, **99.8%** | 0.001 |
+
+So the component extraction is right on both sides, and **components times
+modifiers is proven to reproduce a real scoring system** — which is the
+load-bearing operation Phase 9 was going to have to trust. ESPN's own
+`scoringItems` for `leaguedefaults/3` supplied the stat-id vocabulary rather
+than a guess: `3` passing yards, `4` passing touchdowns, `20` interceptions,
+`24`/`25` rushing, `42`/`43` receiving, `53` receptions, `72` fumbles lost.
+
+Getting there took two corrections, and both are findings rather than mistakes
+to hide:
+
+- **Sleeper scores an interception at -1 where ESPN scores it at -2.** Under one
+  shared preset every quarterback read as off by about 0.9, which looked like a
+  broken mapping and was two presets disagreeing.
+- **ESPN's PPR pays 6 for a return touchdown and Sleeper's feed does not
+  project one at all** (ESPN stats `101` and `102`). It is small — 0.27 points
+  on Rashid Shaheed, the largest seen — but it is a component one source has and
+  the other lacks, so a league that scores return touchdowns is computable from
+  ESPN and not from Sleeper.
+
+### The spread
+
+Week 1 of 2026, the one week where both feeds were freshly modified. 436 players
+joined on `joinKey`; 372 of them QB, RB, WR or TE, which is where this ruleset
+applies; 208 of those projected at 5 or more points by at least one source,
+which is the set anybody would consider starting.
+
+| Measure, those 208 | Value |
+| --- | --- |
+| Median absolute difference | **1.22 pts** |
+| 75th percentile | 1.79 pts |
+| 90th percentile | 2.61 pts |
+| Largest | 4.55 pts |
+| Median as a share of the larger projection | **9.9%** |
+| Mean signed difference, Sleeper minus ESPN | +0.26 pts |
+
+That mean is the check for one desk simply running high, and at a quarter of a
+point against a median gap of 1.22 there is no such bias to correct for. The
+disagreement is per player, not a level difference.
+
+By position, and it is flat enough that no position needs treating differently:
+
+| Position | n | Median | 90th |
+| --- | --- | --- | --- |
+| QB | 32 | 1.11 | 2.22 |
+| RB | 53 | 1.32 | 2.78 |
+| WR | 88 | 1.28 | 2.69 |
+| TE | 35 | 1.11 | 2.51 |
+
+**Kickers and defences are not in any of this.** A kicker scores field goals by
+distance and a defence scores sacks and points allowed, so neither is
+reproducible from the twelve skill components, and neither was compared.
+
+### The number a lineup recommendation actually acts on
+
+Absolute points are not what start/sit advice consumes — ordering is. Two
+projections 1.2 points apart change nothing if both put the same player ahead.
+So: over every pair of players at the same position, how often do the two
+sources order them oppositely?
+
+| Where Sleeper separates the pair by | Pairs | Reversed |
+| --- | --- | --- |
+| 1+ pts | 5422 | 433, **8.0%** |
+| 2+ pts | 4534 | 180, **4.0%** |
+| 3+ pts | 3751 | 64, **1.7%** |
+
+**That is the answer to how to combine them.** Where one desk calls it by 3 or
+more, the other agrees 98.3% of the time, so a confident recommendation is
+usually not a coin flip between sources. Where the gap is a point, one call in
+twelve reverses, which is exactly the region where presenting a single number —
+a mean above all — would manufacture confidence that neither desk has. The
+2026-09-08 decision to show both with the spread visible survives the
+measurement, and the measurement supplies the threshold it needed: **the
+sources disagree in a way that changes the advice below about 3 points of
+separation, and rarely above it.**
+
+The widest individual disagreements, all of them players somebody would start:
+
+| Player | Sleeper | ESPN | Apart |
+| --- | --- | --- | --- |
+| Tua Tagovailoa (QB ATL) | 15.29 | 10.75 | 4.55 |
+| Terrance Ferguson (TE LAR) | 3.68 | 8.08 | 4.40 |
+| Kendre Miller (RB NO) | 1.74 | 6.06 | 4.32 |
+| Ashton Jeanty (RB LV) | 13.80 | 18.06 | 4.26 |
+| Josh Downs (WR IND) | 12.55 | 9.08 | 3.48 |
+
+A mean would have shown Tua at 13.0 and said nothing, and 13.0 is a start in
+most lineups while 10.75 is not.
+
+### Two traps found while measuring, both of which would have shipped
+
+**Sleeper refreshes the current week and leaves the later ones stale.** Week 1
+records carried `last_modified` 2026-09-09T03:00; weeks 4, 8 and 14 all carried
+2026-08-29T07:45, one vintage eleven days old. Worse, **inside that older
+vintage the published points disagree with the record's own components** —
+quarterback `pts_ppr` runs about 2.2 points above what the components in the
+same record produce, while week 1 agrees to 0.02. Two consequences for Phase 9:
+compute from components rather than reading `pts_ppr`, and treat a future week's
+Sleeper projection as an older reading than this week's, because `last_modified`
+says so per record and is the only thing that does.
+
+**ESPN returns last season's weekly projection beside this one, under the same
+week number.** 896 of 1036 players carried a prior-season row matching
+`statSourceId: 1`, `statSplitTypeId: 1` and the requested `scoringPeriodId`.
+`seasonId` is the only field that separates them, and a reader taking the first
+match gets a coin flip: Jahmyr Gibbs answers 18.42 for 2025 and 22.50 for 2026
+on the same week 1 query. This is not a stale-cache problem that resolves
+itself; it is the shape of the response.
+
+### What this does not establish
+
+- **Which desk is better.** This measures disagreement, not accuracy, and
+  accuracy needs actual results that do not exist yet — the season starts
+  2026-09-09. Nothing here justifies preferring one source.
+- **Anything about kickers or defences**, per above.
+- **Rest-of-season spread.** ESPN answers period 0 directly and Sleeper needs
+  its weeks summed, and summing a stale vintage against a fresh one would
+  measure the vintages. Worth redoing once weeks refresh in season.
+- **That the spread stays this size in season.** It was 1.22, 1.21, 1.22 and
+  1.21 at weeks 1, 4, 8 and 14, which is stable across the schedule but is four
+  readings taken on one day, before any football. Injuries and usage are what
+  desks disagree about, and neither exists yet.
+
+Measured with a throwaway probe, `tools/inseason-spread.mjs`, which git ignores
+along with the rest of `tools/`. It fetches the two feeds, joins on the
+repository's own `joinKey`, and prints every figure above; the mapping checks are
+in it and fail loudly, which is how both preset differences were found.
+
 ## Identity, and a negative result worth keeping
 
 Joining a Yahoo player to a projection is the hinge of the whole feature, and
@@ -291,8 +444,10 @@ Each of these was observed, and each has a wrong answer that looks right:
   or empty. Both the values and how fast they land during a game are unknown,
   and no claim about live scoring should rest on this document.
 - Whether Sleeper's `{}` actuals path fills in once games are played.
-- Whether the three sources agree, and by how much. No comparison was made, and
-  a projection nobody has checked against another is one opinion.
+- **Which projection is better.** Sleeper and ESPN have now been compared
+  against each other -- see the measured section above -- but not against a
+  result, because no game has been played. Disagreement is measured; accuracy is
+  not, and nothing here ranks the two desks.
 - Defensive and kicker projection quality, sampled only for shape.
 - Rate limits on any of the four. Nothing was fetched hard enough to find one,
   which is not the same as there being none.

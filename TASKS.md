@@ -1867,21 +1867,209 @@ are divided between them and none was dropped.
     posted nothing to it.
   - Dependencies: Y8.5.
 
+### Phase 9 tasks, in order
+
+Split from `PLAN.md` and from Y9.0's measurement, which released the hold Phase
+9 was carrying. **Y9.1 onward is unstarted, and Phase 9 implementation is not
+authorized** -- the split was written on 2026-09-08 and the owner's instruction
+was to stop at it. Each is one reviewable outcome.
+
+Two surfaces, in the order the 2026-09-08 decision set: the app's screen first,
+a panel over Yahoo's league pages second. The first two tasks are pure
+calculation and need neither a browser nor a real league.
+
+- [x] Y9.0: Measure how far apart the two projection sources run.
+  - Scope: the one thing `PLAN.md` held as "unmeasured, and Phase 9's to
+    measure", because how Sleeper and ESPN are combined could not be decided
+    without it. Read-only, no account, nothing built.
+  - Why it had to come first: the 2026-09-08 decision to show both sources with
+    their spread visible was taken on an argument -- two desks disagreeing is
+    information -- with no idea whether the disagreement was half a point or
+    ten. A range is the right presentation only if there is a range.
+  - Method, and it is the part worth keeping: **one ruleset over both sources'
+    raw components**, not Sleeper's `pts_ppr` against ESPN's `appliedTotal`.
+    Comparing published totals measures the two presets disagreeing as well as
+    the two desks, and they do disagree, so the desks could not be seen through
+    it. Each source's components were then scored under that source's own
+    preset and checked against the points it publishes -- 98.0% and 99.8% of
+    players within 0.05 -- which is what makes the basis established rather
+    than asserted.
+  - Answered: the two run a median **1.22 points apart** on the 208 players
+    either would start in week 1, about 10% of the projection, with a mean
+    signed difference of +0.26, so there is no level bias to correct. Flat
+    across positions and stable across weeks 1, 4, 8 and 14 at 1.21-1.22.
+  - The number that actually decides the question, because start/sit advice
+    consumes ordering rather than points: over pairs of players at one
+    position, the two **reverse the ordering in 8.0% of pairs one desk
+    separates by a point, 4.0% at two points and 1.7% at three.** So the
+    decision to show both stands and now has the threshold it lacked -- they
+    disagree in a way that changes advice below about three points of
+    separation and rarely above it. A mean is ruled out by the measurement
+    rather than by preference: it would have put Tua Tagovailoa at 13.0 where
+    the desks said 15.29 and 10.75, a start against a sit.
+  - Two traps found while measuring, both of which would otherwise have
+    shipped. **Sleeper refreshes the current week and leaves later weeks
+    stale** -- week 1 modified 2026-09-09, weeks 4, 8 and 14 all on
+    2026-08-29 -- and inside that older vintage the published points contradict
+    the record's own components, quarterbacks by about 2.2 points, where the
+    current week agrees to 0.02. And **ESPN returns last season's weekly
+    projection beside this one under the same week number**, on 896 of 1036
+    players, separated only by `seasonId`: Jahmyr Gibbs answers 18.42 and 22.50
+    for the same week 1 query.
+  - Established for free, and it de-risks Y9.1: **components times modifiers
+    reproduces a real scoring system**, on both feeds, which was the
+    load-bearing operation Phase 9 was going to have to take on trust. ESPN's
+    stat-id vocabulary came off its own `scoringItems` rather than a guess.
+  - Acceptance criteria: a reproducible figure with its join coverage stated,
+    so the spread is not measured on a biased subset. Met -- 436 of 461
+    Sleeper-projected players joined, and the 25 that did not are named as
+    unmatched rather than dropped silently.
+  - Automated validation: none, and none is appropriate -- nothing was built.
+    The probe's own two mapping checks are what stand behind the numbers, and
+    they bite: both preset differences were found by watching them fail.
+  - Manual validation: none required. No surface.
+  - Written up in `docs/in-season-data-sources.md`, which also lost a claim
+    this measurement falsified: it had recorded that no comparison had been
+    made. `PLAN.md`'s held row is struck through and the hold released there.
+  - Not done, and listed in the document rather than implied: **which desk is
+    better**, which needs actual results and the season starts 2026-09-09;
+    kickers and defences, whose components this ruleset has no terms for;
+    rest-of-season spread, since summing a stale Sleeper vintage against ESPN's
+    period 0 would measure the vintages. All four readings were taken on one
+    day, before any football.
+  - The probe is `tools/inseason-spread.mjs`, which git ignores with the rest
+    of `tools/`, so it appears in no diff.
+  - Dependencies or blockers: none.
+
+- [ ] Y9.1: Score a projection under the league's own rules.
+  - Scope: a weekly projection feed for both sources, and the scoring join that
+    turns raw components into that league's points. Sleeper's weekly path and
+    ESPN's `leaguedefaults/3` path, cached on disk like the other public feeds,
+    since both are game-scope and need no credential. The league's own 38
+    `stat_categories` against 35 `stat_modifiers`, already parsed by
+    `server/src/platforms/yahoo/league.js`, applied to the components.
+  - Where it goes, proposed rather than settled: beside
+    `server/src/platforms/yahoo/inSeason.js`, which already joins a snapshot to
+    its feeds, with the source modules under `server/src/sources/`. The
+    alternative is a scoring module the client engine holds, on the argument
+    that the draft engine's purity is what makes it testable. Service-side is
+    proposed because the components come from feeds the service fetches and the
+    modifiers from a snapshot the service holds, so a client-side join would
+    ship both across the wire to compute what the service can. **Say so if that
+    is the wrong seam** -- it is an architecture question and this task should
+    not settle it silently.
+  - Why it is first: it needs no browser, no real league and no screen, and
+    every later task is wrong if it is wrong.
+  - Acceptance criteria: setting a synthetic league's rules to a source's own
+    preset reproduces that source's published points for the same player and
+    week, to 0.05, on both sources. A rule the league scores that the source
+    does not project is reported as unsupported, never silently zeroed. A
+    player the source did not project is dropped, not scored zero. ESPN's
+    prior-season row cannot be read as this season's. Sleeper's `pts_ppr` is
+    never read as the answer.
+  - Automated validation: `npm run server:test`, on synthetic feed records and
+    the synthetic snapshot `league.test.js` already uses. Include the two
+    preset reproductions above, the unsupported-rule report, and the
+    `seasonId` filter -- that last one checked by feeding a record set holding
+    both seasons under one week and asserting which is taken.
+  - Manual validation: none required. Nothing renders.
+  - What Y9.0 already establishes for it, so it is not re-derived: the ESPN
+    stat-id vocabulary read off ESPN's own `scoringItems`; that components
+    times modifiers reproduces both feeds to 98.0% and 99.8%; that Sleeper
+    scores an interception at -1 and ESPN at -2;
+    that ESPN's PPR pays 6 for a return touchdown Sleeper does not project;
+    that a future week's Sleeper record is a stale vintage whose own points
+    contradict its own components.
+  - Dependencies or blockers: none.
+
+- [ ] Y9.2: The best legal lineup, and the swaps that reach it.
+  - Scope: a pure calculation over a scored snapshot. Eligibility from each
+    player's `eligible_positions` and the composite slots the 2026-09-08 join
+    decision already resolves; the best legal lineup by projected points; the
+    swaps from the current lineup to it and the projected difference; locked
+    players fixed; byes, IR and missing projections handled as data rather than
+    as zeros.
+  - Acceptance criteria: the greedy-flex trap is beaten -- a lineup filled
+    best-player-first into the first slot that fits must be shown to lose to
+    this, on a case where it does. A locked player never moves. A player with
+    no projection is never recommended in. Where the two sources order two
+    players oppositely and separate them by less than the three points Y9.0
+    identified, the advice reports the disagreement rather than
+    picking a side.
+  - Automated validation: `npm run engine:test` against exhaustive enumeration
+    of every legal lineup for small rosters, which is tractable at eight or
+    nine slots and is the only check that proves an optimum rather than
+    asserting one. Plus the flex trap, a locked player, a bye, and a roster
+    where the best legal lineup is the current one, which must produce no
+    advice rather than a zero-point swap.
+  - Manual validation: none required at this task; the surface is Y9.3.
+  - Dependencies or blockers: Y9.1.
+
+- [ ] Y9.3: The weekly advice screen.
+  - Scope: the advice on the app's own in-season surface, `SeasonScreen.tsx` or
+    a screen beside it. The current lineup against the best legal one, the
+    swaps, the projected difference, **both sources with their spread shown
+    rather than averaged**, per-feed age, and every limit stated where it
+    applies rather than in a footnote.
+  - Acceptance criteria: both a beneficial move and a superficially attractive
+    move the calculation correctly rejects are demonstrated, which `PLAN.md`
+    requires before any recommendation is called complete. A missing or stale
+    feed reads as missing or stale, on the pattern Y8.4 established for the
+    league view. An unsupported scoring rule limits the advice visibly.
+  - Automated validation: `npm run engine:test` for the endpoint,
+    `npm run shots` extended to photograph the screen, including the states
+    where advice is limited -- and `shots` fails on a console error, which is
+    the half a screenshot cannot show.
+  - Manual validation: required. A normal week and a constrained lineup, both
+    compared against the real league in Yahoo, submitting nothing.
+  - Dependencies or blockers: Y9.2.
+
+- [ ] Y9.4: The same reading over Yahoo's own league pages.
+  - Scope: a panel on the league page, on the pattern `userscript/draft-panel.js`
+    proves -- one element holding a shadow root, pointer-transparent except its
+    close button, no storage, no key handler, no focus. Installed from the
+    service as a bookmarklet and build-stamped, as both the panel and the
+    league reader already are. It reads the advice endpoint on the loopback and
+    paints it. It never talks to Yahoo and never writes a lineup.
+  - Acceptance criteria: the panel's swaps and numbers are the screen's, from
+    the same endpoint. A click where it sits still reaches the page underneath.
+    It says when it cannot reach the service instead of showing nothing. Its
+    build stamp reports a stale copy the way the other two do.
+  - Automated validation: the endpoint and the build stamp, in
+    `npm run server:test`. **The rendering cannot be checked** -- `shots`
+    drives this app and the panel renders on a Yahoo page, which is the same
+    gap the draft panel has and is recorded in the 2026-09-08 decision rather
+    than discovered here.
+  - Manual validation: required, and it is the only validation of the
+    rendering. On the real league page, beside the app, confirming the two
+    agree.
+  - Known cost, accepted in advance: the advice sentences become a second copy
+    with nothing checking they agree, exactly as the take line already is. See
+    `DECISIONS.md`, 2026-09-08.
+  - Dependencies or blockers: Y9.3.
+
 ### Subsequent task planning
 
-Phases 9-11 remain roadmap outcomes until their input contracts are established.
-Before implementing each phase, split it into reviewable tasks with explicit
-acceptance and validation, then record actual results rather than marking the
-phase done from a build alone. Order: weekly lineup advice, waiver add/drop
-comparisons, trade evaluation, then trade targets and comparison with waivers.
-Other league platforms remain deferred.
+Phase 9 is split above. Phases 10 and 11 remain roadmap outcomes until their
+input contracts are established. Before implementing each, split it into
+reviewable tasks with explicit acceptance and validation, then record actual
+results rather than marking the phase done from a build alone. Order: waiver
+add/drop comparisons, trade evaluation, then trade targets and comparison with
+waivers. Other league platforms remain deferred.
 
-Phase 9 inherits two things it must settle rather than assume. How the two
-projection sources are combined is open on purpose — a range, a primary, or a
-refusal past some spread — and **how far apart they run has never been
-measured**, which is Phase 9's first job. And computing points from raw
-components against a league's 35 modifiers is the load-bearing work of that
-phase, not a refinement to it.
+**Both things Phase 9 inherited are now settled, and neither had to be
+assumed.** How the two projection sources are combined was open on purpose -- a
+range, a primary, or a refusal past some spread -- and Y9.0 measured the spread
+and answered it: show both, and the disagreement stops mattering above about
+three points of separation. Computing points from raw components against a
+league's 35 modifiers was called the load-bearing work of the phase, and it is,
+but it is no longer a risk: Y9.0 proved the operation against both feeds' own
+published points before anything was built on it.
+
+Phase 10 inherits one hold that a browser run closes and nothing else does:
+**availability -- free agent against waiver against taken -- is league-scoped
+and unread.** It blocks waiver advice entirely, and `PLAN.md` names it as the
+one to close first.
 
 ## Blocked
 

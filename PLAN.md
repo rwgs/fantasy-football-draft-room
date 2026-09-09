@@ -282,12 +282,38 @@ Each was observed, and each has a wrong answer that looks right:
 | FAAB balance | FAAB bid suggestions | on no response seen, and the available league uses priority |
 | A set `weekly_deadline` | lock rules from Yahoo's own field | was `null`; ESPN kickoff times cover the need meanwhile |
 | Actual stat values | anything comparing advice to results | nothing had kicked off; every value read was zero |
-| Whether the two projection sources agree | how to combine them | unmeasured, and Phase 9's to measure |
+| ~~Whether the two projection sources agree~~ | ~~how to combine them~~ | **measured 2026-09-08**, and it releases this hold: see below |
 | A keeper or past-season league | those league types | unread; a past season is unreachable by construction |
 
 None of these blocks Phase 8, which displays a league rather than advising on
 one. Availability blocks Phase 10, and that is the one to close first with a
 browser run.
+
+**The projection hold is released, 2026-09-08.** The spread was measured and is
+written up in `docs/in-season-data-sources.md`. Sleeper and ESPN run a median
+1.22 points apart on the players either would start, about 10% of the
+projection, with no level bias between them. The number that decides how to
+combine them is not that one, though: over pairs of players at one position,
+they reverse the ordering in 8.0% of pairs one desk separates by a point, 4.0%
+at two points and 1.7% at three. So the 2026-09-08 decision to show both with
+the spread visible stands, and it now has the threshold it lacked -- **the two
+disagree in a way that changes advice below about three points of separation and
+rarely above it.** A mean is ruled out by the same measurement rather than by
+preference: it would have shown Tua Tagovailoa at 13.0 where the two desks said
+15.29 and 10.75, which is a start against a sit.
+
+Three things that measurement settled which the implementation must carry, all
+of them in the document:
+
+- **Components times modifiers is proven**, on both feeds, against each feed's
+  own published points -- 98.0% and 99.8% of players within 0.05. Phase 9's
+  scoring join is a known quantity rather than a risk.
+- **Sleeper's future weeks are a stale vintage whose own points contradict its
+  own components** (quarterbacks about 2.2 points apart, where the current week
+  agrees to 0.02). Compute from components; read `last_modified` per record.
+- **ESPN returns last season's weekly projection under the same week number**,
+  on 896 of 1036 players. Only `seasonId` separates them, so a reader must
+  filter on it or get a coin flip.
 
 ## Validation, sequencing and stop points
 

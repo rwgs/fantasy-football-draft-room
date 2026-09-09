@@ -9,6 +9,82 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-08 Weekly advice lands on both surfaces, and the app screen goes first
+
+Status: Accepted, by the repository owner, asked before Phase 9 was split into
+tasks. Constrains Phase 9 and every phase after it that produces advice.
+
+### Decision
+
+Weekly advice renders in two places, and the order is not arbitrary.
+
+**The app's in-season screen first**, as the full surface: the current lineup
+against the best legal one, both projection sources with their spread visible,
+per-feed age, and every limit spelled out. This is where a reading that needs
+room to explain itself belongs, and it is the only surface `npm run shots` can
+photograph, so it is the only one a check can see.
+
+**A panel over Yahoo's own league pages second**, as a compact reading of the
+same numbers, on the exact pattern `userscript/draft-panel.js` already proves:
+a bookmarklet, one element on the end of the body holding a shadow root, every
+part of it ignoring the mouse except its own close button, no storage, no key
+handler, no focus. It reads the service on the loopback and paints. It never
+talks to Yahoo, never reads a cookie, and **never writes a lineup** -- the user
+still makes every change themselves, which is what `ROADMAP.md` Phase 9 already
+required.
+
+### Why
+
+Because the advice is consumed where the lineup is set, and that is Yahoo.
+
+The app screen alone would put the reading one tab away from the only page that
+can act on it, and a start/sit call is read and acted on in the same minute. The
+draft side of this project already learned the same lesson from the other
+direction: the panel exists because a board's reading of a room is wanted over
+the room, not beside it.
+
+The panel second rather than first because the calculation has to be right
+before a second renderer of it is worth having, and because the app screen is
+the one a check can photograph. Building the harder-to-observe surface first
+would mean debugging the arithmetic and the injection at once.
+
+A bookmarklet rather than a userscript, again: the 2026-09-05 entry settled that
+a thing needing no privileges should not inherit the failure modes of one that
+does, and the 2026-09-08 reader entry applied it a second time. Nothing here
+wraps `WebSocket` at `document-start`, so nothing here needs a manager.
+
+### The cost, accepted rather than discovered later
+
+**Every sentence of advice becomes a second copy, and nothing checks the two
+agree.** The panel is a separate script that cannot import from the client, so
+`fillsStarter`'s take line is already one string in two files -- recorded in
+`AGENTS.md` and hit once, when the take line was corrected on 2026-09-07 and had
+to be corrected twice. Phase 9 adds more such sentences than the draft board
+has.
+
+This is accepted knowingly, not solved. What makes it tolerable is that the
+numbers are not duplicated: both surfaces read one endpoint, so the arithmetic
+has one home and only the wording has two. A future consolidation, if the
+wording drifts far enough to hurt, is to serve the sentences from the endpoint
+alongside the numbers rather than to make the panel import anything.
+
+**The panel cannot be photographed by `shots`**, because it renders on a Yahoo
+page and `shots` drives this app. So its rendering is manually validated by
+construction, exactly as the draft panel's is. The endpoint behind it is
+checkable and must carry the coverage the panel cannot.
+
+### What this does not decide
+
+- Whether the panel polls on a beat or paints once when clicked. The draft
+  panel polls at 2500ms because a draft moves; a lineup does not move that way,
+  and the answer is Y9.4's to pick from what the screen needs.
+- Whether the panel ever appears on any Yahoo page other than the league's own.
+  It matches what it is clicked on, and widening the draft bridge's matches
+  stays rejected, per `PLAN.md` and the 2026-09-08 reader entry.
+- Anything about writing to Yahoo. There is no lineup-write path, this does not
+  open one, and `SPEC.md`'s non-goal on writes stands unchanged apart from the
+  draft-queue narrowing already recorded.
+
 ## 2026-09-08 Two joins, because a Yahoo id and a name answer different questions
 
 Status: Accepted. Applies to `server/src/platforms/yahoo/inSeason.js`, and

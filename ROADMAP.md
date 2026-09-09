@@ -5,8 +5,13 @@ Ordered outcomes, each one leaving the project in a working state.
 Phases 1 and 2 shipped before this document existed and are recorded as
 completed rather than restated in detail; `CHANGELOG.md` holds what they
 delivered. Phases 3 through 6 are the Yahoo draft work currently in flight.
-Phases 7 through 11 plan the Yahoo-first in-season extension requested on
-2026-09-08; none is implemented. See [PLAN.md](PLAN.md) for the approach.
+Phases 7 through 11 are the Yahoo-first in-season extension requested on
+2026-09-08. Phase 7's discovery and Phase 8's league view are built, each with
+outstanding items named below; Phase 9 is split into tasks in
+[TASKS.md](TASKS.md) and unstarted; Phases 10 and 11 remain outcomes with no
+tasks written. See [PLAN.md](PLAN.md) for the approach, and `TASKS.md` for what
+has actually been validated -- this document owns the order and the exit
+criteria, not the status of a build.
 
 ## Phase 1: First release — complete, 1.0.0
 
@@ -194,7 +199,7 @@ The Yahoo work is fit to publish, or a decision is recorded not to publish it.
 
 - Full local gate, independent review, and documented manual testing.
 
-## Phase 7: Prove Yahoo in-season access and analysis data
+## Phase 7: Prove Yahoo in-season access and analysis data -- built, not closed
 
 Outcome: a verified way to read the user's actual Yahoo league outside the
 draft room, and a coverage assessment for weekly and remaining-season advice.
@@ -218,7 +223,16 @@ Validation: compare readings to Yahoo; check complete pagination and all team
 rosters; retain only sanitized fixtures in git. Record reproducible reads and
 source coverage, not a claim that the draft bridge proves in-season support.
 
-## Phase 8: A trustworthy Yahoo league view
+**Where it stands.** The exit is met on the data contract: the reader is proved
+end to end, the coverage table is in `docs/yahoo-in-season-data.md`, the source
+assessment is in `docs/in-season-data-sources.md`, and the contract is in
+`PLAN.md`. Two things keep it open, and both need something this project cannot
+reach on its own: the API application's status, which only the account holder
+can read, and the league-scope reads that need a signed-in browser run -- a
+waiver player, a free agent, the other seven rosters and a FAAB balance no
+league on hand has. Y7.1 and Y7.2 in `TASKS.md` carry the detail.
+
+## Phase 8: A trustworthy Yahoo league view -- built, exit met on the reading side
 
 Outcome: select the Yahoo league and own team, then see current rosters,
 settings, availability and data age in an in-season view alongside the draft.
@@ -236,14 +250,26 @@ applicable, restart/staleness/partial-response cases, browser screenshots and
 a manual comparison to the user's league. Run the full local implementation
 gate defined in PLAN.md; preserve and report outstanding draft validation.
 
+**Where it stands.** Built as Y8.1 to Y8.6, and the owner confirmed against
+their real league that every roster matches and the own-team mark is on their
+team. Two items keep the exit short of fully discharged: the scoring was called
+"ok" rather than checked rule by rule against Yahoo, and **no second real
+league has been read**, so "switching league cannot reuse another league's
+state" is proven in the harness and not in life.
+
 ## Phase 9: Weekly starting-lineup advice
 
 Outcome: the first useful in-season release recommends legal swaps from the
 user's roster and explains the projected difference for the selected week.
 
-Dependencies: Phase 8 and verified weekly projection/scoring coverage.
+Dependencies: Phase 8, and weekly projection/scoring coverage, **which is now
+verified** -- Y9.0 measured the spread between the two sources and proved that
+components times modifiers reproduces a real scoring system.
 Scope: a separate pure in-season calculation, exact league scoring, all
-eligibility positions, fixed locked players, byes, IR and missing data.
+eligibility positions, fixed locked players, byes, IR and missing data. The
+advice appears on **two surfaces**, the app's screen first and a panel over
+Yahoo's own league pages second, per the 2026-09-08 decision -- because the
+lineup is set in Yahoo, which is also why nothing here writes one.
 
 Exit: advice respects all supported rules and improves on or agrees with the
 current legal lineup. Unsupported rules or missing required data limit advice
