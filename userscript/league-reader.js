@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo league reader
 // @namespace    fantasy-football-draft-room
-// @version      1.0.0
+// @version      1.1.0
 // @description  Read your own Yahoo league in season - settings, scoring, teams and rosters - and hand it to the draft room running on your machine. Reads only; never writes to Yahoo.
 // @match        https://*.fantasysports.yahoo.com/f1/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
@@ -88,6 +88,17 @@
    */
   const MODE = '__READER_MODE__';
   const AUTO = MODE === 'userscript';
+
+  /*
+   * RAISE `@version` ABOVE WHENEVER THIS FILE CHANGES, or an installed copy
+   * never updates. The build stamp is what says which copy is running and it is
+   * derived from the source, so it cannot be forgotten -- but a manager decides
+   * whether to fetch at all by comparing `@version`, and a body that changed
+   * under an unchanged version is a copy the manager will keep serving forever
+   * while reporting no fault. That is the shape of 2026-09-07, which cost three
+   * mock drafts, and this file caught itself doing it once already: the advice
+   * panel landed with the version left at 1.0.0.
+   */
 
   // ---- How often ---------------------------------------------------------
 
