@@ -121,19 +121,27 @@ written down as unknowable and which Yahoo publishes outright.
 
 ### Fixed
 
-**A player both desks start is agreement, not two disagreements.** Reported from
-a real board on 2026-09-09: a lineup with two `RB` seats showed Christian
-McCaffrey started by Sleeper in one and by ESPN in the other, and the screen
-named him on both sides of the disputed table while reporting nothing as
-agreed. The seats of a slot are interchangeable, so that is one disagreement
-about the other back, not two about him.
+**The desks disagree about players, not about seats.** Reported twice from a
+real board on 2026-09-09, the second time as a partial fix. First: a lineup
+with two `RB` seats showed Christian McCaffrey started by Sleeper in one and by
+ESPN in the other, and the screen named him on both sides of the disputed table
+while reporting nothing as agreed. Then, once seats of the same slot were
+grouped: the same player, started at `RB` by one desk and in the flex by the
+other, named on both sides again.
 
-Each desk sorts its candidates by its own points, so the two hand out the seats
-of a slot in different orders, and comparing them seat by seat read the shuffle
-as a difference of opinion. It is the same defect the swap table had and fixed
-once already, one level up: agreement and dispute are now settled per slot, and
-whoever is left over in a slot pairs up by each desk's own ranking rather than
-by the arbitrary order the matching seated them.
+A player is worth the same points in every seat he can fill, which is what
+makes the best lineup computable at all. So a *set* of startable players scores
+the same however it is seated, and two desks recommending the same set are
+giving the same advice whatever slots their two matchings used. What they can
+differ about is who starts. Both reports were the same mistake — comparing the
+desks somewhere narrower than the thing they disagree about — and the unit is
+now the set of starters, which covers seats and slots at once.
+
+The table changed with it. A row is a player against a player rather than a
+seat, so the slot sits beside each pick and says where that desk would put him;
+the heading counts players; and who both desks start is now named underneath,
+which the service had been working out and throwing away. On the board that was
+reported, three disputed seats naming McCaffrey twice become one decision.
 
 **Un-starring a player takes him out of your Yahoo queue.** Reported live in
 league 876392 on 2026-09-07, by the run that first proved the write works at

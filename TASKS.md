@@ -2183,6 +2183,11 @@ calculation and need neither a browser nor a real league.
   - Dependencies or blockers: none. Y9.4 can start; it reads this endpoint.
 
 - [x] Y9.3a: A player both desks start is agreement, not two disagreements.
+  - **Partial, and superseded by Y9.3b the same day.** It settled two seats of
+    one slot and left the same player double-named across two *different* slots,
+    because the unit was still narrower than the thing the desks disagree about.
+    Kept rather than rewritten: the report and the evidence below are real, and
+    the second report is what identified the unit.
   - **Reported from a real board on 2026-09-09, with a screenshot.** A lineup
     with two `RB` seats showed Christian McCaffrey started by Sleeper in one and
     by ESPN in the other, and the disputed table named him on both sides while
@@ -2217,6 +2222,56 @@ calculation and need neither a browser nor a real league.
   - Manual validation outstanding: the owner's own board, which is where it was
     reported. `engine:test`'s two fixture suites skipped, since
     `client/fixtures.local.json` is absent here.
+  - Dependencies or blockers: none.
+
+- [x] Y9.3b: The desks disagree about players, not about seats.
+  - **Y9.3a was a partial fix, and the owner reported it as one the same day.**
+    Grouping by slot stopped a player being double-named across two `RB` seats
+    and left the same defect across slots: McCaffrey started at `RB` by one desk
+    and in the flex by the other came out as an argument about two seats, when
+    both desks want him on the field. Three disputed seats, two of them naming
+    the same player, where the board held one decision.
+  - The unit was wrong both times, so this fixes the unit rather than the case.
+    A player is worth the same points in every seat he can fill -- the premise
+    `bestLineup` is built on -- so a **set** of startable players scores the same
+    however it is seated, and two desks recommending the same set agree whatever
+    slots their matchings used. What they can differ about is who starts.
+    `lineupAdvice` now compares the sets. Seats and slots are both covered by
+    that, and it is less code than the per-slot version it replaces.
+  - The screen changed with it, and the owner chose the shape: a row is a player
+    against a player, so `slot` moved from the row onto each pick and says where
+    that desk would put him. The heading counts players. `agreed` is rendered for
+    the first time -- it was computed and thrown away since Y9.2 -- because
+    without it a player who vanished from the disputed table looks dropped rather
+    than agreed.
+  - The checks that fail on Y9.3a's code, both in `server/src/lineup.test.js`:
+    `a player both desks start in different slots is agreement too`, which is the
+    reported board in miniature, and the slot assertions on the two existing
+    dispute tests. The first also pins the spread at 13 where one desk separates
+    the players by 13 and the other by 2, since the widest view is the one
+    reported.
+  - **Three checks were added to `engine:test` and they do not bite, which is
+    said here rather than left to look like coverage.** They assert the invariant
+    over the real endpoint -- a player both desks start is agreed, never
+    disputed, never named twice -- but whether the fixture produces a shared
+    starter in two slots depends on live projections, and today it does not: run
+    against the pre-fix service all three passed. They guard the joined-up route;
+    the unit tests are the demonstration. Recorded in the file too.
+  - Rendered evidence: the advice panel photographed against the fixture, which
+    reads `One player the two desks disagree about`, `Omarion Hampton RB` against
+    `Ashton Jeanty RB`, and `Both desks start Chase Brown, A.J. Brown, CeeDee
+    Lamb, Justin Jefferson`. `shots` cannot see that paragraph on its own --
+    it is below the viewport it photographs -- so it was driven separately
+    against the same spare pair.
+  - Local gate: `server:test` 185, typecheck clean, `bridge:test` 7,
+    `engine:test` green, build clean, `shots` clean with no console errors, lint
+    unchanged and none of it in the files touched. Isolated service and client on
+    5179 and 5180, restarted between every code change; 5178 was never touched
+    and is still holding the owner's league.
+  - Manual validation outstanding: the owner's own board. 5178 has not been
+    restarted, so nothing reported here has been seen against a real league yet.
+    `engine:test`'s two fixture suites skipped, since `client/fixtures.local.json`
+    is absent here.
   - Dependencies or blockers: none.
 
 - [ ] Y9.4: The same reading over Yahoo's own league pages.

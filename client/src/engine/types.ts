@@ -1096,12 +1096,24 @@ export interface LineupDesk {
   locked: string[] | null;
 }
 
-/** A seat the two desks fill differently, reported rather than decided. */
+/**
+ * A player the two desks disagree about, reported rather than decided.
+ *
+ * A player and not a seat, and the distinction is the whole shape of this. A
+ * set of startable players scores the same however it is seated, so two desks
+ * recommending the same set agree whatever slots their matchings used. What
+ * they can differ about is who starts at all.
+ *
+ * So the slot rides on the pick rather than on the row: each desk seats its own
+ * choice wherever its own lineup puts him, and the row has no single slot to
+ * carry.
+ */
 export interface LineupDispute {
-  slot: string;
   picks: {
     desk: string;
     player: string | null;
+    /** Where this desk seats him. Null where the pick is nobody. */
+    slot: string | null;
     points: Record<string, number | null>;
   }[];
   /** The widest gap any one desk sees between the players it is choosing between. */
@@ -1146,7 +1158,12 @@ export interface LineupRead {
   editable?: boolean;
   advice: {
     desks: Record<string, LineupDesk>;
-    agreed: { slot: string; player: string }[];
+    /**
+     * A player every desk starts. `slot` is null where they start him in
+     * different ones, which is agreement about the player and no claim about
+     * the seat.
+     */
+    agreed: { slot: string | null; player: string }[];
     disputed: LineupDispute[];
     /** Which desks answered at all. One desk's advice is not two agreeing. */
     answered: string[];

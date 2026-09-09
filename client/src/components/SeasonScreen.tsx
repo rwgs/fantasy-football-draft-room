@@ -440,36 +440,44 @@ function Advice({ lineup, loading, error }: {
         )}
 
         {/*
-          * A seat the desks fill differently, reported rather than decided. The
-          * spread is shown because it is what says whether the disagreement is
-          * two desks splitting hairs or a real difference of opinion.
+          * A PLAYER THE DESKS DISAGREE ABOUT, NOT A SEAT THEY FILL DIFFERENTLY,
+          * and the difference is one this table got wrong twice. A set of
+          * startable players scores the same however it is seated, so two desks
+          * recommending the same set agree -- whatever slots their two matchings
+          * happened to use. Comparing seats named a player both desks start on
+          * both sides of this table, first in two `RB` seats and then as an `RB`
+          * against a flex, which reads as a decision the user does not have.
+          *
+          * So the slot sits beside each pick rather than over the row: it says
+          * where that desk would put him, which is where the change is made.
+          * The spread is shown because it is what says whether the disagreement
+          * is two desks splitting hairs or a real difference of opinion.
           */}
         {!!advice?.disputed.length && (
           <>
             <p>
               <b>
                 {advice.disputed.length === 1
-                  ? 'One seat'
-                  : advice.disputed.length + ' seats'}
+                  ? 'One player'
+                  : advice.disputed.length + ' players'}
               </b>
-              {' the two desks fill differently. Both are shown rather than averaged, because '
+              {' the two desks disagree about. Both are shown rather than averaged, because '
                 + 'an average is an opinion neither desk holds.'}
             </p>
             <table className="season-table">
               <thead>
                 <tr>
-                  <th>Slot</th>
                   {desks.map((key) => <th key={key}>{deskName(key) + ' starts'}</th>)}
                   <th className="num">Apart</th>
                 </tr>
               </thead>
               <tbody>
                 {advice.disputed.map((row) => (
-                  <tr key={row.slot + row.picks.map((p) => p.player).join()}>
-                    <td className="mono">{row.slot}</td>
+                  <tr key={row.picks.map((p) => p.player).join()}>
                     {row.picks.map((pick) => (
                       <td key={pick.desk}>
                         {pick.player ?? <span className="hint">nobody</span>}
+                        {pick.slot && <span className="hint mono">{' ' + pick.slot}</span>}
                       </td>
                     ))}
                     <td className="mono num">
@@ -481,6 +489,19 @@ function Advice({ lineup, loading, error }: {
               </tbody>
             </table>
           </>
+        )}
+
+        {/*
+          * Who both desks start, which is the other half of the same statement
+          * and was computed and thrown away until now. It is what makes the
+          * table above readable: a player who is not in it is not missing, he
+          * is agreed, and a reader who saw him named there yesterday needs to
+          * be told which of the two it is.
+          */}
+        {!!advice?.agreed.length && (
+          <p className="hint">
+            {'Both desks start ' + advice.agreed.map((a) => a.player).join(', ') + '.'}
+          </p>
         )}
 
         {/*

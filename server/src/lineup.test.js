@@ -546,8 +546,11 @@ test('two desks disagreeing about a seat report the disagreement, not a winner',
   assert.deepEqual(advice.agreed, []);
 
   const [dispute] = advice.disputed;
-  assert.equal(dispute.slot, 'W/R/T');
   assert.deepEqual(dispute.picks.map((pick) => pick.player), ['wr1', 'rb1']);
+  // The slot rides on the pick and not on the row, because two desks choosing
+  // between two players seat them wherever their own lineup puts them. Here
+  // that is the same slot, which is the easy case and not the general one.
+  assert.deepEqual(dispute.picks.map((pick) => pick.slot), ['W/R/T', 'W/R/T']);
   // Each desk's view of both players, so the screen can show both rather than
   // the difference between them.
   assert.deepEqual(dispute.picks[0].points, { sleeper: 15.29, espn: 10.75 });
@@ -616,7 +619,49 @@ test('a player both desks start in the same slot is agreement, not two disputes'
   assert.equal(advice.disputed.length, 1);
   assert.deepEqual(advice.disputed[0].picks.map((pick) => pick.player),
     ['etienne', 'dowdle']);
-  assert.equal(advice.disputed[0].slot, 'RB');
+  assert.deepEqual(advice.disputed[0].picks.map((pick) => pick.slot), ['RB', 'RB']);
+});
+
+test('a player both desks start in different slots is agreement too', () => {
+  /*
+   * The same defect across slots rather than within one, which is what grouping
+   * by slot did not reach. Reported from the same board a day later, as a
+   * partial fix: a back one desk starts at `RB` and the other in `W/R/T` came
+   * out as an argument about two seats, when both desks want him on the field.
+   *
+   * Both desks here start McCaffrey and Etienne and differ only over the last
+   * place, so there is exactly one decision. `bestLineup` reaches it by
+   * different routes -- Sleeper keeps McCaffrey at `RB` and starts a tight end
+   * in the flex, ESPN rates Dowdle above him and moves him to the flex to fit
+   * them both in -- and the route is not the advice. A set of startable players
+   * scores the same however it is seated.
+   */
+  const slots = [slot('RB', 2, ['RB']), slot('W/R/T', 1, FLEX)];
+  const players = [
+    player('mccaffrey', ['RB'], 'RB'), player('etienne', ['RB'], 'RB'),
+    player('loveland', ['TE'], 'W/R/T'), player('dowdle', ['RB'], 'BN'),
+  ];
+  const sleeper = pointsOf({ mccaffrey: 20, etienne: 15, loveland: 10, dowdle: 8 });
+  const espn = pointsOf({ dowdle: 18, mccaffrey: 16, etienne: 12, loveland: 5 });
+
+  const advice = lineupAdvice({ slots, players, sources: { sleeper, espn } });
+
+  // McCaffrey starts on both desks, at `RB` on one and in `W/R/T` on the other,
+  // so his slot is null: agreement about the player, no claim about the seat.
+  // He is the player the report from the board named on both sides.
+  assert.deepEqual(advice.agreed, [
+    { player: 'mccaffrey', slot: null }, { player: 'etienne', slot: 'RB' },
+  ]);
+
+  assert.equal(advice.disputed.length, 1, 'one decision, not three seats');
+  const [dispute] = advice.disputed;
+  assert.deepEqual(dispute.picks.map((pick) => [pick.player, pick.slot]),
+    [['loveland', 'W/R/T'], ['dowdle', 'RB']]);
+  // ESPN separates them by 13 and Sleeper by 2, and the wider view is the one
+  // reported: one desk holding a strong opinion the other contradicts is more
+  // worth a reader's attention rather than less.
+  assert.equal(dispute.spread, 13);
+  assert.equal(dispute.material, true);
 });
 
 test('a desk that did not answer is absent, and one that answered with nothing is not', () => {

@@ -44,7 +44,7 @@
 import { SCOREABLE_POSITIONS } from './sources/components.js';
 
 /**
- * When two desks disagreeing about a seat stops being noise.
+ * When two desks disagreeing about a player stops being noise.
  *
  * Y9.0 measured the spread between Sleeper and ESPN over a real week and found
  * the two desks rarely more than about three points apart on the same player,
@@ -365,10 +365,14 @@ export function lineupMoves({ lineup, seats }, players = []) {
  * ONE LINEUP PER DESK AND NEVER A BLENDED ONE. The two desks are two opinions,
  * and the measurement that established how far apart they run also established
  * that averaging them invents a third opinion neither holds -- see
- * `MATERIAL_SPREAD`. So a seat the desks fill differently is reported as
- * disputed, carrying what each desk thinks of both players, and this function
- * does not decide it. That is not indecision: the honest output of two sources
- * that disagree is the disagreement.
+ * `MATERIAL_SPREAD`. So a player one desk starts and the other does not is
+ * reported as disputed, carrying what each desk thinks of both players, and
+ * this function does not decide it. That is not indecision: the honest output
+ * of two sources that disagree is the disagreement.
+ *
+ * A PLAYER AND NOT A SEAT, which the block below says at length because getting
+ * it wrong twice cost two reports from a real board. Where each desk seats its
+ * own choice is not a difference of opinion.
  *
  * `locked` is a Set of player keys, or null where nothing is known about which
  * players have locked. Null is carried through to `locksKnown: false` rather
@@ -408,77 +412,98 @@ export function lineupAdvice({
   const disputed = [];
   const agreed = [];
   if (names.length > 1) {
-    const { seats } = desks[names[0]];
     const valueOf = (name, player) => sources[name].get(player.playerKey) ?? 0;
 
     /*
-     * BY SLOT AND NOT BY SEAT, which is `lineupMoves`' grouping and the same
-     * defect one level up from it. The seats of a slot are interchangeable, and
-     * each desk seats its candidates in its own order of points, so a player
-     * both desks start falls out of one matching in the first `RB` seat and out
-     * of the other in the second. Compared seat by seat that read as two
-     * disagreements and no agreement: seen on a real board, where Christian
-     * McCaffrey was started by both desks and named in both disputed rows. He is
-     * not a decision the user has to make, and putting him in those rows hid
-     * the one seat that is.
+     * THE SET OF STARTERS, NOT THE SEATS AND NOT THE SLOTS.
+     *
+     * This has been wrong twice, each time by comparing the desks somewhere
+     * narrower than the thing they actually disagree about, so it is worth
+     * writing down what the unit is and why it is that.
+     *
+     * A player is worth the same points in every seat he can fill -- the note at
+     * the top of this file, and the reason `bestLineup` is a matroid greedy
+     * rather than an assignment. So a *set* of startable players has one score
+     * however it is seated, and two desks recommending the same set are giving
+     * the same advice whatever slots their two matchings happened to use. The
+     * disagreement is about which players start at all.
+     *
+     * Comparing seats reported a player both desks started, seated in `RB#0` by
+     * one and `RB#1` by the other, as two disagreements and no agreement.
+     * Grouping by slot fixed that and left the same defect across slots: a back
+     * one desk starts at `RB` and the other in `W/R/T` came out as an argument
+     * about two seats, when both desks want him on the field. Both were seen on
+     * a real board, a day apart, and the second was reported as a partial fix.
      */
-    for (const slot of new Set(seats.map((s) => s.slot))) {
-      const started = names.map((name) => desks[name].lineup
-        .filter((entry) => entry.seat.slot === slot)
-        .map((entry) => entry.player));
+    const started = names.map((name) => desks[name].lineup);
 
-      const everyone = started[0].filter((player) => started
-        .every((lineup) => lineup.some((other) => other.playerKey === player.playerKey)));
-      for (const player of everyone) agreed.push({ slot, player: nameFor(player) });
+    const sameIn = (lineup, entry) => lineup
+      .find((other) => other.player.playerKey === entry.player.playerKey);
 
-      /*
-       * Whoever is left pairs up as the seats actually in dispute, each desk's
-       * remainder taken in its own order of points. Any pairing is legal, since
-       * the seats are interchangeable, but pairing them as the matching happened
-       * to hand them out could set a desk's 20-point pick against the other's
-       * 5-point one, and report a spread that is an artifact of the matching
-       * rather than a difference of opinion.
-       */
-      const settled = new Set(everyone.map((player) => player.playerKey));
-      const left = names.map((name, at) => started[at]
-        .filter((player) => !settled.has(player.playerKey))
-        .sort((a, b) => valueOf(name, b) - valueOf(name, a)));
-      const rows = Math.max(...left.map((lineup) => lineup.length));
-
-      for (let row = 0; row < rows; row += 1) {
-        const picks = names.map((name, at) => ({ desk: name, player: left[at][row] ?? null }));
+    // In the first desk's seat order, so the screen reads down the lineup.
+    const shared = started[0].filter((entry) => started.every((lineup) => sameIn(lineup, entry)));
+    for (const entry of shared) {
+      const slots = new Set(started.map((lineup) => sameIn(lineup, entry).seat.slot));
+      agreed.push({
+        player: nameFor(entry.player),
         /*
-         * How far apart the desks are about this seat, taken as the widest view
-         * any one of them holds of the players it is choosing between. A desk
-         * that separates them by a point is reporting a coin flip; one that
-         * separates them by six is reporting a real difference that the other
-         * desk contradicts, which is more worth a reader's attention rather
-         * than less.
+         * Null where the desks seat him differently, which is agreement and
+         * not a dispute: the same set scores the same however it is seated.
+         * One desk's slot printed as though both held it would be a claim
+         * neither made.
          */
-        let spread = 0;
-        for (const name of names) {
-          const values = picks
-            .map(({ player }) => (player ? sources[name].get(player.playerKey) : null))
-            .filter((value) => typeof value === 'number');
-          if (values.length > 1) {
-            spread = Math.max(spread, Math.max(...values) - Math.min(...values));
-          }
+        slot: slots.size === 1 ? entry.seat.slot : null,
+      });
+    }
+
+    /*
+     * Whoever is left is the decision, each desk's remainder in its own order
+     * of points. Any pairing is legal, since what is being compared is two sets
+     * rather than two seatings, but pairing them as the matchings happened to
+     * seat them could set a desk's 20-point pick against the other's 5-point
+     * one and report a spread that is an artifact of the matching.
+     */
+    const settled = new Set(shared.map((entry) => entry.player.playerKey));
+    const left = names.map((name, at) => started[at]
+      .filter((entry) => !settled.has(entry.player.playerKey))
+      .sort((a, b) => valueOf(name, b.player) - valueOf(name, a.player)));
+    const rows = Math.max(...left.map((lineup) => lineup.length));
+
+    for (let row = 0; row < rows; row += 1) {
+      const picks = names.map((name, at) => ({ desk: name, entry: left[at][row] ?? null }));
+      /*
+       * How far apart the desks are about this decision, taken as the widest
+       * view any one of them holds of the players it is choosing between. A desk
+       * that separates them by a point is reporting a coin flip; one that
+       * separates them by six is reporting a real difference that the other desk
+       * contradicts, which is more worth a reader's attention rather than less.
+       */
+      let spread = 0;
+      for (const name of names) {
+        const values = picks
+          .map(({ entry }) => (entry ? sources[name].get(entry.player.playerKey) : null))
+          .filter((value) => typeof value === 'number');
+        if (values.length > 1) {
+          spread = Math.max(spread, Math.max(...values) - Math.min(...values));
         }
-        disputed.push({
-          slot,
-          picks: picks.map(({ desk, player }) => ({
-            desk,
-            player: player ? nameFor(player) : null,
-            points: Object.fromEntries(names.map((name) => [
-              name, player ? sources[name].get(player.playerKey) ?? null : null,
-            ])),
-          })),
-          spread,
-          // Whether the disagreement is worth acting on or is two desks
-          // splitting hairs. Reported, not applied: nothing here picks a winner.
-          material: spread >= MATERIAL_SPREAD,
-        });
       }
+      disputed.push({
+        picks: picks.map(({ desk, entry }) => ({
+          desk,
+          player: entry ? nameFor(entry.player) : null,
+          // Per pick and not per row, because the two desks seat their picks in
+          // different slots -- which is the whole reason a row has none of its
+          // own. It says where the change would be made as well as what it is.
+          slot: entry ? entry.seat.slot : null,
+          points: Object.fromEntries(names.map((name) => [
+            name, entry ? sources[name].get(entry.player.playerKey) ?? null : null,
+          ])),
+        })),
+        spread,
+        // Whether the disagreement is worth acting on or is two desks splitting
+        // hairs. Reported, not applied: nothing here picks a winner.
+        material: spread >= MATERIAL_SPREAD,
+      });
     }
   }
 

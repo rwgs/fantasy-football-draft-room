@@ -3728,7 +3728,7 @@ async function yahooLineup() {
 
   for (const desk of desks) {
     const answer = got.advice.desks[desk];
-    const seats: { id: string; slot: string; accepts: string[] }[] = answer.seats;
+    const seats: { slot: string; accepts: string[] }[] = answer.seats;
 
     check(desk + ': the kicker slot is named as one no desk can advise on',
       answer.unscoreable.includes('K'), JSON.stringify(answer.unscoreable));
@@ -3794,6 +3794,50 @@ async function yahooLineup() {
         return !!row && row.fills.includes(e.seat.slot);
       }), 'checked ' + answer.lineup.length + ' seats');
   }
+
+  /*
+   * A PLAYER BOTH DESKS START IS AGREED AND NEVER DISPUTED, which is the one
+   * claim this table has got wrong twice against a real board.
+   *
+   * The desks agree or differ about a *set* of starters, because a set scores
+   * the same however it is seated -- so which seat each desk's matching used is
+   * not a difference of opinion. Comparing seats named a player both desks
+   * start on both sides of the disputed table, first in two `RB` seats and then
+   * as an `RB` against a flex, and each version looked like a decision the user
+   * had to make.
+   *
+   * AN INVARIANT ON THE ENDPOINT, NOT THE DEMONSTRATION, and worth saying so
+   * rather than letting a green run be read as more than it is. The two sets
+   * are derived from the lineups the endpoint returns, so this holds whoever
+   * the desks happen to pick -- but whether the fixture produces a shared
+   * starter in two different slots depends on live numbers, and today it does
+   * not. Run against the pre-fix service these three passed. What reproduces
+   * the defect is `server/src/lineup.test.js`, where the desks' orders are
+   * chosen to force it; this guards the joined-up route against a regression
+   * the unit tests would not see.
+   */
+  const startedBy = (desk: string) => new Set<string>(got.advice.desks[desk].lineup
+    .map((e: { player: { name: string } }) => e.player.name));
+  const bothStart = [...startedBy(desks[0])].filter((name) => startedBy(desks[1]).has(name));
+  const agreedNames: string[] = got.advice.agreed.map((a: { player: string }) => a.player);
+  const disputedNames: string[] = got.advice.disputed.flatMap(
+    (row: { picks: { player: string | null }[] }) => row.picks
+      .map((pick) => pick.player)
+      .filter((name): name is string => !!name),
+  );
+
+  check('a player both desks start is reported as agreed',
+    bothStart.every((name) => agreedNames.includes(name))
+      && agreedNames.length === bothStart.length,
+    agreedNames.join(', ') + ' against ' + bothStart.join(', '));
+  check('and never as a player they disagree about',
+    !disputedNames.some((name) => bothStart.includes(name)),
+    disputedNames.join(', ') || 'nothing disputed');
+  // Twice in the table is the same defect wearing the other face: a player can
+  // only be one desk's pick, since being both desks' makes him agreed.
+  check('so nobody is named twice in the disputed table',
+    new Set(disputedNames).size === disputedNames.length,
+    disputedNames.join(', ') || 'nothing disputed');
 
   check('a league rule no desk publishes is reported rather than counted as zero',
     (got.unsupported?.sleeper ?? []).some(
