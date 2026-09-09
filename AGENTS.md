@@ -165,6 +165,28 @@ run `API=http://127.0.0.1:5179 npx tsx src/engine/selftest.ts` from `client/`.
 That is already the habit because 5178 may be mirroring a live draft; this is a
 second reason for it.
 
+**The client and `shots` can be isolated the same way, which keeps 5178 out of
+the gate entirely.** `vite.config.ts` reads `VITE_API_TARGET` for its `/api`
+proxy and `client/scripts/shots.mjs` reads `SHOTS_URL` for the app origin, so a
+spare service, a spare client and a browser run against each other:
+
+```bash
+cd server && PORT=5179 node src/index.js                  # the spare service
+cd client && VITE_API_TARGET=http://127.0.0.1:5179 npx vite --port 5180 --strictPort
+SHOTS_URL=http://127.0.0.1:5180 npm run shots             # drives that pair
+```
+
+Use `127.0.0.1` and not `localhost`, which resolves to `::1` alone here. With
+this the whole local gate runs without touching 5178, which is the only way to
+validate a `server/src` change needing a browser without the restart that costs
+whatever that service is holding.
+
+**Restart the spare after every service edit.** A spare left running is exactly
+as stale as 5178 and warns about it nowhere, because `serve -- status` only
+knows about 5178. That cost a run on 2026-09-09: a `shots` pass photographed
+lineup advice from code one fix behind, and the screenshot showed a defect that
+had already been fixed.
+
 Two of its suites — "Following a real draft" and "Reading a real league" — skip
 unless `client/fixtures.local.json` exists. They are the only checks that
 exercise `server/src/platforms/`, so a green run without that file says nothing
