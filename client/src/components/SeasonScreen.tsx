@@ -380,8 +380,19 @@ function DeskAdvice({ desk, name }: { desk: LineupDesk; name: string }) {
  * known about which players have locked all change what the advice is worth.
  * Each is said where it applies.
  */
-function Advice({ lineup, loading, error, slots, pool, pooled }: {
+function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
   lineup: LineupRead | null; loading: boolean; error: string | null;
+  /**
+   * Whose team this is, masked like any other, or null where the league read
+   * has not identified one.
+   *
+   * NAMED HERE BECAUSE IT IS NAMED NOWHERE ELSE. The rosters below are the rest
+   * of the league and this is the only place the user's own team appears, so
+   * without this the screen advises at length on a team it never names. It is
+   * also the standing evidence that the guid match worked: a wrong name here is
+   * advice about somebody else's roster.
+   */
+  team: string | null;
   /** The league's slots, which is what puts the roster in a readable order. */
   slots: SeasonSlot[];
   /**
@@ -442,6 +453,8 @@ function Advice({ lineup, loading, error, slots, pool, pooled }: {
     <section className="panel">
       <div className="panel-head">
         <h2 className="eyebrow">This week</h2>
+        {team && <b>{team}</b>}
+        {team && <span className="chip" aria-pressed="true">yours</span>}
         <span className="hint mono">
           {loading ? 'working it out…' : lineup?.week != null ? 'week ' + lineup.week : ''}
         </span>
@@ -583,8 +596,16 @@ function Advice({ lineup, loading, error, slots, pool, pooled }: {
           * quarterback on a roster with no quarterback slot outprojects the
           * flex starter and still cannot play there, and without that column the
           * advice looks as though it overlooked him.
+          *
+          * IT NO LONGER WAITS ON A DESK, because it is now the only place the
+          * user's own roster appears at all -- the list below is the rest of
+          * the league. A desk that failed costs its own column and nothing
+          * else; the banner above says so, and every other column here came out
+          * of the league the browser read rather than out of a feed. Gated on a
+          * desk, a week where both of them fell over showed the user every
+          * rival's roster and not their own.
           */}
-        {!!roster.length && !!desks.length && (
+        {!!roster.length && (
           <table className="season-table">
             <thead>
               <tr>
@@ -862,6 +883,38 @@ export default function SeasonScreen({
   const ownPool = new Map(
     (league?.rosters.find((r) => r.own)?.players ?? []).map((p) => [p.playerKey, p.pool]),
   );
+
+  /*
+   * WHERE THE USER'S OWN ROSTER APPEARS, WHICH IS ONE PLACE AND NOT TWO.
+   *
+   * The week's table is that roster in full -- every player, the slot he is in,
+   * what the pool says about him, and both desks' numbers besides -- so listing
+   * it again among the rivals said everything twice and put the copy with less
+   * on it further down the page.
+   *
+   * The fallback is the point of the flag rather than a guard on it. The week's
+   * table comes from a second request, and when that request fails there is no
+   * table to have moved the roster into: dropping it from the list regardless
+   * would show every rival's roster and not the reader's own, which is worse
+   * than the duplicate this removes. So the condition here is exactly the one
+   * `Advice` renders the table on.
+   */
+  const ownAbove = !lineupError && !!lineup?.read && !!lineup.roster?.length;
+  const ownAt = league?.rosters.findIndex((r) => r.own) ?? -1;
+  const ownName = ownAt < 0 ? null : maskTeam(
+    teamNames.get(league!.rosters[ownAt].teamKey ?? '') || 'Team ' + (ownAt + 1),
+    ownAt,
+    true,
+    anonymous,
+  );
+  /*
+   * The rosters to list, each still carrying the place it holds in the league's
+   * own list. The index is what names a team when names are hidden, so taking
+   * it from the filtered array would renumber every team below the user's.
+   */
+  const listed = (league?.rosters ?? [])
+    .map((roster, at) => ({ roster, at }))
+    .filter(({ roster }) => !(ownAbove && roster.own));
   const scored = snapshot?.scoring.filter((s) => s.points != null) ?? [];
 
   return (
@@ -932,6 +985,7 @@ export default function SeasonScreen({
           lineup={lineup}
           loading={lineupLoading}
           error={lineupError}
+          team={ownName}
           slots={league?.slots ?? []}
           pool={ownPool}
           pooled={!!league?.joined.pool}
@@ -1058,14 +1112,21 @@ export default function SeasonScreen({
 
         <section className="panel">
           <div className="panel-head">
-            <h2 className="eyebrow">Rosters</h2>
+            <h2 className="eyebrow">{ownAbove ? 'Other rosters' : 'Rosters'}</h2>
+            {/*
+              * Counted over what is listed rather than over the league, because
+              * a league-wide total printed beside a list one team short is a
+              * number that does not add up on the screen carrying it.
+              */}
             <span className="hint mono">
-              {league ? league.matched.of + ' players' : ''}
+              {listed.length
+                ? listed.reduce((n, { roster }) => n + roster.matched.of, 0) + ' players'
+                : ''}
             </span>
           </div>
           <div className="setup-body">
-            {league?.rosters.length
-              ? league.rosters.map((roster, at) => (
+            {league && listed.length
+              ? listed.map(({ roster, at }) => (
                 <Roster
                   key={roster.teamKey ?? String(at)}
                   roster={roster}

@@ -553,17 +553,6 @@ async function yahooSeason(browser, viewport) {
   }
 
   /*
-   * The own-team mark is the acceptance criterion worth photographing, and the
-   * fixture puts it on the second roster on purpose, so the shot has to reach
-   * it. A failure here is the guid match having fallen back to a position.
-   */
-  await page.getByText('Gridiron Gulls').waitFor({ state: 'visible' });
-  const marks = await page.locator('.season-roster-head .chip').count();
-  if (marks !== 1) {
-    throw new Error('expected exactly one roster marked as yours, found ' + marks);
-  }
-
-  /*
    * THE ADVICE, WHICH IS THE ONE THING ON THIS SCREEN THAT RECOMMENDS
    * ANYTHING, so it is also the one worth photographing most.
    *
@@ -584,6 +573,31 @@ async function yahooSeason(browser, viewport) {
   await desks.first().waitFor({ state: 'visible', timeout: ROOM_WAIT });
   await page.screenshot({ path: join(OUT, 'season-advice.png') });
   console.log('  season-advice.png');
+
+  /*
+   * THE OWN-TEAM MARK, WHICH MOVED WITH THE ROSTER IT MARKS. The user's team is
+   * named in the week's panel and listed nowhere else, so the acceptance
+   * criterion is checked in both directions: the right name at the top, and no
+   * roster below still wearing the mark.
+   *
+   * The fixture makes the *second* team the user's on purpose. A guid match
+   * that had quietly fallen back to a position would name the first, so the
+   * name is the whole of the check and a count of rosters is not.
+   */
+  const weekPanel = page.locator('.panel', { has: page.getByRole('heading', { name: 'This week' }) });
+  const weekHead = weekPanel.locator('.panel-head');
+  await weekHead.getByText('Gridiron Gulls').waitFor({ state: 'visible' });
+  if (await weekHead.locator('.chip').count() !== 1) {
+    throw new Error("the week's panel does not mark the team it advises on as yours");
+  }
+  const marks = await page.locator('.season-roster-head .chip').count();
+  if (marks) {
+    throw new Error("the user's own roster is still listed among the rivals, " + marks + ' marked');
+  }
+  const rivals = await page.locator('.season-roster').count();
+  if (rivals !== 7) {
+    throw new Error('expected the other 7 of 8 rosters listed, found ' + rivals);
+  }
 
   /*
    * NOBODY IS BENCHED AND STARTED IN THE SAME TABLE.
@@ -628,7 +642,6 @@ async function yahooSeason(browser, viewport) {
    * roster closes the panel. Taking the last rather than counting them means a
    * desk that fails to answer takes its block away without moving the target.
    */
-  const weekPanel = page.locator('.panel', { has: page.getByRole('heading', { name: 'This week' }) });
   const weekRows = await weekPanel.locator('.season-table').last().locator('tbody tr').all();
   const weekSlots = [];
   for (const row of weekRows) {
@@ -867,9 +880,9 @@ async function main() {
     const { page, errors } = await yahooSeason(browser, WIDE);
     await page.screenshot({ path: join(OUT, 'season-full.png'), fullPage: true });
     console.log('  season-full.png');
-    // The user's own roster rather than the first, since the fixture puts the
-    // two in different places on purpose.
-    await shoot(page, '.season-roster:has(.chip)', 'season-roster');
+    // The user's own roster, which is the week's panel: it is not in the list
+    // below, because everything that list would say about it is said there.
+    await shoot(page, '.panel:has(.season-desk)', 'season-roster');
 
     if (errors.length) failures.push('yahoo-season: ' + errors.join(' | '));
     await page.close();
