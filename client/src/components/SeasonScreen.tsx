@@ -537,7 +537,19 @@ function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
    * scoreboard rather than out of a desk and so survives both desks failing.
    * Null where the installed reader is old enough to have sent no scoreboard.
    */
-  const ownYahoo = lineup?.teams?.find((t) => t.teamKey === lineup.teamKey)?.totals.yahoo ?? null;
+  const ownTeam = lineup?.teams?.find((t) => t.teamKey === lineup.teamKey) ?? null;
+  const ownYahoo = ownTeam?.totals.yahoo ?? null;
+
+  /*
+   * The columns the roster table below carries, which is not the same list as
+   * the desks that answered. Yahoo is a column here and is not in `answered`:
+   * it publishes a team total and projects no player, so it heads a blank
+   * column with a total under it and has no block of advice of its own. Adding
+   * it to `desks` instead would ask `advice.desks` for a desk that is not
+   * there, and would look up `unsupported` and `unprojected` under a key
+   * neither of them holds.
+   */
+  const tableDesks = ownYahoo ? [...desks, 'yahoo'] : desks;
 
   /*
    * The starting lineup as one block, then the bench, on the league's own slot
@@ -755,7 +767,7 @@ function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
                 <th className="num">Bye</th>
                 <th className="num">Owned</th>
                 <th>Status</th>
-                {desks.map((key) => <th key={key} className="num">{deskName(key)}</th>)}
+                {tableDesks.map((key) => <th key={key} className="num">{deskName(key)}</th>)}
                 <th>Can fill</th>
               </tr>
             </thead>
@@ -798,9 +810,16 @@ function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
                         // can only be made when the pool actually answered.
                         : pooled ? 'not in the pool' : ''}
                     </td>
-                    {desks.map((key) => (
+                    {tableDesks.map((key) => (
                       <td key={key} className="mono num">
-                        {p.points[key as 'sleeper' | 'espn'] == null
+                        {/*
+                          * Blank for Yahoo, which projects the team and not the
+                          * player -- see `deskCell`, which the rival tables use
+                          * for the same reason. A dash here would be a claim
+                          * about this player rather than about what Yahoo
+                          * publishes.
+                          */}
+                        {key === 'yahoo' ? '' : p.points[key as 'sleeper' | 'espn'] == null
                           // Not zero. Nobody projected him, which is a different
                           // statement from a projection of nothing.
                           ? <span className="hint">none</span>
@@ -816,6 +835,41 @@ function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
                 );
               })}
             </tbody>
+            {/*
+              * THE SAME TOTALS THE RIVALS CARRY, AND FROM THE SAME PLACE.
+              *
+              * The desk blocks above already say "8.9 now, 12.5 best", so this
+              * is not the only place the numbers appear -- but it is the only
+              * place they sit under the column they are a total of, which is
+              * what makes this roster comparable with the eleven below it. A
+              * table that made the reader scroll up to a different layout to
+              * find its total is one they cannot put beside another.
+              *
+              * Read off `lineup.teams` rather than off `advice.desks`, though
+              * both hold it, so that this roster and every rival get their
+              * totals by one path. Two paths agreeing today is not the same as
+              * one path.
+              */}
+            {!!tableDesks.length && !!ownTeam && (
+              <tfoot>
+                <tr>
+                  <td colSpan={7}>Starters</td>
+                  {tableDesks.map((key) => (
+                    <td key={key} className="mono num">{pts(ownTeam.totals[deskKey(key)]?.now)}</td>
+                  ))}
+                  <td />
+                </tr>
+                <tr>
+                  <td colSpan={7} className="hint">Best possible</td>
+                  {tableDesks.map((key) => (
+                    <td key={key} className="mono num hint">
+                      {pts(ownTeam.totals[deskKey(key)]?.best)}
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         )}
 

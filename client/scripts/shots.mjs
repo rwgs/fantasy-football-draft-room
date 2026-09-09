@@ -773,6 +773,44 @@ async function yahooSeason(browser, viewport) {
   }
 
   /*
+   * AND THE USER'S OWN TABLE TOTALS ITSELF, exactly as the rivals below it do.
+   * It did not at first, which is the whole point of checking it here: the
+   * numbers were on screen in the desk blocks above and nowhere under the
+   * column they total, so the one roster the user cares most about was the one
+   * they could not put beside another.
+   */
+  const weekFoot = await weekPanel.locator('.season-table').last().locator('tfoot tr').all();
+  if (weekFoot.length !== 2) {
+    throw new Error("the week's own table shows " + weekFoot.length
+      + ' total rows, expected a total and a best');
+  }
+  const weekTotals = (await weekFoot[0].locator('td').allInnerTexts())
+    .map((cell) => cell.trim()).filter((cell) => cell && cell !== 'Starters');
+  if (!weekTotals.length) {
+    throw new Error("the week's own table shows a total row with no totals in it");
+  }
+
+  /*
+   * AND IT IS THE SAME NUMBER THE DESK BLOCK ABOVE ALREADY SHOWS. The two are
+   * separate renderings of one total -- the block says "8.9 now, 12.5 best" in
+   * a sentence and the table puts it under the column it totals -- so they can
+   * only ever disagree by one of them being wrong. Read as text rather than
+   * compared to a fixture, because the projections are live and the number
+   * changes weekly; what cannot change is that both places say it.
+   */
+  const weekBest = (await weekFoot[1].locator('td').allInnerTexts())
+    .map((cell) => cell.trim()).filter((cell) => cell && cell !== 'Best possible');
+  const firstDesk = await page.locator('.season-desk-head').first().innerText();
+  const said = firstDesk.match(/([\d.]+) now\s*[^\d]*([\d.]+) best/);
+  if (!said) {
+    throw new Error('the first desk block no longer says its totals: ' + firstDesk);
+  }
+  if (weekTotals[0] !== said[1] || weekBest[0] !== said[2]) {
+    throw new Error("the week's table and its desk block disagree: table says "
+      + weekTotals[0] + '/' + weekBest[0] + ', block says ' + said[1] + '/' + said[2]);
+  }
+
+  /*
    * A kicker and a defence slot get no advice at all, and the screen has to say
    * so rather than leave two seats quietly missing from a nine-slot lineup.
    * Y9.1 could not reproduce either position's components against a feed's own
