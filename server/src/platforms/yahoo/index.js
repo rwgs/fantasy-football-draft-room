@@ -28,8 +28,16 @@ import {
 } from './room.js';
 import { bridgeStatus } from '../../bridge.js';
 import { getSnapshot, listSnapshots, putSnapshot } from './league.js';
-import { joinLeague } from './inSeason.js';
+import { joinLeague, resolveSlots } from './inSeason.js';
 import { fetchPlayerPool, fetchReference } from '../../sources/yahooPlayers.js';
+import {
+  COMPONENTS_SUPPLIED as SLEEPER_SUPPLIES, fetchSleeperWeek,
+} from '../../sources/sleeperProjections.js';
+import {
+  COMPONENTS_SUPPLIED as ESPN_SUPPLIES, fetchEspnWeek,
+} from '../../sources/espnProjections.js';
+import { scoreRoster, unsupportedRules } from './scoring.js';
+import { lineupAdvice, startingSeats } from '../../lineup.js';
 
 /**
  * A Yahoo league ID as the draft room writes it: bare digits.
@@ -537,6 +545,179 @@ export async function readSeason(leagueId, boardQuery) {
   };
 }
 
+/**
+ * The week's lineup advice for the user's own team.
+ *
+ * The one route in this project that recommends anything about a real league,
+ * and every limit on it is carried in the answer rather than left for a screen
+ * to remember. `lineup.js` does the calculation, `scoring.js` turns each desk's
+ * components into this league's points, and this fetches and joins.
+ *
+ * ONE LINEUP PER DESK, NEVER A BLENDED ONE, which is Y9.0's finding and not a
+ * preference: averaging the two desks showed a player at 13.0 where they said
+ * 15.29 and 10.75, which is a start reported as a sit. So both are computed and
+ * a seat they fill differently comes back disputed.
+ *
+ * THE WEEK IS THE SNAPSHOT'S OWN, not today's. A roster is a lineup for a week
+ * -- `selected_position` is what the user has set for the week the browser read
+ * -- so advising on a different week would compare this week's lineup against
+ * next week's projection and call the difference an improvement. A caller may
+ * ask for another week explicitly; nothing infers one.
+ */
+export async function readLineup(leagueId, { week: wanted } = {}) {
+  const held = getSnapshot(leagueId);
+  if (!held.read) return { read: false, advice: null, feeds: null, hint: held.hint };
+
+  const snapshot = held.snapshot;
+  const own = (snapshot.rosters || []).find((roster) => roster.teamKey === snapshot.ownTeamKey);
+
+  /*
+   * NO OWN ROSTER IS A REFUSAL, NOT AN EMPTY LINEUP. Advice about a team this
+   * app cannot identify is advice about somebody else's team, and the guid
+   * match that identifies it is the thing Y7.1 established precisely so a seat
+   * number would never be guessed at. A reader too old to send every roster
+   * lands here, which is why the reason names the reader.
+   */
+  if (!own) {
+    return {
+      read: true,
+      advice: null,
+      feeds: null,
+      week: null,
+      error: snapshot.readerBehind
+        ? 'The installed reader sent only one roster and not the one it could name as yours. '
+          + 'Reinstall it from the league page and read the league again.'
+        : 'No roster in this snapshot matched your Yahoo account, so there is no lineup to advise on.',
+    };
+  }
+
+  const week = Number(wanted) || own.week || snapshot.week?.current || null;
+  if (!week) {
+    return {
+      read: true,
+      advice: null,
+      feeds: null,
+      week: null,
+      error: 'This snapshot does not say which week its roster is for, so nothing can be projected.',
+    };
+  }
+
+  const year = Number(snapshot.season) || new Date().getFullYear();
+
+  const asked = (work) => work.then(
+    (value) => ({ value, error: null }),
+    (err) => ({ value: null, error: String(err.message || err) }),
+  );
+
+  const [sleeper, espn, vocabulary] = await Promise.all([
+    asked(fetchSleeperWeek({ year, week })),
+    asked(fetchEspnWeek({ year, week })),
+    asked(fetchReference('rosterPositions')),
+  ]);
+
+  /*
+   * A DESK THAT FAILED IS PASSED AS NULL, on the same reasoning Y8.4 recorded
+   * for the pool: `?? new Map()` would report every player on the roster as one
+   * nobody projected, which reads as a finding about the roster rather than as
+   * a fetch that failed, and would then refuse to advise on a full lineup while
+   * looking as though it had.
+   */
+  const scored = (desk) => scoreRoster({
+    players: own.players,
+    scoring: snapshot.scoring,
+    byKey: desk.value ? desk.value.byKey : null,
+  });
+  const sleeperScored = scored(sleeper);
+  const espnScored = scored(espn);
+
+  const slots = resolveSlots(snapshot.slots, vocabulary.value
+    ? vocabulary.value.rosterPositions
+    : null);
+
+  const advice = lineupAdvice({
+    slots,
+    players: own.players,
+    sources: { sleeper: sleeperScored.points, espn: espnScored.points },
+    // Nothing known about locks, and said so rather than assumed. Yahoo
+    // publishes no kickoff time at any scope and ESPN's is not read yet, so
+    // `locksKnown` comes back false and the screen has to say so.
+    locked: null,
+    week,
+  });
+
+  /*
+   * EVERY PLAYER, WITH BOTH DESKS' NUMBERS AND WHAT HE COULD FILL, because the
+   * advice cannot be checked from the lineup alone. A screen that shows only
+   * the recommended starters cannot answer the question a user actually asks,
+   * which is why *not* the other one -- and the honest answer is often that the
+   * obvious candidate is projected higher and is not eligible for the open
+   * slot. Y9.3 has to demonstrate a superficially attractive move being
+   * correctly rejected, and this is the data that demonstrates it.
+   */
+  const { seats } = startingSeats(slots);
+  const roster = own.players.map((player) => {
+    const eligible = new Set(player.positions?.length
+      ? player.positions
+      : [player.displayPosition].filter(Boolean));
+    return {
+      playerKey: player.playerKey,
+      name: player.name,
+      team: player.team,
+      positions: player.positions,
+      selectedPosition: player.selectedPosition,
+      byeWeek: player.byeWeek,
+      // Distinct slot names rather than seats: two RB seats are one answer to
+      // "where could he play".
+      fills: [...new Set(seats
+        .filter((seat) => seat.accepts.some((position) => eligible.has(position)))
+        .map((seat) => seat.slot))],
+      points: {
+        sleeper: sleeperScored.points ? sleeperScored.points.get(player.playerKey) ?? null : null,
+        espn: espnScored.points ? espnScored.points.get(player.playerKey) ?? null : null,
+      },
+    };
+  });
+
+  return {
+    read: true,
+    week,
+    teamKey: own.teamKey,
+    editable: own.editable,
+    advice,
+    roster,
+    /*
+     * The rules this league scores that a desk cannot, per desk rather than per
+     * player. A league scoring defensive touchdowns has no component behind it
+     * on either desk, and a total that quietly dropped the rule would be the
+     * right shape and the wrong number -- so the limit is stated beside the
+     * advice it limits.
+     */
+    unsupported: {
+      sleeper: unsupportedRules(snapshot.scoring, SLEEPER_SUPPLIES),
+      espn: unsupportedRules(snapshot.scoring, ESPN_SUPPLIES),
+    },
+    // Named, not counted, on the pattern Y8.4 set: a count says a join went
+    // wrong and a name says who to go and look at.
+    unprojected: { sleeper: sleeperScored.unmatched, espn: espnScored.unmatched },
+    feeds: {
+      league: { fetchedAt: snapshot.readAt, stale: false, error: null },
+      sleeper: feedAge(sleeper, sleeper.value?.meta),
+      espn: feedAge(espn, espn.value?.meta),
+      vocabulary: feedAge(vocabulary, vocabulary.value?.meta),
+    },
+    /*
+     * Sleeper dates each record rather than the week, and Y9.0 found a future
+     * week comes back as a stale vintage inside a fresh fetch -- its own points
+     * contradicting its own components by about two points at quarterback. A
+     * fetch age cannot show that, so the oldest record's date rides along.
+     */
+    vintage: {
+      sleeper: sleeper.value?.meta?.oldestRecordAt ?? null,
+      desk: sleeper.value?.meta?.desk ?? null,
+    },
+  };
+}
+
 /** One feed's age and whether it answered, in the shape every feed reports. */
 function feedAge(asked, meta) {
   return {
@@ -599,6 +780,7 @@ export default {
   getSnapshot,
   listSnapshots,
   readSeason,
+  readLineup,
   isValidId: (id) => IS_ID.test(id),
   idHint: 'A Yahoo league ID is the number in your draft room address.',
   importLeague,

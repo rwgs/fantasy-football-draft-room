@@ -2579,6 +2579,7 @@ async function main() {
   await yahooRoom();
   await yahooQueue();
   await yahooSeason();
+  await yahooLineup();
 
   console.log('');
   if (failures) {
@@ -3509,6 +3510,324 @@ async function yahooSeason() {
     API + '/api/yahoo/league/' + spare[0] + '/season?' + boardQuery)).json();
   check('and the refusal leaves the target league still unread',
     after.read === false, JSON.stringify(after.read));
+}
+
+/**
+ * The week's lineup advice, through the endpoint that serves it.
+ *
+ * `server:test` proves the calculation against exhaustive enumeration on
+ * fixtures. This is the other half, and it is not the same claim: here the
+ * projections are the live desks', the scoring is a league's own, and the join
+ * from a Yahoo roster to two projection feeds has to have actually worked. A
+ * pure function checked on invented numbers cannot tell you that Ja'Marr Chase
+ * was found on both desks.
+ *
+ * THE OPTIMUM IS RE-DERIVED FROM THE SERVICE'S OWN ANSWER. The endpoint returns
+ * every rostered player with both desks' points and the seats the league
+ * starts, which is enough to brute-force the best lineup here and compare. So
+ * the check is not "the number looks plausible" but "the number is the maximum",
+ * on live data, with nothing shared between the two calculations but the input.
+ *
+ * The roster is built so that two things are true whatever the week's
+ * projections say. There is a better lineup than the one posted, so advice has
+ * something to recommend; and there is a quarterback the naive answer would
+ * start, on a roster with no quarterback slot, so a superficially attractive
+ * move has to be refused. `PLAN.md` requires both before a recommendation is
+ * called complete.
+ *
+ * RUN THIS AGAINST A SERVICE NOBODY IS USING, for the reason `yahooSeason`
+ * gives above.
+ */
+async function yahooLineup() {
+  console.log('\nAdvising a lineup');
+
+  const LEAGUE = String(Date.now() + 3).slice(-9);
+  const board = await (await fetch(API + '/api/board?scoring=ppr&teams=12')).json();
+
+  const nothing = await (await fetch(
+    API + '/api/yahoo/league/' + LEAGUE + '/lineup')).json();
+  check('a league nobody has read has no lineup, and says so rather than refusing',
+    nothing.read === false && !!nothing.hint, JSON.stringify(nothing).slice(0, 80));
+
+  const noSuch = await fetch(API + '/api/sleeper/league/1234567890123456789/lineup');
+  check('a platform with no lineup to advise on is refused the route',
+    noSuch.status === 404, String(noSuch.status));
+
+  /*
+   * Real people off the live board, so the join to both projection desks is
+   * exercised for real. Picked by position because the roster's shape is the
+   * whole point: a back, a weak receiver started, a strong receiver benched,
+   * and a quarterback who cannot legally play anywhere on it.
+   */
+  const at = (position: string, n: number) => {
+    const found = (board.players as { name: string; position: string; team: string }[])
+      .filter((p) => p.position === position)[n];
+    if (!found) throw new Error('the board has no ' + position + ' at ' + n);
+    return found;
+  };
+  const rb = at('RB', 0);
+  const wrStrong = at('WR', 0);
+  const wrWeak = at('WR', 70);
+  const qb = at('QB', 0);
+  const k = at('K', 0);
+
+  const list = (items: unknown[]) => {
+    const out: Record<string, unknown> = { count: items.length };
+    items.forEach((item, i) => { out[String(i)] = item; });
+    return out;
+  };
+  const yahooPlayer = (
+    p: { name: string; position: string; team: string }, id: number, selected: string,
+  ) => ({
+    player: [
+      [
+        { player_key: '470.p.' + id }, { player_id: String(id) },
+        { name: { full: p.name } }, { editorial_team_abbr: p.team },
+        { display_position: p.position }, { primary_position: p.position },
+        { eligible_positions: [{ position: p.position }] },
+      ],
+      { selected_position: [{ position: selected }] },
+    ],
+  });
+
+  const key = '470.l.' + LEAGUE;
+  const roster = (teamId: number, players: unknown[]) => ({
+    fantasy_content: {
+      team: [
+        [{ team_key: key + '.t.' + teamId }],
+        { roster: { week: 3, is_editable: 1, 0: { players: list(players) } } },
+      ],
+    },
+  });
+
+  /*
+   * NO QUARTERBACK SLOT, ON PURPOSE. It is what makes the quarterback below a
+   * trap rather than a start: he outprojects everyone on the roster and there
+   * is nowhere he can legally go. A kicker slot is here for the opposite
+   * reason -- no desk projects one, so it must come back as a seat the advice
+   * refuses to cover rather than as a seat filled by whoever had a number.
+   */
+  const snapshot = {
+    settings: {
+      fantasy_content: {
+        league: [
+          {
+            league_key: key, league_id: LEAGUE, name: 'Advice League', game_code: 'nfl',
+            season: '2026', num_teams: 2, current_week: 3,
+          },
+          {
+            settings: [{
+              roster_positions: [
+                { roster_position: { position: 'RB', count: 1, is_starting_position: 1 } },
+                { roster_position: { position: 'W/R/T', count: 1, is_starting_position: 1 } },
+                { roster_position: { position: 'K', count: 1, is_starting_position: 1 } },
+                { roster_position: { position: 'BN', count: 4, is_starting_position: 0 } },
+              ],
+              stat_categories: {
+                stats: [
+                  { stat: { stat_id: 4, name: 'Passing Yards', enabled: '1' } },
+                  { stat: { stat_id: 5, name: 'Passing Touchdowns', enabled: '1' } },
+                  { stat: { stat_id: 9, name: 'Rushing Yards', enabled: '1' } },
+                  { stat: { stat_id: 10, name: 'Rushing Touchdowns', enabled: '1' } },
+                  { stat: { stat_id: 11, name: 'Receptions', enabled: '1' } },
+                  { stat: { stat_id: 12, name: 'Receiving Yards', enabled: '1' } },
+                  { stat: { stat_id: 13, name: 'Receiving Touchdowns', enabled: '1' } },
+                  // Scored, and no desk publishes it, so the advice must report
+                  // the rule as missing rather than count it as nothing.
+                  { stat: { stat_id: 57, name: 'Defensive Touchdowns', enabled: '1' } },
+                ],
+              },
+              stat_modifiers: {
+                stats: [
+                  { stat: { stat_id: 4, value: '0.04' } }, { stat: { stat_id: 5, value: '4' } },
+                  { stat: { stat_id: 9, value: '0.1' } }, { stat: { stat_id: 10, value: '6' } },
+                  { stat: { stat_id: 11, value: '1' } }, { stat: { stat_id: 12, value: '0.1' } },
+                  { stat: { stat_id: 13, value: '6' } }, { stat: { stat_id: 57, value: '6' } },
+                ],
+              },
+              waiver_type: 'WR', uses_faab: '0',
+            }],
+          },
+        ],
+      },
+    },
+    teams: {
+      fantasy_content: {
+        league: [
+          { league_key: key },
+          {
+            teams: list([
+              { team: [[{ team_key: key + '.t.1' }, { team_id: '1' }, { name: 'Theirs' },
+                { managers: [{ manager: { guid: 'GUID-THEIRS' } }] }]] },
+              { team: [[{ team_key: key + '.t.2' }, { team_id: '2' }, { name: 'Mine' },
+                { managers: [{ manager: { guid: 'GUID-MINE' } }] }]] },
+            ]),
+          },
+        ],
+      },
+    },
+    rosters: [
+      roster(1, [yahooPlayer(at('WR', 95), 7001, 'W/R/T')]),
+      roster(2, [
+        yahooPlayer(rb, 7101, 'RB'),
+        yahooPlayer(wrWeak, 7102, 'W/R/T'),
+        yahooPlayer(wrStrong, 7103, 'BN'),
+        yahooPlayer(qb, 7104, 'BN'),
+        yahooPlayer(k, 7105, 'K'),
+      ]),
+    ],
+    profile: { fantasy_content: { users: { count: 1, 0: { user: [{ guid: 'GUID-MINE' }] } } } },
+  };
+
+  const put = await fetch(API + '/api/yahoo/league/' + LEAGUE + '/snapshot', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(snapshot),
+  });
+  check('a snapshot to advise on is taken', put.ok, String(put.status));
+
+  const got = await (await fetch(API + '/api/yahoo/league/' + LEAGUE + '/lineup')).json();
+  check('the lineup comes back advised', got.read === true && !!got.advice,
+    JSON.stringify(got.error || got.hint || '').slice(0, 90));
+  check('for the week the roster was read for, not for today',
+    got.week === 3, String(got.week));
+
+  const desks: string[] = got.advice?.answered ?? [];
+  check('both projection desks answered', desks.length === 2, desks.join(','));
+  check('and nothing is claimed about locks, because Yahoo publishes no kickoff time',
+    got.advice?.locksKnown === false, String(got.advice?.locksKnown));
+
+  type Row = {
+    playerKey: string; name: string; selectedPosition: string; byeWeek: number | null;
+    fills: string[]; points: Record<string, number | null>;
+  };
+  const rows: Row[] = got.roster ?? [];
+  check('every rostered player comes back with both desks and what he can fill',
+    rows.length === 5 && rows.every((r) => 'sleeper' in r.points && 'espn' in r.points),
+    String(rows.length));
+
+  /*
+   * THE QUARTERBACK IS THE TRAP, AND THE TRAP HAS TO BE REAL. He is checked to
+   * outproject the receiver actually started, because if he did not this would
+   * pass while proving nothing -- the same discipline the wrong algorithms in
+   * `server:test` are held to. Then he is checked never to be seated, which is
+   * the acceptance criterion: a superficially attractive move, refused.
+   */
+  const qbRow = rows.find((r) => r.name === qb.name);
+  const weakRow = rows.find((r) => r.name === wrWeak.name);
+  check('the quarterback can fill no starting slot on this roster',
+    !!qbRow && qbRow.fills.length === 0, JSON.stringify(qbRow?.fills));
+  check('and he outprojects the receiver who is started, so starting him is tempting',
+    !!qbRow && !!weakRow && (qbRow.points.sleeper ?? 0) > (weakRow.points.sleeper ?? 0),
+    qbRow?.points.sleeper + ' against ' + weakRow?.points.sleeper);
+
+  const kRow = rows.find((r) => r.name === k.name);
+  check('a kicker gets no projection from either desk, rather than a small one',
+    !!kRow && kRow.points.sleeper === null && kRow.points.espn === null,
+    JSON.stringify(kRow?.points));
+
+  for (const desk of desks) {
+    const answer = got.advice.desks[desk];
+    const seats: { id: string; slot: string; accepts: string[] }[] = answer.seats;
+
+    check(desk + ': the kicker slot is named as one no desk can advise on',
+      answer.unscoreable.includes('K'), JSON.stringify(answer.unscoreable));
+    check(desk + ': no starting slot was left unresolved',
+      answer.unresolved.length === 0, JSON.stringify(answer.unresolved));
+    check(desk + ': the quarterback is never in the recommended lineup',
+      !answer.lineup.some((e: { player: { name: string } }) => e.player.name === qb.name),
+      answer.lineup.map((e: { player: { name: string } }) => e.player.name).join(', '));
+
+    /*
+     * The optimum, re-derived here from what the service returned, by the same
+     * brute force `server:test` uses and sharing no code with the service. A
+     * player is a candidate on exactly the service's own rules: he has a
+     * projection from this desk, he is not on injured reserve, and he is not on
+     * bye in the week being advised. Nothing is locked, which `locksKnown`
+     * above has already established.
+     */
+    const usable = rows.filter((r) => r.points[desk] != null
+      && r.selectedPosition !== 'IR'
+      && !(r.byeWeek != null && r.byeWeek === got.week));
+
+    let bestTotal = 0;
+    const walk = (index: number, used: Set<string>, total: number) => {
+      if (index === seats.length) {
+        if (total > bestTotal) bestTotal = total;
+        return;
+      }
+      walk(index + 1, used, total);
+      for (const row of usable) {
+        if (used.has(row.playerKey)) continue;
+        if (!row.fills.includes(seats[index].slot)) continue;
+        used.add(row.playerKey);
+        walk(index + 1, used, total + (row.points[desk] as number));
+        used.delete(row.playerKey);
+      }
+    };
+    walk(0, new Set(), 0);
+
+    check(desk + ': the lineup it recommends is the best one there is',
+      Math.abs(answer.points - bestTotal) < 1e-6,
+      answer.points + ' against a true maximum of ' + bestTotal);
+
+    /*
+     * And it is better than the lineup as posted, which is what makes it
+     * advice. The fixture benches the strongest receiver on purpose, so a gain
+     * of nothing here means the join found nobody rather than that the lineup
+     * was already right.
+     */
+    check(desk + ': there is a better lineup than the one posted, and it is offered',
+      answer.gain > 0 && answer.moves.length > 0,
+      'gain ' + answer.gain + ', ' + answer.moves.length + ' moves');
+    check(desk + ': the move starts the receiver who was benched',
+      answer.moves.some((m: { in: { name: string } }) => m.in.name === wrStrong.name),
+      answer.moves.map((m: { in: { name: string } }) => m.in.name).join(', '));
+
+    // Nobody is in two seats, and everybody seated can fill the seat he is in.
+    const seated = answer.lineup.map((e: { player: { playerKey: string } }) => e.player.playerKey);
+    check(desk + ': no player is seated twice',
+      new Set(seated).size === seated.length, seated.join(', '));
+    check(desk + ': everybody seated is eligible for the seat he is in',
+      answer.lineup.every((e: { seat: { slot: string }; player: { name: string } }) => {
+        const row = rows.find((r) => r.name === e.player.name);
+        return !!row && row.fills.includes(e.seat.slot);
+      }), 'checked ' + answer.lineup.length + ' seats');
+  }
+
+  check('a league rule no desk publishes is reported rather than counted as zero',
+    (got.unsupported?.sleeper ?? []).some(
+      (rule: { name: string }) => /Defensive Touchdowns/.test(rule.name),
+    ),
+    JSON.stringify((got.unsupported?.sleeper ?? []).map((r: { name: string }) => r.name)));
+
+  /*
+   * A ROSTER THIS APP CANNOT IDENTIFY AS THE USER'S OWN GETS NO ADVICE AT ALL.
+   *
+   * Advice about a team the guid never matched is advice about somebody else's
+   * team, and it would look exactly like advice about theirs. So it refuses and
+   * says why, rather than advising on whichever roster came back first.
+   */
+  const ORPHAN = String(Date.now() + 4).slice(-9);
+  const orphanKey = '470.l.' + ORPHAN;
+  const orphaned = JSON.parse(JSON.stringify(snapshot)
+    .split(key).join(orphanKey)
+    .split('"' + LEAGUE + '"').join('"' + ORPHAN + '"'));
+  orphaned.profile.fantasy_content.users['0'].user[0].guid = 'GUID-NOBODY';
+
+  const putOrphan = await fetch(API + '/api/yahoo/league/' + ORPHAN + '/snapshot', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(orphaned),
+  });
+  check('a snapshot matching no manager is still stored', putOrphan.ok, String(putOrphan.status));
+
+  const orphanAdvice = await (await fetch(
+    API + '/api/yahoo/league/' + ORPHAN + '/lineup')).json();
+  check('but it is advised on nobody, and says why rather than advising a stranger',
+    orphanAdvice.read === true && orphanAdvice.advice === null && /matched/.test(
+      String(orphanAdvice.error)),
+    String(orphanAdvice.error).slice(0, 90));
 }
 
 /** The smallest snapshot the service will take, for a league of a given number. */

@@ -1036,3 +1036,150 @@ export interface SeasonLeagueHeld {
 export interface SeasonLeagueList {
   leagues: SeasonLeagueHeld[];
 }
+
+/**
+ * One seat of the league's starting lineup, and who is in it.
+ *
+ * `id` distinguishes two seats of the same slot, which a slot name cannot: a
+ * league starting two backs has two `RB` seats and they are not the same seat.
+ */
+export interface LineupSeat {
+  id: string;
+  slot: string;
+  index: number;
+  accepts: string[];
+}
+
+/** A move from the current lineup to the best one, as a seat the user edits. */
+export interface LineupMove {
+  slot: string;
+  /** Null where the seat was empty, which is a start rather than a swap. */
+  out: { playerKey: string; name: string } | null;
+  in: { playerKey: string; name: string };
+}
+
+/** Why a player in a starting slot cannot be counted or kept there. */
+export interface LineupSat {
+  player: string;
+  slot: string;
+  reason: string;
+}
+
+/** One projection desk's answer: its best lineup and what it would take. */
+export interface LineupDesk {
+  lineup: { seat: LineupSeat; player: SeasonPlayer }[];
+  points: number;
+  currentPoints: number;
+  /**
+   * The projected difference, and **null where a starter has no projection**.
+   *
+   * The difference between two totals is only a difference if both are totals.
+   * One built over a player this desk never scored is missing a term of unknown
+   * size, so a number here would be confidently wrong in an unknown direction.
+   */
+  gain: number | null;
+  seats: LineupSeat[];
+  moves: LineupMove[];
+  /** Starting seats nothing could legally fill. */
+  empty: string[];
+  /** Starting slots this app could not read, so it refused to reason about them. */
+  unresolved: string[];
+  /**
+   * Starting slots no desk projects, which today means kickers and defences.
+   *
+   * A permanent limit rather than a defect: Y9.1 could not reproduce either
+   * position's components against a feed's own published points.
+   */
+  unscoreable: string[];
+  unscoredStarters: LineupSat[];
+  benched: LineupSat[];
+  /** Null where nothing is known about which players have locked. */
+  locked: string[] | null;
+}
+
+/** A seat the two desks fill differently, reported rather than decided. */
+export interface LineupDispute {
+  slot: string;
+  picks: {
+    desk: string;
+    player: string | null;
+    points: Record<string, number | null>;
+  }[];
+  /** The widest gap any one desk sees between the players it is choosing between. */
+  spread: number;
+  /** Whether that gap is past the three points Y9.0 measured between the desks. */
+  material: boolean;
+}
+
+/** A rostered player with both desks' numbers and what he could actually fill. */
+export interface LineupRosterPlayer {
+  playerKey: string;
+  name: string | null;
+  team: string | null;
+  positions: string[];
+  selectedPosition: string | null;
+  byeWeek: number | null;
+  /**
+   * Which starting slots he may fill, by slot name.
+   *
+   * Empty is the answer to "why not him", and it is the common one: a
+   * quarterback on a roster with no quarterback slot outprojects the flex
+   * starter and still cannot play there.
+   */
+  fills: string[];
+  points: { sleeper: number | null; espn: number | null };
+}
+
+/**
+ * This week's lineup advice for the user's own team.
+ *
+ * BOTH DESKS, NEVER AVERAGED, which is Y9.0's measurement and not a
+ * preference: a mean showed a player at 13.0 where the desks said 15.29 and
+ * 10.75, which is a start reported as a sit.
+ */
+export interface LineupRead {
+  read: boolean;
+  hint?: string;
+  /** Why there is no advice, where the league was read but a lineup cannot be. */
+  error?: string;
+  week: number | null;
+  teamKey?: string;
+  editable?: boolean;
+  advice: {
+    desks: Record<string, LineupDesk>;
+    agreed: { slot: string; player: string }[];
+    disputed: LineupDispute[];
+    /** Which desks answered at all. One desk's advice is not two agreeing. */
+    answered: string[];
+    /**
+     * Whether anything is known about which players have locked.
+     *
+     * False is the ordinary case, not an edge one: Yahoo publishes no kickoff
+     * time at any scope. The screen has to say so, because advice given as
+     * though nothing had locked is advice to make moves that may be refused.
+     */
+    locksKnown: boolean;
+  } | null;
+  roster?: LineupRosterPlayer[];
+  /** The league's own rules each desk cannot score, per desk rather than per player. */
+  unsupported?: {
+    sleeper: { statId: string; name: string; points: number; reason: string }[];
+    espn: { statId: string; name: string; points: number; reason: string }[];
+  };
+  /** Rostered players a desk never projected, named rather than counted. */
+  unprojected?: { sleeper: string[] | null; espn: string[] | null };
+  feeds: {
+    league: SeasonFeed;
+    sleeper: SeasonFeed;
+    espn: SeasonFeed;
+    vocabulary: SeasonFeed;
+  } | null;
+  /**
+   * Sleeper's oldest record in the week, and the desk behind it.
+   *
+   * A fetch age cannot show this. Y9.0 found a future week comes back as a
+   * stale vintage inside a fresh fetch, its own points contradicting its own
+   * components by about two points at quarterback.
+   */
+  vintage?: { sleeper: number | null; desk: string | null };
+}

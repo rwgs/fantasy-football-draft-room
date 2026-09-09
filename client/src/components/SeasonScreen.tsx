@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { maskLeague, maskTeam } from '../anon';
 import type {
+  LineupDesk, LineupRead,
   SeasonFeed, SeasonLeagueHeld, SeasonPlayer, SeasonRead, SeasonRoster, SeasonSlot,
 } from '../engine/types';
 
@@ -46,6 +47,16 @@ interface Props {
   loading: boolean;
   error: string | null;
   anonymous: boolean;
+  /**
+   * This week's advice for the user's own team, or null before it lands.
+   *
+   * Held apart from `read` because it is a second request waiting on two
+   * projection desks: the league renders first and this arrives under it, and a
+   * desk that failed leaves the league on screen rather than the screen empty.
+   */
+  lineup: LineupRead | null;
+  lineupLoading: boolean;
+  lineupError: string | null;
   /** Read a league. Given one, it becomes the league this screen is looking at. */
   onRead: (leagueId: string) => void;
   onBack: () => void;
@@ -206,8 +217,350 @@ function Roster({ roster, name, anonymous, index, pooled, slots }: {
   );
 }
 
+/** A number of points, at the precision a projection deserves and no more. */
+const pts = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1));
+
+/** How the desks are labelled, so a column heading is a desk and not a field. */
+const DESK_NAMES: Record<string, string> = { sleeper: 'Sleeper', espn: 'ESPN' };
+const deskName = (key: string) => DESK_NAMES[key] || key;
+
+/**
+ * One desk's answer: what the lineup scores now, what the best one scores, and
+ * the moves between them.
+ *
+ * THE TWO DESKS ARE NEVER AVERAGED, and Y9.0 is the reason rather than taste:
+ * a mean showed a player at 13.0 where the desks said 15.29 and 10.75, which is
+ * a start reported as a sit. So each gets its own column, and a seat they fill
+ * differently is reported below as disputed.
+ */
+function DeskAdvice({ desk, name }: { desk: LineupDesk; name: string }) {
+  const sat = desk.benched.filter((s) => s.reason !== 'not projected');
+  /*
+   * Its own classes rather than the roster's, though the shape is alike. A desk
+   * is not a roster, and sharing the class would have conflated them for
+   * anything selecting on it -- `shots` counts `.season-roster-head .chip` to
+   * prove exactly one roster is marked as yours, and reads the first
+   * `.season-roster` to prove the starting lineup is contiguous. Both would
+   * have started reading this block instead.
+   */
+  return (
+    <div className="season-desk">
+      <div className="season-desk-head">
+        <b>{name}</b>
+        <span className="hint">
+          {pts(desk.currentPoints) + ' now · ' + pts(desk.points) + ' best'}
+        </span>
+        {/*
+          * A GAIN OF NULL IS NOT A GAIN OF ZERO. It means a player in the
+          * lineup has no projection from this desk, so the difference is
+          * missing a term of unknown size. Printing 0.0 there would be a
+          * confident claim that the lineup is already right.
+          */}
+        {desk.gain == null ? (
+          <span className="chip">gain unknown</span>
+        ) : desk.gain > 0 ? (
+          <span className="chip" aria-pressed="true">{'+' + pts(desk.gain)}</span>
+        ) : (
+          <span className="chip">no change</span>
+        )}
+      </div>
+
+      {desk.moves.length ? (
+        <table className="season-table">
+          <thead>
+            <tr>
+              <th>Slot</th>
+              <th>Bench</th>
+              <th>Start</th>
+            </tr>
+          </thead>
+          <tbody>
+            {desk.moves.map((move) => (
+              <tr key={move.slot + move.in.playerKey}>
+                <td className="mono">{move.slot}</td>
+                <td>{move.out ? move.out.name : <span className="hint">empty</span>}</td>
+                <td><b>{move.in.name}</b></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="hint">
+          {desk.gain == null
+            ? 'No move can be recommended, because a player in this lineup has no projection.'
+            : 'This desk would leave the lineup exactly as it is.'}
+        </p>
+      )}
+
+      {/*
+        * A starter this desk cannot score, named. It is the reason the gain
+        * above is unknown, so the two belong beside each other.
+        */}
+      {!!desk.unscoredStarters.length && (
+        <p className="hint">
+          {'No projection for ' + desk.unscoredStarters.map((s) => s.player).join(', ')
+            + ', so nothing is claimed about '
+            + (desk.unscoredStarters.length === 1 ? 'that seat' : 'those seats') + '.'}
+        </p>
+      )}
+
+      {!!sat.length && (
+        <p className="hint">
+          {sat.map((s) => s.player + ' is ' + s.reason).join('; ') + '.'}
+        </p>
+      )}
+
+      {!!desk.empty.length && (
+        <p className="hint">
+          {'Nothing on this roster can legally fill: ' + desk.empty.join(', ') + '.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * This week's advice, and every limit on it beside the thing it limits.
+ *
+ * The one screen in this project that recommends anything, which is why the
+ * limits are not in a footnote: a kicker slot no desk projects, a league rule
+ * no desk publishes, a player nobody projected, and the fact that nothing is
+ * known about which players have locked all change what the advice is worth.
+ * Each is said where it applies.
+ */
+function Advice({ lineup, loading, error }: {
+  lineup: LineupRead | null; loading: boolean; error: string | null;
+}) {
+  if (error) {
+    return (
+      <section className="panel">
+        <div className="panel-head"><h2 className="eyebrow">This week</h2></div>
+        <div className="setup-body"><p className="banner is-bad">{error}</p></div>
+      </section>
+    );
+  }
+  // Nothing read yet is the picker's business, not an absence to report twice.
+  if (!lineup && !loading) return null;
+  if (lineup && !lineup.read) return null;
+
+  const advice = lineup?.advice ?? null;
+  const desks = advice ? advice.answered : [];
+  const first = desks.length ? advice!.desks[desks[0]] : null;
+  const unsupported = desks.length
+    ? lineup?.unsupported?.[desks[0] as 'sleeper' | 'espn'] ?? []
+    : [];
+  const missed = desks
+    .map((key) => ({ key, names: lineup?.unprojected?.[key as 'sleeper' | 'espn'] ?? [] }))
+    .filter((entry) => entry.names && entry.names.length);
+
+  /*
+   * The starting lineup as one block, then the bench, exactly as the rosters
+   * below are ordered and for the reason recorded there: Yahoo's own order puts
+   * started players after benched ones, so a table in feed order breaks the
+   * lineup in half. The order comes from the seats the league actually starts,
+   * so a league that starts things in a different order reads in that order,
+   * and `sort` is stable so two players in one slot keep Yahoo's order.
+   */
+  const rank = new Map((first?.seats ?? []).map((seat, at) => [seat.slot, at]));
+  const roster = [...(lineup?.roster ?? [])]
+    .sort((a, b) => (rank.get(a.selectedPosition ?? '') ?? rank.size)
+      - (rank.get(b.selectedPosition ?? '') ?? rank.size));
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2 className="eyebrow">This week</h2>
+        <span className="hint mono">
+          {loading ? 'working it out…' : lineup?.week != null ? 'week ' + lineup.week : ''}
+        </span>
+      </div>
+      <div className="setup-body">
+        {/*
+          * A league whose own team could not be identified, or a week the
+          * snapshot does not name. Stated rather than rendered as an empty
+          * lineup, because advice about a team this app cannot identify is
+          * advice about somebody else's team.
+          */}
+        {lineup?.error && <p className="banner is-bad">{lineup.error}</p>}
+
+        {loading && !advice && (
+          <p className="hint">
+            Fetching both projection desks and scoring them under your league&rsquo;s own rules.
+          </p>
+        )}
+
+        {advice && !desks.length && (
+          <p className="banner is-bad">
+            Neither projection desk answered, so there is no advice at all. The league above is
+            unaffected &mdash; it came from your browser, not from those feeds.
+          </p>
+        )}
+
+        {/*
+          * LOCKS ARE UNKNOWN AND THAT IS THE ORDINARY CASE, not an edge one:
+          * Yahoo publishes no kickoff time at any scope. Said plainly, because
+          * advice offered as though nothing had locked is advice to make moves
+          * Yahoo may refuse.
+          */}
+        {advice && !advice.locksKnown && !!desks.length && (
+          <p className="hint">
+            Whether a player has already locked is not known &mdash; Yahoo publishes no kickoff
+            time. Check each move is still allowed before setting it.
+          </p>
+        )}
+
+        {/*
+          * The two desks' ages, here rather than in the panel of ages above,
+          * because they are the advice's freshness and not the league's. And
+          * Sleeper's oldest record beside its fetch age, because Y9.0 found a
+          * future week comes back as a stale vintage inside a fresh fetch --
+          * its own points contradicting its own components by about two points
+          * at quarterback. A fetch age cannot show that.
+          */}
+        {lineup?.feeds && !!desks.length && (
+          <div className="stat-row">
+            <FeedRow label="Sleeper" feed={lineup.feeds.sleeper} />
+            <FeedRow label="ESPN" feed={lineup.feeds.espn} />
+            {lineup.vintage?.sleeper != null && (
+              <div>
+                <span className="eyebrow">Oldest record</span>
+                <b className="mono">{since(lineup.vintage.sleeper)}</b>
+                <span className="hint">{lineup.vintage.desk || 'Sleeper'}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!!desks.length && (
+          <div className="season-advice">
+            {desks.map((key) => (
+              <DeskAdvice key={key} desk={advice!.desks[key]} name={deskName(key)} />
+            ))}
+          </div>
+        )}
+
+        {/*
+          * A seat the desks fill differently, reported rather than decided. The
+          * spread is shown because it is what says whether the disagreement is
+          * two desks splitting hairs or a real difference of opinion.
+          */}
+        {!!advice?.disputed.length && (
+          <>
+            <p>
+              <b>
+                {advice.disputed.length === 1
+                  ? 'One seat'
+                  : advice.disputed.length + ' seats'}
+              </b>
+              {' the two desks fill differently. Both are shown rather than averaged, because '
+                + 'an average is an opinion neither desk holds.'}
+            </p>
+            <table className="season-table">
+              <thead>
+                <tr>
+                  <th>Slot</th>
+                  {desks.map((key) => <th key={key}>{deskName(key) + ' starts'}</th>)}
+                  <th className="num">Apart</th>
+                </tr>
+              </thead>
+              <tbody>
+                {advice.disputed.map((row) => (
+                  <tr key={row.slot + row.picks.map((p) => p.player).join()}>
+                    <td className="mono">{row.slot}</td>
+                    {row.picks.map((pick) => (
+                      <td key={pick.desk}>
+                        {pick.player ?? <span className="hint">nobody</span>}
+                      </td>
+                    ))}
+                    <td className="mono num">
+                      {pts(row.spread)}
+                      {!row.material && <span className="hint"> close</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {/*
+          * EVERY PLAYER, WITH BOTH DESKS' NUMBERS AND WHAT HE COULD FILL,
+          * because the question a user actually asks is why *not* the other
+          * one. An empty eligibility column is the answer surprisingly often: a
+          * quarterback on a roster with no quarterback slot outprojects the
+          * flex starter and still cannot play there, and without that column the
+          * advice looks as though it overlooked him.
+          */}
+        {!!roster.length && !!desks.length && (
+          <table className="season-table">
+            <thead>
+              <tr>
+                <th>Slot</th>
+                <th>Player</th>
+                {desks.map((key) => <th key={key} className="num">{deskName(key)}</th>)}
+                <th>Can fill</th>
+              </tr>
+            </thead>
+            <tbody>
+              {roster.map((p) => (
+                <tr
+                  key={p.playerKey}
+                  data-bench={p.selectedPosition === 'BN' || p.selectedPosition === 'IR'}
+                >
+                  <td className="mono">{p.selectedPosition ?? '—'}</td>
+                  <td>{p.name ?? p.playerKey}</td>
+                  {desks.map((key) => (
+                    <td key={key} className="mono num">
+                      {p.points[key as 'sleeper' | 'espn'] == null
+                        // Not zero. Nobody projected him, which is a different
+                        // statement from a projection of nothing.
+                        ? <span className="hint">none</span>
+                        : pts(p.points[key as 'sleeper' | 'espn'])}
+                    </td>
+                  ))}
+                  <td className="mono">
+                    {p.fills.length
+                      ? p.fills.join(', ')
+                      : <span className="hint">no starting slot</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/*
+          * The permanent limits, last, because they qualify everything above
+          * rather than any one row of it. A kicker slot gets no advice at all
+          * and the screen has to say so: Y9.1 could not reproduce a kicker's or
+          * a defence's components against either feed's own published points,
+          * and a ruleset fitted by least squares returned a 30-39 yard field
+          * goal at -0.29 points while fitting all 32 kickers to within 0.008.
+          */}
+        {(!!first?.unscoreable.length || !!unsupported.length || !!missed.length) && (
+          <p className="hint">
+            {!!first?.unscoreable.length && (
+              'No desk projects ' + first.unscoreable.join(' or ') + ', so '
+              + (first.unscoreable.length === 1 ? 'that slot gets' : 'those slots get')
+              + ' no advice and ' + (first.unscoreable.length === 1 ? 'its' : 'their')
+              + ' points are not in the totals above. ')}
+            {!!unsupported.length && (
+              'This league scores ' + unsupported.map((rule) => rule.name).join(', ')
+              + ', which no desk publishes, so '
+              + (unsupported.length === 1 ? 'that rule is' : 'those rules are')
+              + ' missing from every total rather than counted as zero. ')}
+            {missed.map((entry) => deskName(entry.key) + ' projected nothing for '
+              + entry.names!.join(', ') + '. ').join('')}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function SeasonScreen({
-  read, leagueId, held, forgotten, loading, error, anonymous, onRead, onBack,
+  read, leagueId, held, forgotten, loading, error, anonymous,
+  lineup, lineupLoading, lineupError, onRead, onBack,
 }: Props) {
   const [typed, setTyped] = useState(leagueId ?? '');
   const snapshot = read?.snapshot ?? null;
@@ -429,6 +782,14 @@ export default function SeasonScreen({
               + (league.unresolvedSlots.length === 1 ? 'it takes' : 'they take') + '.'}
           </p>
         )}
+
+        {/*
+          * The advice comes first, above the ages and the rosters, because it
+          * is what the screen is now for. The banners stay above it: a reader
+          * too old to send every roster, or a slot list that never arrived,
+          * both change what the advice below is worth.
+          */}
+        <Advice lineup={lineup} loading={lineupLoading} error={lineupError} />
 
         <section className="panel">
           <div className="panel-head">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchBoard, fetchBridge, fetchDraftPicks, fetchLeague, fetchLeagueSetup, fetchRoomState,
-  fetchSeason, fetchSeasonLeagues, matchNotes, matchRankings,
+  fetchLineup, fetchSeason, fetchSeasonLeagues, matchNotes, matchRankings,
 } from './api';
 import { maskLeague } from './anon';
 import { keeperPicksIn } from './engine/order';
@@ -15,6 +15,7 @@ import type { DraftEngine } from './engine/draft';
 import { YAHOO_MOCK_ROSTER, rosterSize } from './engine/roster';
 import type {
   AppMode, Board, BridgeStatus, CpuConfig, DeclaredKeeper, LeagueConfig, LeagueImport, LeagueSetup,
+  LineupRead,
   NoteSet, Overrides, PendingKeeper, Platform, PresetPick, RankingSet, SavedLeague,
   SeasonLeagueHeld, SeasonRead, SortKey,
 } from './engine/types';
@@ -213,6 +214,21 @@ export default function App() {
    * the league it was made for and cannot see a later one.
    */
   const seasonAsked = useRef(0);
+
+  /**
+   * This week's lineup advice, kept apart from the league it is about.
+   *
+   * A second request rather than part of the league read, because it waits on
+   * two projection desks where that waits on none. Held separately so the
+   * league renders as soon as it arrives and the advice lands under it, and so
+   * a desk that failed leaves the league on screen rather than the screen
+   * empty.
+   */
+  const [lineup, setLineup] = useState<{ leagueId: string; read: LineupRead } | null>(null);
+  const [lineupBusy, setLineupBusy] = useState(false);
+  const [lineupError, setLineupError] = useState<string | null>(null);
+  /** Which advice request is the current one, on the same reasoning as above. */
+  const lineupAsked = useRef(0);
 
   // A different scoring format is a different board, and a different board can
   // match a different set of names. Run the file again rather than leave a
@@ -944,6 +960,35 @@ export default function App() {
     }
   }, [seasonLeagueId, league.scoring, league.teams, league.adpSource, league.year]);
 
+  /**
+   * Read this week's lineup advice for the user's own team.
+   *
+   * Separate from `loadSeason` and run beside it. A refusal is an error to
+   * show; a league nobody has read yet, or one with no roster this app can
+   * identify as the user's own, comes back as an ordinary answer carrying the
+   * reason, which the screen states rather than treating as a fault.
+   */
+  const loadLineup = useCallback(async (leagueId?: string) => {
+    const asked = leagueId ?? seasonLeagueId;
+    if (!asked) return;
+    const ticket = lineupAsked.current + 1;
+    lineupAsked.current = ticket;
+
+    setLineup((held) => (held && held.leagueId === asked ? held : null));
+    setLineupBusy(true);
+    setLineupError(null);
+    try {
+      const got = await fetchLineup('yahoo', asked);
+      if (ticket !== lineupAsked.current) return;
+      setLineup({ leagueId: asked, read: got });
+    } catch (err) {
+      if (ticket !== lineupAsked.current) return;
+      setLineupError('The advice could not be worked out. ' + String((err as Error).message));
+    } finally {
+      if (ticket === lineupAsked.current) setLineupBusy(false);
+    }
+  }, [seasonLeagueId]);
+
   /** Which leagues the service holds, asked when the screen opens and after a read. */
   const loadSeasonHeld = useCallback(async () => {
     setSeasonHeld(await fetchSeasonLeagues('yahoo').then((r) => r.leagues).catch(() => []));
@@ -1479,7 +1524,18 @@ export default function App() {
           loading={seasonBusy}
           error={seasonError}
           anonymous={anonymous}
-          onRead={(id) => { void loadSeason(id); void loadSeasonHeld(); }}
+          // Paired with its league on the same reasoning as the reading above:
+          // one league's advice must never appear under another's name.
+          lineup={lineup?.leagueId === seasonLeagueId ? lineup.read : null}
+          lineupLoading={lineupBusy}
+          lineupError={lineupError}
+          onRead={(id) => {
+            // Both at once, so the league renders without waiting on two
+            // projection desks and the advice lands under it when it arrives.
+            void loadSeason(id);
+            void loadLineup(id);
+            void loadSeasonHeld();
+          }}
           onBack={() => setScreen('setup')}
         />
       )}

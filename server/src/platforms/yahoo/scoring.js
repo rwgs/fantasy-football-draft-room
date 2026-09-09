@@ -28,6 +28,7 @@
  */
 
 import { isComponent } from '../../sources/components.js';
+import { joinKey } from '../../names.js';
 
 /**
  * Yahoo's stat ids against the components a desk projects.
@@ -194,4 +195,77 @@ export function scoreComponents(components, scoring = []) {
   }
 
   return { points, terms };
+}
+
+/**
+ * One projection row's points, from a desk's row rather than from components.
+ *
+ * The wrapper Y9.1 left unbuilt because nothing called it, added here where
+ * something does. It is thin on purpose: a desk row carries more than its
+ * components -- a vintage, a published total that is not this league's, a team
+ * -- and the arithmetic wants only the components, so this is the one place
+ * that knows a row holds them under `components`.
+ *
+ * A row with no components at all is null and not zero, for the reason the
+ * whole file exists: nobody projected him.
+ */
+export function scoreProjection(row, scoring = []) {
+  if (!row?.components) return null;
+  return scoreComponents(row.components, scoring);
+}
+
+/**
+ * A roster's worth of points, under this league's rules, from one desk.
+ *
+ * THE JOIN IS THE RISKY HALF, NOT THE ARITHMETIC, and it is the same join
+ * `inSeason.js` makes against the board and for the same reason: a desk has
+ * never heard of a Yahoo player key, so the only thing the two sides share is a
+ * name, a position and a team. So every eligible position is tried rather than
+ * the first -- Yahoo lists players as `WR,TE` where a desk files them under one
+ * -- which is `boardMatch`'s rule applied to a projection feed.
+ *
+ * A Map keyed on the player key, because that is what `lineup.js` asks with, and
+ * A PLAYER NOBODY PROJECTED IS SIMPLY ABSENT FROM IT. Not zero. `lineup.js`
+ * reads a missing key as unprojected and refuses to seat him, so the absence is
+ * load-bearing: putting a zero here would make every unmatched player a player
+ * projected to score nothing, which is a lineup recommendation built out of a
+ * failed name match.
+ *
+ * `unmatched` is named rather than counted, on the pattern Y8.4 set. A count
+ * says a join went wrong and a name says who to go and look at.
+ */
+export function scoreRoster({ players = [], scoring = [], byKey } = {}) {
+  // A desk that did not answer has said nothing about anybody, which is not the
+  // same as a desk that answered about nobody. Null travels outward.
+  if (!byKey) return { points: null, unmatched: null, terms: null };
+
+  const points = new Map();
+  const terms = new Map();
+  const unmatched = [];
+
+  for (const player of players) {
+    const positions = player.positions?.length
+      ? player.positions
+      : [player.displayPosition].filter(Boolean);
+
+    let row = null;
+    for (const position of positions) {
+      if (!player.name && position !== 'DEF') continue;
+      row = byKey.get(joinKey(player.name || '', position, player.team));
+      if (row) break;
+    }
+
+    const scored = scoreProjection(row, scoring);
+    if (!scored) {
+      unmatched.push(player.name || player.playerKey || 'a player with no name');
+      continue;
+    }
+    points.set(player.playerKey, scored.points);
+    // Kept so a total can be taken apart against Yahoo's own page, which is the
+    // manual comparison Phase 9 asks for and the only way to find which line
+    // disagrees.
+    terms.set(player.playerKey, scored.terms);
+  }
+
+  return { points, terms, unmatched };
 }

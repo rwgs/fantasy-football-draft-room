@@ -1,5 +1,6 @@
 import type {
   Board, BridgeReport, LeagueImport, LeagueMember, LeagueSetup, LivePicks, LiveDraftState,
+  LineupRead,
   NoteSet, Overrides, Platform, QueuePriority, RankingSet, RoomAdvice, RoomState, SeasonLeagueList, SeasonRead,
 } from './engine/types';
 
@@ -180,6 +181,30 @@ export async function fetchSeason(
 ): Promise<SeasonRead> {
   const res = await fetch(
     on(platform, '/league/' + encodeURIComponent(leagueId) + '/season?' + query(q)),
+    { cache: 'no-store' },
+  );
+  if (!res.ok) return fail(res);
+  return res.json();
+}
+
+/**
+ * This week's lineup advice for the user's own team.
+ *
+ * A second request rather than part of `fetchSeason`, because it costs
+ * differently and fails differently: that one joins a snapshot to the pool and
+ * the board, this one waits on two projection desks. A league should render
+ * without paying for projections, and a desk that failed should not stop it.
+ *
+ * No board query. The advice is computed from the league's own scoring against
+ * each desk's raw components, so the cross-source board has nothing to say
+ * about it.
+ */
+export async function fetchLineup(
+  platform: Platform,
+  leagueId: string,
+): Promise<LineupRead> {
+  const res = await fetch(
+    on(platform, '/league/' + encodeURIComponent(leagueId) + '/lineup'),
     { cache: 'no-store' },
   );
   if (!res.ok) return fail(res);

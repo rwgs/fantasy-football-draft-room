@@ -643,3 +643,52 @@ test('the limits travel with the advice rather than being left for a caller to n
   assert.deepEqual(advice.desks.sleeper.unresolved, ['Q/W/R/T']);
   assert.equal(advice.desks.sleeper.points, 22, 'only the seat that can be advised on is counted');
 });
+
+test('a player who keeps his slot is not reported as moving within it', () => {
+  /*
+   * SEEN ON A REAL BOARD, and it is the reason `lineupMoves` groups by slot.
+   * Two receiver seats hold Lamb and Jefferson; Brown is on the bench and
+   * outprojects both. The right advice is one swap -- Jefferson out, Brown in
+   * -- and comparing seats individually instead reported Lamb benched from one
+   * receiver seat and started in the other, in the same table.
+   */
+  const slots = [slot('WR', 2, ['WR'])];
+  const players = [
+    player('lamb', ['WR'], 'WR'),
+    player('jefferson', ['WR'], 'WR'),
+    player('brown', ['WR'], 'BN'),
+  ];
+  const points = pointsOf({ brown: 14, lamb: 12, jefferson: 8 });
+
+  const advice = lineupAdvice({ slots, players, sources: { sleeper: points } });
+  const { moves, points: best, gain } = advice.desks.sleeper;
+
+  assert.equal(moves.length, 1, JSON.stringify(moves));
+  assert.equal(moves[0].out.name, 'jefferson');
+  assert.equal(moves[0].in.name, 'brown');
+  assert.equal(best, 26);
+  assert.equal(gain, 6);
+
+  // And Lamb is nowhere in the advice, because he has nothing to do.
+  const named = moves.flatMap((move) => [move.out?.name, move.in.name]);
+  assert.ok(!named.includes('lamb'), 'a player who stays put is not advised about');
+});
+
+test('a slot losing a player it cannot refill is not a move to nobody', () => {
+  // The leftover case. Nothing can replace him, so `benched` names the reason
+  // and no move is invented -- "bench him, start nobody" says less than "he is
+  // on bye".
+  const slots = [slot('WR', 2, ['WR'])];
+  const players = [
+    player('fit', ['WR'], 'WR'),
+    player('bye', ['WR'], 'WR', { byeWeek: 5 }),
+  ];
+  const points = pointsOf({ fit: 10, bye: 15 });
+
+  const advice = lineupAdvice({ slots, players, sources: { sleeper: points }, week: 5 });
+  const desk = advice.desks.sleeper;
+
+  assert.deepEqual(desk.moves, []);
+  assert.deepEqual(desk.benched, [{ player: 'bye', slot: 'WR', reason: 'on bye' }]);
+  assert.deepEqual(desk.empty, ['WR']);
+});

@@ -2102,6 +2102,31 @@ input[type='range']::-moz-range-thumb {
 /* A grid rather than a wrapped row, so a value sits with its own rule and with
    no other. Thirty-five pairs inline left the pairing to the eye and the eye
    got it wrong. */
+/*
+ * The two desks, side by side where there is room and stacked where there is
+ * not. Side by side is the point: the whole reason both are shown is that the
+ * reader is meant to compare them, and a column each says "these are two
+ * opinions" where one above the other reads as a list.
+ */
+.season-advice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px 28px;
+  margin-bottom: 14px;
+}
+
+/*
+ * A desk block looks like a roster block and is not one, so it has its own
+ * classes. See the note in `SeasonScreen.tsx`: `shots` selects on the roster's.
+ */
+.season-desk-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
 .season-scoring {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));

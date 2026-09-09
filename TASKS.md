@@ -2087,24 +2087,100 @@ calculation and need neither a browser nor a real league.
     whatever that service was holding.
   - Dependencies or blockers: none.
 
-- [ ] Y9.3: The weekly advice screen.
-  - Scope: the advice on the app's own in-season surface, `SeasonScreen.tsx` or
-    a screen beside it. The current lineup against the best legal one, the
-    swaps, the projected difference, **both sources with their spread shown
-    rather than averaged**, per-feed age, and every limit stated where it
-    applies rather than in a footnote.
-  - Acceptance criteria: both a beneficial move and a superficially attractive
-    move the calculation correctly rejects are demonstrated, which `PLAN.md`
-    requires before any recommendation is called complete. A missing or stale
-    feed reads as missing or stale, on the pattern Y8.4 established for the
-    league view. An unsupported scoring rule limits the advice visibly.
-  - Automated validation: `npm run engine:test` for the endpoint,
-    `npm run shots` extended to photograph the screen, including the states
-    where advice is limited -- and `shots` fails on a console error, which is
-    the half a screenshot cannot show.
-  - Manual validation: required. A normal week and a constrained lineup, both
-    compared against the real league in Yahoo, submitting nothing.
-  - Dependencies or blockers: Y9.2.
+- [x] Y9.3: The weekly advice screen.
+  - Scope: the advice on the app's own in-season surface. Built as a `This week`
+    section in `SeasonScreen.tsx`, `readLineup` in
+    `server/src/platforms/yahoo/index.js`, `GET
+    /api/:platform/league/:id/lineup`, `fetchLineup` in `client/src/api.ts` and
+    the `LineupRead` types beside the season ones. The current lineup against
+    the best legal one, the swaps, the projected difference, both desks with
+    their spread shown rather than averaged, per-feed age, and every limit
+    stated where it applies.
+  - **A section on the existing screen rather than a fifth screen**, which
+    `SeasonScreen.tsx` had already reserved: its own header says "Phase 9 owns
+    the advice", and the advice is about the roster that screen already shows.
+    The banners stay above it, because a stale reader or a slot list that never
+    arrived both change what the advice is worth.
+  - Acceptance criteria, both met and **demonstrated against the live desks
+    rather than a fixture**. The beneficial move: Ja'Marr Chase in for Malik
+    Washington, +12.72 Sleeper and +12.35 ESPN. The superficially attractive
+    move correctly rejected: Josh Allen at 15.52 and 17.34, outprojecting the
+    started receiver by about ten points, refused because the roster has no
+    quarterback slot and nothing else he can fill. That rejection is why the
+    endpoint returns the whole roster with both desks' numbers and a `fills`
+    column -- a screen showing only the recommended starters cannot answer the
+    question a user actually asks, which is why not the obvious one.
+  - Also carried, each beside what it limits rather than in a footnote: a K or
+    DEF slot as one no desk projects, a league rule no desk publishes reported
+    instead of counted as zero, a player nobody projected named, a stale feed
+    read as stale, and `locksKnown: false` said in words -- Yahoo publishes no
+    kickoff time at any scope, so that is the ordinary case and the screen says
+    to check each move is still allowed.
+  - Sleeper's oldest record is shown beside its fetch age, and it earned its
+    place immediately: a fresh fetch of week 3 carried records **11 days old**,
+    which is exactly the stale vintage inside a fresh fetch Y9.0 measured. A
+    fetch age alone would have read as current.
+  - **Four defects the rendered screen caught that review had not.** The first
+    is a Y9.2 bug: `lineupMoves` compared seats individually, so a receiver the
+    matching seated in the other of two interchangeable `WR` seats came out as
+    "bench CeeDee Lamb" and "start CeeDee Lamb" in the same table -- a correct
+    total and advice that reads as a bug, in the one place that tells the user
+    what to do. It now groups by slot, and two checks pin it. The second: the
+    advice's roster table was in Yahoo's own order, which repeats the
+    non-contiguous-lineup defect this screen had already fixed once for rosters;
+    it now orders by the seats the league starts. The third: the desk blocks
+    first reused `.season-roster`, which would have broken two existing `shots`
+    checks that count `.season-roster-head .chip` and read the first
+    `.season-roster`; they have their own classes and a note saying why. The
+    fourth: Sleeper's `last_modified` is milliseconds, not seconds, and the
+    first version aged it to the year 58629.
+  - The `scoreProjection` wrapper Y9.1 deferred is added here, where it finally
+    has a caller, together with `scoreRoster` -- the join from a Yahoo roster to
+    a desk's week, which tries every eligible position because Yahoo lists
+    players as `WR,TE` where a desk files them under one. **A player no desk
+    projected is absent from the map rather than zero**, and that absence is
+    load-bearing: `lineup.js` reads a missing key as unprojected and refuses to
+    seat him.
+  - Automated validation: 30 checks in `npm run engine:test` under `Advising a
+    lineup`, and 8 more in `npm run server:test`, taking it from 175 to 183.
+    The engine suite **re-derives the optimum from the service's own answer** by
+    brute force, on live projections, for both desks -- so the claim checked is
+    that the number is the maximum and not that it looks plausible. It also
+    checks the trap is still a trap: the quarterback must actually outproject
+    the started receiver, or the rejection would prove nothing.
+  - **Both layers bite, and each with exactly one check.** Scoring an unmatched
+    player zero instead of leaving him absent fails `a rostered player no desk
+    projected is absent from the map, never zero` in `server:test` and `a kicker
+    gets no projection from either desk, rather than a small one` in
+    `engine:test`, and nothing else in either.
+  - `npm run shots` extended: `season-advice.png`, plus assertions that the K
+    and DEF limit, the unsupported rule and the lock warning are all on the
+    page. The fixture now prices its `Targets` category on purpose -- left
+    unpriced it is a rule the league counts at nothing, which cannot make a
+    total wrong and is correctly not reported, so it demonstrated nothing.
+    What `shots` cannot check is whether the advice is *right*, only that it
+    renders and states its limits.
+  - Local gate: typecheck clean, `server:test` 183, `bridge:test` 7,
+    `engine:test` green against an isolated service on 5179, build clean,
+    `shots` clean with no console errors, lint unchanged at 44 warnings. Three
+    `engine:test` suites still skip for want of `client/fixtures.local.json`,
+    which is the open task above.
+  - **Manual validation is NOT done, and it is the acceptance criterion this
+    task cannot close by itself.** Everything above ran against synthetic
+    snapshots carrying real players and live projections; none of it compared a
+    total against Yahoo's own page for the owner's real league, which needs
+    their signed-in browser. Y9.1 kept `terms` per player precisely so a total
+    can be taken apart and the disagreeing line found. Until that is done, the
+    scoring join is proven against each desk's published points and not against
+    Yahoo's arithmetic for a real roster. A normal week and a constrained
+    lineup, submitting nothing, is what remains.
+  - Worth knowing for the next run: the isolated service was restarted twice
+    mid-task, and the first `shots` run photographed advice from code one fix
+    behind -- the Lamb defect was still on screen after being fixed. The
+    staleness `serve -- status` warns about applies to a service an agent
+    started itself. 5178 was left alone throughout, since nothing imports the
+    new modules into any route it serves.
+  - Dependencies or blockers: none. Y9.4 can start; it reads this endpoint.
 
 - [ ] Y9.4: The same reading over Yahoo's own league pages.
   - Scope: a panel on the league page, on the pattern `userscript/draft-panel.js`

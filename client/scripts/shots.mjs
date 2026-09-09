@@ -389,6 +389,16 @@ async function postSnapshot(id, teams, { old = false } = {}) {
                     { stat: { stat_id: 4, value: '0.04' } },
                     { stat: { stat_id: 5, value: '4' } },
                     { stat: { stat_id: 11, value: '0.5' } },
+                    /*
+                     * Priced on purpose, and it is what makes the advice's
+                     * limits real rather than theoretical. No desk publishes
+                     * targets, so a league that scores them has a rule missing
+                     * from every projected total -- and the screen has to say
+                     * so instead of counting it as zero. Left unpriced this
+                     * category is a rule the league counts at nothing, which
+                     * cannot make a total wrong and is correctly not reported.
+                     */
+                    { stat: { stat_id: 78, value: '0.5' } },
                   ],
                 },
                 waiver_type: 'FR', waiver_rule: 'continuous', uses_faab: '0',
@@ -531,6 +541,53 @@ async function yahooSeason(browser, viewport) {
   const marks = await page.locator('.season-roster-head .chip').count();
   if (marks !== 1) {
     throw new Error('expected exactly one roster marked as yours, found ' + marks);
+  }
+
+  /*
+   * THE ADVICE, WHICH IS THE ONE THING ON THIS SCREEN THAT RECOMMENDS
+   * ANYTHING, so it is also the one worth photographing most.
+   *
+   * It arrives on its own request, after the league and behind two projection
+   * desks, so the wait is for the desks rather than for the section: the
+   * heading renders immediately saying it is working it out.
+   *
+   * What is asserted is deliberately not "a move was advised". The fixture's
+   * players are real and their projections are live, so which move is best
+   * changes week to week and a check on the number would fail for the wrong
+   * reason. What must hold whatever the numbers say is that the limits are
+   * stated: this fixture starts a kicker and a defence, which no desk projects,
+   * and scores targets, which none publishes.
+   */
+  await page.getByRole('heading', { name: 'This week' })
+    .waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  const desks = page.locator('.season-desk');
+  await desks.first().waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await page.screenshot({ path: join(OUT, 'season-advice.png') });
+  console.log('  season-advice.png');
+
+  /*
+   * A kicker and a defence slot get no advice at all, and the screen has to say
+   * so rather than leave two seats quietly missing from a nine-slot lineup.
+   * Y9.1 could not reproduce either position's components against a feed's own
+   * published points, so this is a permanent limit and not a gap to fix.
+   */
+  const limits = await page.locator('.panel', { has: page.getByRole('heading', { name: 'This week' }) })
+    .innerText();
+  for (const said of ['K', 'DEF']) {
+    if (!limits.includes(said)) {
+      throw new Error('the advice does not say ' + said + ' gets none: ' + limits.slice(0, 400));
+    }
+  }
+  if (!limits.includes('Targets')) {
+    throw new Error('a league rule no desk publishes went unmentioned: ' + limits.slice(0, 400));
+  }
+  /*
+   * And that nothing is known about locks, which is the ordinary case rather
+   * than an edge one: Yahoo publishes no kickoff time at any scope. Advice
+   * offered as though nothing had locked is advice to make moves Yahoo refuses.
+   */
+  if (!limits.includes('locked')) {
+    throw new Error('the advice does not say whether locks are known: ' + limits.slice(0, 400));
   }
 
   return { page, errors };

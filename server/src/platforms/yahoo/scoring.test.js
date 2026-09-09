@@ -24,7 +24,10 @@ import { test } from 'node:test';
 
 import { COMPONENTS_SUPPLIED as SLEEPER_SUPPLIES } from '../../sources/sleeperProjections.js';
 import { COMPONENTS_SUPPLIED as ESPN_SUPPLIES } from '../../sources/espnProjections.js';
-import { scoreComponents, unsupportedRules } from './scoring.js';
+import {
+  scoreComponents, scoreProjection, scoreRoster, unsupportedRules,
+} from './scoring.js';
+import { joinKey } from '../../names.js';
 
 /**
  * A league rule, shaped the way `league.js` reads one.
@@ -227,4 +230,99 @@ test('a rule with no components present at all contributes no term', () => {
   // had said so explicitly.
   const { terms } = scoreComponents({ passYd: 100 }, SLEEPER_PPR);
   assert.deepEqual(terms.map((term) => term.statId), ['4']);
+});
+
+/** A roster player, shaped the way `league.js` reads one. */
+const rostered = (name, positions, team = 'BUF') => ({
+  playerKey: `470.p.${name.length}${positions[0]}`,
+  name,
+  team,
+  displayPosition: positions.join(','),
+  positions,
+  selectedPosition: positions[0],
+});
+
+/** A desk's week, keyed the way both projection readers key theirs. */
+const deskWeek = (rows) => new Map(
+  rows.map((row) => [joinKey(row.name, row.position, row.team), row]),
+);
+
+test('a desk row scores through the wrapper exactly as its components do', () => {
+  // The wrapper Y9.1 deferred. It must add nothing: a row and its own
+  // components are the same points, or the wrapper is doing arithmetic.
+  const [name, published, components] = SLEEPER_PLAYERS[0];
+  const row = { name, position: 'QB', team: 'BUF', components, modifiedAt: 1 };
+
+  const viaRow = scoreProjection(row, SLEEPER_PPR);
+  const viaComponents = scoreComponents(components, SLEEPER_PPR);
+
+  assert.deepEqual(viaRow, viaComponents);
+  assert.ok(Math.abs(viaRow.points - published) < 0.05);
+});
+
+test('a row carrying no components is null, not a player projected nothing', () => {
+  assert.equal(scoreProjection(null, SLEEPER_PPR), null);
+  assert.equal(scoreProjection({ name: 'A Ghost', position: 'WR' }, SLEEPER_PPR), null);
+});
+
+test('a roster scores against a desk, and the join tries every eligible position', () => {
+  const [qbName, qbPublished, qbComponents] = SLEEPER_PLAYERS[0];
+  // Filed by the desk as a tight end, listed by Yahoo as `WR,TE`. Joining on
+  // the first eligible position alone would miss him, which is `boardMatch`'s
+  // rule and the reason it is applied here too.
+  const dual = { name: 'Dual Eligible', position: 'TE', team: 'KC', components: { rec: 5, recYd: 60 } };
+  const byKey = deskWeek([
+    { name: qbName, position: 'QB', team: 'BUF', components: qbComponents },
+    dual,
+  ]);
+
+  const { points, unmatched } = scoreRoster({
+    players: [rostered(qbName, ['QB']), rostered('Dual Eligible', ['WR', 'TE'], 'KC')],
+    scoring: SLEEPER_PPR,
+    byKey,
+  });
+
+  assert.equal(points.size, 2);
+  assert.ok(Math.abs(points.get(rostered(qbName, ['QB']).playerKey) - qbPublished) < 0.05);
+  assert.equal(points.get(rostered('Dual Eligible', ['WR', 'TE'], 'KC').playerKey), 11);
+  assert.deepEqual(unmatched, []);
+});
+
+test('a rostered player no desk projected is absent from the map, never zero', () => {
+  // Load-bearing: `lineup.js` reads a missing key as unprojected and refuses to
+  // seat him. A zero here would turn a failed name match into a recommendation.
+  const { points, unmatched } = scoreRoster({
+    players: [rostered('Nobody Knows Him', ['WR'])],
+    scoring: SLEEPER_PPR,
+    byKey: deskWeek([]),
+  });
+
+  assert.equal(points.size, 0);
+  assert.equal(points.has('470.p.16WR'), false);
+  assert.deepEqual(unmatched, ['Nobody Knows Him']);
+});
+
+test('a desk that did not answer says nothing about anybody, rather than nothing', () => {
+  // Null travels outward on the pattern Y8.4 set. An empty Map would report
+  // every rostered player as one no desk has heard of, which reads as a finding
+  // about the roster instead of as a fetch that failed.
+  const nothing = scoreRoster({ players: [rostered('Josh Allen', ['QB'])], scoring: SLEEPER_PPR });
+
+  assert.equal(nothing.points, null);
+  assert.equal(nothing.unmatched, null);
+});
+
+test('the terms survive the roster join, so a total can be argued with', () => {
+  const [name, , components] = SLEEPER_PLAYERS[0];
+  const player = rostered(name, ['QB']);
+  const { points, terms } = scoreRoster({
+    players: [player],
+    scoring: SLEEPER_PPR,
+    byKey: deskWeek([{ name, position: 'QB', team: 'BUF', components }]),
+  });
+
+  const lines = terms.get(player.playerKey);
+  const summed = lines.reduce((n, term) => n + term.points, 0);
+  assert.ok(Math.abs(summed - points.get(player.playerKey)) < 1e-9);
+  assert.ok(lines.some((term) => term.name === 'Passing Yards'));
 });

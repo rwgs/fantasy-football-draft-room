@@ -327,16 +327,41 @@ export function bestLineup({
  */
 export function lineupMoves({ lineup, seats }, players = []) {
   const now = seatedNow(seats, players);
+  const named = (player) => ({ playerKey: player.playerKey, name: nameFor(player) });
 
+  /*
+   * GROUPED BY SLOT AND NOT BY SEAT, because the seats of one slot are
+   * interchangeable and comparing them individually invents moves. A league
+   * starting two receivers has two `WR` seats; a receiver the matching happens
+   * to seat in the other one has not moved, and reporting it per seat produced
+   * "bench CeeDee Lamb" and "start CeeDee Lamb" in the same table, which was
+   * seen on a real board and is worse than useless -- it is advice that reads
+   * as a bug, in the one place on the screen that tells the user what to do.
+   *
+   * So a player who was starting in a slot and still is does not appear at all,
+   * and what is left over pairs up as the swaps that actually have to be made.
+   */
   const moves = [];
-  for (const { seat: s, player } of lineup) {
-    const was = now.get(s) ?? null;
-    if (was?.playerKey === player.playerKey) continue;
-    moves.push({
-      slot: s.slot,
-      out: was ? { playerKey: was.playerKey, name: nameFor(was) } : null,
-      in: { playerKey: player.playerKey, name: nameFor(player) },
+  for (const slot of new Set(seats.map((s) => s.slot))) {
+    const before = [...now].filter(([s]) => s.slot === slot).map(([, player]) => player);
+    const after = lineup.filter((entry) => entry.seat.slot === slot).map((entry) => entry.player);
+    const staying = new Set(after
+      .filter((player) => before.some((was) => was.playerKey === player.playerKey))
+      .map((player) => player.playerKey));
+
+    const out = before.filter((player) => !staying.has(player.playerKey));
+    const going = after.filter((player) => !staying.has(player.playerKey));
+
+    going.forEach((player, at) => {
+      moves.push({ slot, out: out[at] ? named(out[at]) : null, in: named(player) });
     });
+    /*
+     * A player left over with nobody to replace him is not a move, because
+     * there is nothing to start in his place. It happens only to a player who
+     * was never a candidate -- on bye, on IR, or nobody projected him -- and
+     * `benched` already names him with the reason, which is the actionable half.
+     * A move reading "bench him, start nobody" would say less.
+     */
   }
   return { moves, current: [...now.values()] };
 }

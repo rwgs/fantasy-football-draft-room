@@ -674,6 +674,33 @@ app.get('/api/:platform/league/:id/season', async (req, res) => {
 });
 
 /**
+ * This week's lineup advice for the user's own team.
+ *
+ * Separate from `/season` because it costs differently and fails differently:
+ * that route joins a snapshot to the pool and the board, this one fetches two
+ * projection desks and recommends something. A screen that only wants to show
+ * a league should not pay for projections, and a projection desk that failed
+ * should not stop a league rendering.
+ *
+ * Offered only to platforms that can advise on a lineup, exactly as the
+ * snapshot and season routes are. Nothing is ever written to a platform here.
+ */
+app.get('/api/:platform/league/:id/lineup', async (req, res) => {
+  const target = readTarget(req, res);
+  if (!target) return;
+  if (!target.platform.readLineup) {
+    res.status(404).json({ error: 'That platform has no lineup to advise on.' });
+    return;
+  }
+  try {
+    res.set('cache-control', 'no-store');
+    res.json(await target.platform.readLineup(target.id, { week: req.query.week }));
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
+/**
  * What the board makes of the room, written by the app and read by the bridge.
  *
  * The two cannot address each other. The app is a page on this machine and the
