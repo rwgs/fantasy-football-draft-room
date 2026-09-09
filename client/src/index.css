@@ -2095,6 +2095,14 @@ input[type='range']::-moz-range-thumb {
 .season-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line-soft); }
 .season-table .num { text-align: right; padding-right: 14px; }
 
+/* The rosters are one table per team, stacked, and they are read down the page
+   as much as across: whether a rival is starting the player you are deciding
+   about is a question answered by the eye running down a column. So they take
+   the widths their `colgroup` states rather than each measuring its own names,
+   which is what left no two of them lining up. Only the rosters -- every other
+   table on this screen is the only one of its kind and can size itself. */
+.season-roster .season-table { table-layout: fixed; }
+
 /* A bench player is still on the roster and still worth reading, so this dims
    rather than hides. The draft's roster panel dims an empty slot the same way. */
 .season-table tr[data-bench='true'] td { opacity: 0.55; }

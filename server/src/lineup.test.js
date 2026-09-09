@@ -629,38 +629,51 @@ test('a player both desks start in different slots is agreement too', () => {
    * partial fix: a back one desk starts at `RB` and the other in `W/R/T` came
    * out as an argument about two seats, when both desks want him on the field.
    *
-   * Both desks here start McCaffrey and Etienne and differ only over the last
-   * place, so there is exactly one decision. `bestLineup` reaches it by
-   * different routes -- Sleeper keeps McCaffrey at `RB` and starts a tight end
-   * in the flex, ESPN rates Dowdle above him and moves him to the flex to fit
-   * them both in -- and the route is not the advice. A set of startable players
-   * scores the same however it is seated.
+   * Both desks here start Barkley and Jefferson and differ only over the last
+   * place, so there is exactly one decision, and the two answers seat Jefferson
+   * differently because their other picks leave him nowhere else. Sleeper wants
+   * Dowdle, who is a back and fills nothing but the flex, so Jefferson is
+   * pushed out to `WR`; ESPN wants Aiyuk, who fills `WR` perfectly well, so
+   * Jefferson stays in the flex he already holds. The route is not the advice.
+   * A set of startable players scores the same however it is seated.
+   *
+   * THE DIVERGENCE HAS TO BE FORCED to be worth checking, which is what makes
+   * this fixture as knotted as it is. `settle` seats every answer for the
+   * fewest moves, so two desks agreeing on a player now seat him in the same
+   * slot wherever anything else can give -- and a fixture where they differ
+   * only because the matching wandered would be checking the wandering.
    */
-  const slots = [slot('RB', 2, ['RB']), slot('W/R/T', 1, FLEX)];
+  const slots = [slot('RB', 1, ['RB']), slot('WR', 1, ['WR']), slot('W/R/T', 1, FLEX)];
   const players = [
-    player('mccaffrey', ['RB'], 'RB'), player('etienne', ['RB'], 'RB'),
-    player('loveland', ['TE'], 'W/R/T'), player('dowdle', ['RB'], 'BN'),
+    player('barkley', ['RB'], 'RB'), player('jefferson', ['WR'], 'W/R/T'),
+    player('lamb', ['WR'], 'WR'), player('dowdle', ['RB'], 'BN'),
+    player('aiyuk', ['WR'], 'BN'),
   ];
-  const sleeper = pointsOf({ mccaffrey: 20, etienne: 15, loveland: 10, dowdle: 8 });
-  const espn = pointsOf({ dowdle: 18, mccaffrey: 16, etienne: 12, loveland: 5 });
+  const sleeper = pointsOf({
+    barkley: 22, jefferson: 20, dowdle: 18, aiyuk: 6, lamb: 5,
+  });
+  const espn = pointsOf({
+    barkley: 21, aiyuk: 19, jefferson: 16, lamb: 4, dowdle: 3,
+  });
 
   const advice = lineupAdvice({ slots, players, sources: { sleeper, espn } });
 
-  // McCaffrey starts on both desks, at `RB` on one and in `W/R/T` on the other,
+  // Jefferson starts on both desks, at `WR` on one and in `W/R/T` on the other,
   // so his slot is null: agreement about the player, no claim about the seat.
-  // He is the player the report from the board named on both sides.
+  // He is the player the report from the board named on both sides. Barkley
+  // sits in one slot on both, so his is stated.
   assert.deepEqual(advice.agreed, [
-    { player: 'mccaffrey', slot: null }, { player: 'etienne', slot: 'RB' },
+    { player: 'barkley', slot: 'RB' }, { player: 'jefferson', slot: null },
   ]);
 
   assert.equal(advice.disputed.length, 1, 'one decision, not three seats');
   const [dispute] = advice.disputed;
   assert.deepEqual(dispute.picks.map((pick) => [pick.player, pick.slot]),
-    [['loveland', 'W/R/T'], ['dowdle', 'RB']]);
-  // ESPN separates them by 13 and Sleeper by 2, and the wider view is the one
+    [['dowdle', 'W/R/T'], ['aiyuk', 'WR']]);
+  // ESPN separates them by 16 and Sleeper by 12, and the wider view is the one
   // reported: one desk holding a strong opinion the other contradicts is more
   // worth a reader's attention rather than less.
-  assert.equal(dispute.spread, 13);
+  assert.equal(dispute.spread, 16);
   assert.equal(dispute.material, true);
 });
 
@@ -756,15 +769,77 @@ test('a player the answer moves to another slot is moved, not benched and starte
    * came out as "bench Travis Etienne Jr." against "start Travis Etienne Jr."
    * in two rows of the table that tells the user what to do.
    *
-   * Two backs start at `RB` and a tight end holds the flex. Dowdle outprojects
-   * all three, and the flex is the only seat left for the back he displaces, so
-   * the answer is one swap and one relocation: Loveland comes out for Dowdle,
-   * and Etienne -- who was already starting and still is -- shifts to the flex.
+   * A receiver holds the flex and another holds `WR`. Dowdle outprojects the
+   * one at `WR` and is a back, so the flex is the only seat he can take, and
+   * the receiver sitting in it has to shift to `WR` to make room. The answer is
+   * one swap and one relocation: Lamb comes out for Dowdle, and Jefferson --
+   * who was already starting and still is -- shifts to `WR`.
    *
-   * The relocation has to be forced to be worth checking. With one `RB` seat
-   * the matching simply seats Dowdle in the flex and leaves Etienne alone,
-   * because a back fills either and `seat`'s current-seat preference declines
-   * to invent motion. It is the second `RB` seat that leaves it no choice.
+   * THE RELOCATION HAS TO BE FORCED to be worth checking, and forcing it is
+   * exactly what the incoming player's eligibility does. Where he fills both
+   * seats the answer simply puts him in the one being vacated and leaves the
+   * other starter alone -- see the next test, which is that case and is where
+   * this went wrong on a real board.
+   */
+  const slots = [slot('RB', 1, ['RB']), slot('WR', 1, ['WR']), slot('W/R/T', 1, FLEX)];
+  const players = [
+    player('barkley', ['RB'], 'RB'),
+    player('jefferson', ['WR'], 'W/R/T'),
+    player('lamb', ['WR'], 'WR'),
+    player('dowdle', ['RB'], 'BN'),
+  ];
+  const points = pointsOf({
+    barkley: 20, dowdle: 18, jefferson: 12, lamb: 5,
+  });
+
+  const advice = lineupAdvice({ slots, players, sources: { sleeper: points } });
+  const { moves, moved, points: best } = advice.desks.sleeper;
+
+  // One swap, and the slot on it is where the incoming player goes.
+  assert.equal(moves.length, 1, JSON.stringify(moves));
+  assert.equal(moves[0].slot, 'W/R/T');
+  assert.equal(moves[0].out.name, 'lamb');
+  assert.equal(moves[0].in.name, 'dowdle');
+
+  // And the relocation, which the user still has to make: Yahoo will not.
+  assert.deepEqual(moved.map((m) => [m.name, m.from, m.to]), [['jefferson', 'W/R/T', 'WR']]);
+
+  /*
+   * The invariant behind both reports, and it is the one worth keeping: nobody
+   * is on both sides of the swap table. A player being started in place of
+   * himself is advice that reads as a bug.
+   */
+  const benched = moves.map((move) => move.out?.name).filter(Boolean);
+  const started = moves.map((move) => move.in.name);
+  assert.deepEqual(benched.filter((name) => started.includes(name)), []);
+
+  // And Barkley, who keeps the `RB` seat throughout, is in neither list.
+  assert.ok(![...benched, ...started, ...moved.map((m) => m.name)].includes('barkley'));
+
+  assert.equal(best, 50);
+});
+
+test('a seat standing empty is filled directly, not by displacing somebody', () => {
+  /*
+   * THE SAME BOARD AGAIN, AND THE OPPOSITE MISTAKE. The fixture above forces a
+   * relocation; this one offers a free ride and the answer used to refuse it.
+   *
+   * Two backs start at `RB` and a tight end holds the flex. Dowdle outprojects
+   * all three and fills the flex as readily as `RB`, so the whole of the advice
+   * is: bench the tight end, start Dowdle in the flex he vacates. Nobody else
+   * need move at all.
+   *
+   * The greedy would not do that, and could not: it has to take players in
+   * descending points, so Dowdle was seated before either of the men whose
+   * seats he might take, found `RB` unclaimed in a matching that starts empty,
+   * and pushed its owner into the flex. Every number was right -- the same
+   * three players, the same 41 -- and every word was wrong. The swap named `RB`
+   * when the man coming out was in `W/R/T`, and beneath it sat "Move Travis
+   * Etienne Jr. from RB to W/R/T", instructing the user to undo a move they had
+   * never been asked to make. Reported from a real board, twice in one screen.
+   *
+   * So `settle` reseats the chosen set with each player's own seat claimed
+   * first, and this is the check that it did.
    */
   const slots = [slot('RB', 2, ['RB']), slot('W/R/T', 1, FLEX)];
   const players = [
@@ -777,30 +852,20 @@ test('a player the answer moves to another slot is moved, not benched and starte
     dowdle: 18, etienne: 12, barkley: 11, loveland: 5,
   });
 
-  const advice = lineupAdvice({ slots, players, sources: { sleeper: points } });
-  const { moves, moved, points: best } = advice.desks.sleeper;
+  const { moves, moved, points: best } = lineupAdvice({
+    slots, players, sources: { sleeper: points },
+  }).desks.sleeper;
 
-  // One swap, and the slot on it is where the incoming player goes.
-  assert.equal(moves.length, 1, JSON.stringify(moves));
-  assert.equal(moves[0].slot, 'RB');
-  assert.equal(moves[0].out.name, 'loveland');
-  assert.equal(moves[0].in.name, 'dowdle');
+  // The swap names the slot the outgoing player is actually sitting in.
+  assert.deepEqual(moves.map((m) => [m.slot, m.out?.name ?? null, m.in.name]),
+    [['W/R/T', 'loveland', 'dowdle']], JSON.stringify(moves));
 
-  // And the relocation, which the user still has to make: Yahoo will not.
-  assert.deepEqual(moved.map((m) => [m.name, m.from, m.to]), [['etienne', 'RB', 'W/R/T']]);
+  // And nothing else moves, because nothing else has to.
+  assert.deepEqual(moved, []);
 
-  /*
-   * The invariant behind both reports, and it is the one worth keeping: nobody
-   * is on both sides of the swap table. A player being started in place of
-   * himself is advice that reads as a bug.
-   */
-  const benched = moves.map((move) => move.out?.name).filter(Boolean);
-  const started = moves.map((move) => move.in.name);
-  assert.deepEqual(benched.filter((name) => started.includes(name)), []);
-
-  // And Barkley, who keeps an `RB` seat throughout, is in neither list.
-  assert.ok(![...benched, ...started, ...moved.map((m) => m.name)].includes('barkley'));
-
+  // The seating changed and the total did not, which is the point: this was
+  // never a question of points, and a check on the total alone would pass
+  // against the answer that read wrong.
   assert.equal(best, 41);
 });
 

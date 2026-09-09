@@ -329,6 +329,24 @@ async function postSnapshot(id, teams, { old = false } = {}) {
    */
   const HELD = 9;
   const BENCHED = new Set([6, 7]);
+
+  /*
+   * A KICKER AND A DEFENCE, INVENTED RATHER THAN TAKEN OFF THE BOARD, and
+   * posted last of all so they land behind the bench exactly as Yahoo sends
+   * them. The board is ADP order and neither position comes anywhere near the
+   * top of it, so nine real players are nine skill players and the two slots
+   * this app can say least about were the two the fixture never held.
+   *
+   * They are what makes the ordering checkable. No desk projects either, so
+   * they are not seats a lineup can be advised into -- which is precisely how
+   * the week's table came to sort them below the bench, having ranked the
+   * roster by the seats rather than by the league's own slot list.
+   */
+  const UNSCORED = [
+    { name: 'Cameron Dicker', team: 'LAC', position: 'K', bye: 12 },
+    { name: 'Denver Broncos', team: 'DEN', position: 'DEF', bye: 12 },
+  ];
+
   const rosters = Array.from({ length: teams }, (_, t) => ({
     fantasy_content: {
       team: [
@@ -338,12 +356,14 @@ async function postSnapshot(id, teams, { old = false } = {}) {
             week: 3,
             is_editable: 1,
             0: {
-              players: list(board.players.slice(t * HELD, (t + 1) * HELD)
-                .map((p, i) => player(
+              players: list([
+                ...board.players.slice(t * HELD, (t + 1) * HELD).map((p, i) => player(
                   p,
                   20000 + t * HELD + i,
                   BENCHED.has(i) ? 'BN' : p.position,
-                ))),
+                )),
+                ...UNSCORED.map((p, i) => player(p, 29000 + t * UNSCORED.length + i, p.position)),
+              ]),
             },
           },
         },
@@ -592,6 +612,37 @@ async function yahooSeason(browser, viewport) {
     if (both.length) {
       throw new Error('a desk benches and starts the same player: ' + both.join(', '));
     }
+  }
+
+  /*
+   * AND THE WEEK'S OWN TABLE READS AS A LINEUP TOO, which is the same check as
+   * the roster one above and had to be made twice because the two tables
+   * ordered themselves from different lists. The roster took the league's slot
+   * list and was right; this one took the seats a lineup can be advised into,
+   * which deliberately exclude the kicker and the defence because no desk
+   * projects them -- so both sorted last, below eight benched players, in the
+   * table the reader is meant to check the advice against.
+   *
+   * The roster is the last table in the panel, which is what finds it: the
+   * desks' own tables of swaps come first, then the disputed one, and the
+   * roster closes the panel. Taking the last rather than counting them means a
+   * desk that fails to answer takes its block away without moving the target.
+   */
+  const weekPanel = page.locator('.panel', { has: page.getByRole('heading', { name: 'This week' }) });
+  const weekRows = await weekPanel.locator('.season-table').last().locator('tbody tr').all();
+  const weekSlots = [];
+  for (const row of weekRows) {
+    const cells = await row.locator('td').allInnerTexts();
+    weekSlots.push(cells[0].trim());
+  }
+  const sat = weekSlots.findIndex((slot) => slot === 'BN');
+  if (sat < 0) {
+    throw new Error("the week's table benched nobody, so this checks nothing: " + weekSlots.join(' '));
+  }
+  const below = weekSlots.slice(sat + 1).filter((slot) => slot !== 'BN' && slot !== 'IR');
+  if (below.length) {
+    throw new Error("a started player sits below the bench in the week's table: "
+      + below.join(', ') + ' in ' + weekSlots.join(' '));
   }
 
   /*

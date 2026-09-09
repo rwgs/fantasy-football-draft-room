@@ -140,23 +140,99 @@ function cannotStart(player, { week, locked, points }) {
  * players into other seats they also fill. Asking only whether a seat is free
  * is the best-first mistake at the top of this file.
  *
- * `order` puts a player's current seat first among the ones he fills, which
- * changes no total and stops the advice inventing motion. Where two seats are
- * interchangeable a lineup that leaves everyone where they are is the same
- * lineup, and reporting it as two swaps would be advice to do nothing, phrased
- * as advice to do something.
+ * BREADTH FIRST, AND THE BREADTH IS THE POINT. Every augmenting path seats the
+ * same player and scores the same total, because a player is worth the same in
+ * every seat he fills -- so which one is taken never shows up in a number, and
+ * shows up in every word of the advice. The length of the path is the count of
+ * players displaced to make room, and each of those is a line telling the user
+ * to go and move somebody. The shortest path is the fewest such lines.
+ *
+ * Depth first took whatever it stumbled into. Asked to seat a back where one
+ * seat's occupant could shuffle along and another's could not, it walked into
+ * the first and displaced two men where one would have done, then reported both
+ * -- see `settle`, which is where that was caught, and which is the other half
+ * of this. `order` still puts a player's own seat first, so a tie between two
+ * paths of equal length goes to the one that leaves him where he is.
+ *
+ * None of this can move the total, and a maximum matching is still a maximum
+ * matching: Kuhn's needs an augmenting path found whenever one exists, and
+ * breadth first finds one exactly when depth first would.
  */
-function seat(entry, { bySeat, seen, order }) {
-  for (const index of order(entry)) {
-    if (seen.has(index)) continue;
-    seen.add(index);
-    const held = bySeat.get(index);
-    if (held === undefined || seat(held, { bySeat, seen, order })) {
-      bySeat.set(index, entry);
-      return true;
+function seat(entry, { bySeat, order }) {
+  /*
+   * `wants` is the search tree, seat by seat: who would move into this seat if
+   * the path being built turns out to reach an empty one. `at` is where each
+   * displaced player is sitting now, which is how the path is walked back --
+   * the source has no entry there, and that is what ends the walk.
+   */
+  const wants = new Map();
+  const at = new Map();
+  const queue = [entry];
+  let open = null;
+
+  while (queue.length && open === null) {
+    const who = queue.shift();
+    for (const index of order(who)) {
+      if (wants.has(index)) continue;
+      wants.set(index, who);
+      const held = bySeat.get(index);
+      if (held === undefined) {
+        open = index;
+        break;
+      }
+      at.set(held, index);
+      queue.push(held);
     }
   }
-  return false;
+
+  if (open === null) return false;
+
+  // Back down the path from the empty seat: each player takes the seat ahead of
+  // him and gives up the one behind, and the last seat given up is nobody's
+  // because the player at the far end came from the bench.
+  for (let index = open; index !== undefined;) {
+    const who = wants.get(index);
+    bySeat.set(index, who);
+    index = at.get(who);
+  }
+  return true;
+}
+
+/**
+ * The same players, seated so that as few of them move as possible.
+ *
+ * WHO STARTS AND WHERE THEY SIT ARE TWO QUESTIONS, AND ONLY THE FIRST IS THE
+ * GREEDY'S. A player is worth the same points in every seat he fills -- the
+ * note at the top of this file -- so every seating of the chosen set scores the
+ * same, and the one the greedy ends up holding is merely whichever its search
+ * reached first. That is fine for a total and useless for advice, because the
+ * advice is the difference between that seating and the user's.
+ *
+ * Preferring a player's own seat inside the greedy cannot fix it, because the
+ * greedy has to take players in descending points and the seat a player wants
+ * to keep may be claimed before its owner is reached. Reported from a real
+ * board: a back off the bench outprojected the two starting at `RB`, took one
+ * of their seats because he was first through, and pushed its owner into the
+ * flex -- which was standing empty for want of the tight end who had just been
+ * benched out of it, and who the incoming back could have replaced directly.
+ * The total was right to the penny and every word of the advice was wrong: the
+ * swap named `RB` instead of the flex, and a relocation nobody needed was
+ * printed underneath it.
+ *
+ * So the set is settled first and seated second. Every player who has a seat
+ * now and still fills it claims it, which cannot conflict -- a seat holds one
+ * player -- and the rest are matched around them. The set is known seatable, so
+ * `seat` finds room for each of them from any starting arrangement; that is the
+ * same theorem as before, used the same way.
+ */
+function settle(chosen, { bySeat, currentSeat, order }) {
+  const rest = [];
+  for (const entry of chosen) {
+    const held = currentSeat.get(entry.player.playerKey);
+    if (held !== undefined && entry.fills.includes(held)) bySeat.set(held, entry);
+    else rest.push(entry);
+  }
+  for (const entry of rest) seat(entry, { bySeat, order });
 }
 
 /**
@@ -279,8 +355,15 @@ export function bestLineup({
      * sorted, so nothing below it can be worth taking either.
      */
     if (!(entry.points > 0)) break;
-    seat(entry, { bySeat, seen: new Set(), order });
+    seat(entry, { bySeat, order });
   }
+
+  // Who starts is now settled and where they sit is not -- see `settle`, which
+  // seats these same players again for the fewest moves rather than the first
+  // arrangement the greedy happened to reach.
+  const chosen = [...bySeat.values()];
+  bySeat.clear();
+  settle(chosen, { bySeat, currentSeat, order });
 
   const lineup = [];
   for (const [index, entry] of bySeat) lineup.push({ seat: free[index], player: entry.player });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { maskLeague, maskTeam } from '../anon';
 import type {
   LineupDesk, LineupRead,
-  SeasonFeed, SeasonLeagueHeld, SeasonPlayer, SeasonRead, SeasonRoster, SeasonSlot,
+  SeasonFeed, SeasonLeagueHeld, SeasonPoolRecord, SeasonRead, SeasonRoster, SeasonSlot,
 } from '../engine/types';
 
 /**
@@ -132,9 +132,11 @@ function slotLine(slot: SeasonSlot): string {
  * order Yahoo gave them, and a slot the list does not mention sorts last rather
  * than throwing the roster away.
  */
-function inSlotOrder(players: SeasonPlayer[], slots: SeasonSlot[]): SeasonPlayer[] {
+function inSlotOrder<T extends { selectedPosition: string | null }>(
+  players: T[], slots: SeasonSlot[],
+): T[] {
   const rank = new Map(slots.map((slot, at) => [slot.position, at]));
-  const at = (p: SeasonPlayer) => rank.get(p.selectedPosition ?? '') ?? slots.length;
+  const at = (p: T) => rank.get(p.selectedPosition ?? '') ?? slots.length;
   return [...players].sort((a, b) => at(a) - at(b));
 }
 
@@ -170,6 +172,28 @@ function Roster({ roster, name, anonymous, index, pooled, slots }: {
       </div>
 
       <table className="season-table">
+        {/*
+          * EVERY TEAM IS ITS OWN TABLE, SO THE WIDTHS HAVE TO BE STATED. A
+          * table left to size itself measures its own contents and nothing
+          * else, so a roster holding "Amon-Ra St. Brown" set a wider player
+          * column than the one below it holding "Bo Nix", and stacked down
+          * the page, a dozen rosters put their headings in a dozen places. It
+          * read as a rendering fault, which is roughly what it was.
+          *
+          * Declared here beside the columns they size rather than in the
+          * stylesheet, because the two have to be changed together: a column
+          * added to the row below and not to this list silently takes its
+          * width from whatever is left over.
+          */}
+        <colgroup>
+          <col style={{ width: '8%' }} />
+          <col style={{ width: '27%' }} />
+          <col style={{ width: '13%' }} />
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '9%' }} />
+          <col style={{ width: '29%' }} />
+        </colgroup>
         <thead>
           <tr>
             <th>Slot</th>
@@ -356,8 +380,22 @@ function DeskAdvice({ desk, name }: { desk: LineupDesk; name: string }) {
  * known about which players have locked all change what the advice is worth.
  * Each is said where it applies.
  */
-function Advice({ lineup, loading, error }: {
+function Advice({ lineup, loading, error, slots, pool, pooled }: {
   lineup: LineupRead | null; loading: boolean; error: string | null;
+  /** The league's slots, which is what puts the roster in a readable order. */
+  slots: SeasonSlot[];
+  /**
+   * What Yahoo's pool says about each rostered player, by key.
+   *
+   * The lineup and the league are two fetches and this table wants both: the
+   * projections come from the desks and the injury and the ownership come from
+   * the pool, which only the league read asks for. Joining them here rather
+   * than fetching the pool twice keeps one answer per feed, and the keys are
+   * the same keys -- both sides came out of the one snapshot the browser read.
+   */
+  pool: Map<string, SeasonPoolRecord | null>;
+  /** Whether the pool answered at all, which decides what a miss may be called. */
+  pooled: boolean;
 }) {
   if (error) {
     return (
@@ -382,17 +420,23 @@ function Advice({ lineup, loading, error }: {
     .filter((entry) => entry.names && entry.names.length);
 
   /*
-   * The starting lineup as one block, then the bench, exactly as the rosters
-   * below are ordered and for the reason recorded there: Yahoo's own order puts
-   * started players after benched ones, so a table in feed order breaks the
-   * lineup in half. The order comes from the seats the league actually starts,
-   * so a league that starts things in a different order reads in that order,
-   * and `sort` is stable so two players in one slot keep Yahoo's order.
+   * The starting lineup as one block, then the bench, on the league's own slot
+   * list and the same `inSlotOrder` the rosters below use.
+   *
+   * IT USED TO RANK BY THE SEATS, AND THE SEATS ARE NOT THE SLOTS. `seats` is
+   * what `startingSeats` could seat somebody in, so it deliberately drops the
+   * two slots no desk can project -- the kicker and the defence -- along with
+   * any slot this app could not resolve. A slot missing from the ranking sorts
+   * last, which put a started kicker and a started defence below the bench, in
+   * the one table on this screen that is meant to read as a lineup. They are
+   * exactly the players there is least to say about and exactly the ones the
+   * old order buried furthest down.
+   *
+   * The league's slot list has all of them, unscoreable and unresolved alike,
+   * in the order the league itself starts them, so ranking on that puts every
+   * starter above every bench player whatever any desk can score.
    */
-  const rank = new Map((first?.seats ?? []).map((seat, at) => [seat.slot, at]));
-  const roster = [...(lineup?.roster ?? [])]
-    .sort((a, b) => (rank.get(a.selectedPosition ?? '') ?? rank.size)
-      - (rank.get(b.selectedPosition ?? '') ?? rank.size));
+  const roster = inSlotOrder(lineup?.roster ?? [], slots);
 
   return (
     <section className="panel">
@@ -546,34 +590,71 @@ function Advice({ lineup, loading, error }: {
               <tr>
                 <th>Slot</th>
                 <th>Player</th>
+                <th>Elig.</th>
+                <th>Team</th>
+                <th className="num">Bye</th>
+                <th className="num">Owned</th>
+                <th>Status</th>
                 {desks.map((key) => <th key={key} className="num">{deskName(key)}</th>)}
                 <th>Can fill</th>
               </tr>
             </thead>
             <tbody>
-              {roster.map((p) => (
-                <tr
-                  key={p.playerKey}
-                  data-bench={p.selectedPosition === 'BN' || p.selectedPosition === 'IR'}
-                >
-                  <td className="mono">{p.selectedPosition ?? '—'}</td>
-                  <td>{p.name ?? p.playerKey}</td>
-                  {desks.map((key) => (
-                    <td key={key} className="mono num">
-                      {p.points[key as 'sleeper' | 'espn'] == null
-                        // Not zero. Nobody projected him, which is a different
-                        // statement from a projection of nothing.
-                        ? <span className="hint">none</span>
-                        : pts(p.points[key as 'sleeper' | 'espn'])}
+              {roster.map((p) => {
+                /*
+                 * WHY THE POOL AND NOT THE PROJECTION SAYS WHETHER TO START
+                 * HIM. A desk projects a hurt player perfectly happily, so a
+                 * lineup read off the numbers alone will start a man who is
+                 * out, and the roster tables below carried the one column that
+                 * would have said so. It belongs beside the numbers it
+                 * qualifies rather than three panels further down.
+                 */
+                const held = pool.get(p.playerKey) ?? null;
+                return (
+                  <tr
+                    key={p.playerKey}
+                    data-bench={p.selectedPosition === 'BN' || p.selectedPosition === 'IR'}
+                  >
+                    <td className="mono">{p.selectedPosition ?? '—'}</td>
+                    <td>{p.name ?? p.playerKey}</td>
+                    {/*
+                      * Every eligible position, which is not the same question
+                      * as `Can fill` beside it: a quarterback on a roster with
+                      * no quarterback slot is eligible at QB and fills nothing.
+                      */}
+                    <td className="mono">{p.positions.join(', ') || '—'}</td>
+                    <td className="mono">{p.team ?? '—'}</td>
+                    <td className="mono num">{held?.byeWeek ?? p.byeWeek ?? '—'}</td>
+                    <td className="mono num">
+                      {held ? (held.percentOwned == null ? '—' : held.percentOwned + '%') : ''}
                     </td>
-                  ))}
-                  <td className="mono">
-                    {p.fills.length
-                      ? p.fills.join(', ')
-                      : <span className="hint">no starting slot</span>}
-                  </td>
-                </tr>
-              ))}
+                    <td className="hint">
+                      {held
+                        // Yahoo's own code, spelt out where it spelt it out.
+                        // Never read as an injury: `NA` is 44% of the pool and
+                        // means unrostered rather than hurt.
+                        ? (held.statusFull || held.status || 'nothing reported')
+                        // "Not in the pool" is a claim about the player, and it
+                        // can only be made when the pool actually answered.
+                        : pooled ? 'not in the pool' : ''}
+                    </td>
+                    {desks.map((key) => (
+                      <td key={key} className="mono num">
+                        {p.points[key as 'sleeper' | 'espn'] == null
+                          // Not zero. Nobody projected him, which is a different
+                          // statement from a projection of nothing.
+                          ? <span className="hint">none</span>
+                          : pts(p.points[key as 'sleeper' | 'espn'])}
+                      </td>
+                    ))}
+                    <td className="mono">
+                      {p.fills.length
+                        ? p.fills.join(', ')
+                        : <span className="hint">no starting slot</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -772,6 +853,15 @@ export default function SeasonScreen({
   );
   const starting = league?.slots.filter((s) => s.starting) ?? [];
   const bench = league?.slots.filter((s) => !s.starting) ?? [];
+  /*
+   * The pool's word on the user's own players, for the week's table to read.
+   * Keyed off the roster the league read marked as yours rather than off the
+   * lineup's `teamKey`, because `own` is settled by the guid and a key match
+   * would be the seat guess Y7.1 exists to avoid.
+   */
+  const ownPool = new Map(
+    (league?.rosters.find((r) => r.own)?.players ?? []).map((p) => [p.playerKey, p.pool]),
+  );
   const scored = snapshot?.scoring.filter((s) => s.points != null) ?? [];
 
   return (
@@ -838,7 +928,14 @@ export default function SeasonScreen({
           * too old to send every roster, or a slot list that never arrived,
           * both change what the advice below is worth.
           */}
-        <Advice lineup={lineup} loading={lineupLoading} error={lineupError} />
+        <Advice
+          lineup={lineup}
+          loading={lineupLoading}
+          error={lineupError}
+          slots={league?.slots ?? []}
+          pool={ownPool}
+          pooled={!!league?.joined.pool}
+        />
 
         <section className="panel">
           <div className="panel-head">
