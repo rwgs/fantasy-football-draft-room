@@ -119,9 +119,13 @@ export async function fetchProjections({ year, force = false }) {
  * apart, which is his 35 catches at half a point -- and not an IDP total, which
  * would be the same number in all three and would reflect his 31 tackles.
  *
+ * Exported because `sleeperProjections.js` reads the same feed for the weekly
+ * numbers and has to key it the same way. Two modules deciding this
+ * differently would be two answers to whether a record is the same player.
+ *
  * @param {object} player Sleeper's `player` record
  */
-function draftablePosition(player) {
+export function draftablePosition(player) {
   const primary = normPos(player.position);
   if (DRAFTABLE.has(primary)) return primary;
   for (const alt of player.fantasy_positions || []) {

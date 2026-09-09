@@ -1870,9 +1870,9 @@ are divided between them and none was dropped.
 ### Phase 9 tasks, in order
 
 Split from `PLAN.md` and from Y9.0's measurement, which released the hold Phase
-9 was carrying. **Y9.1 onward is unstarted, and Phase 9 implementation is not
-authorized** -- the split was written on 2026-09-08 and the owner's instruction
-was to stop at it. Each is one reviewable outcome.
+9 was carrying. The split was written on 2026-09-08 and stopped at, on the
+owner's instruction; **implementation resumed on 2026-09-09 and Y9.1 is
+built.** Y9.2 onward is unstarted. Each is one reviewable outcome.
 
 Two surfaces, in the order the 2026-09-08 decision set: the app's screen first,
 a panel over Yahoo's league pages second. The first two tasks are pure
@@ -1941,45 +1941,72 @@ calculation and need neither a browser nor a real league.
     of `tools/`, so it appears in no diff.
   - Dependencies or blockers: none.
 
-- [ ] Y9.1: Score a projection under the league's own rules.
+- [x] Y9.1: Score a projection under the league's own rules.
   - Scope: a weekly projection feed for both sources, and the scoring join that
-    turns raw components into that league's points. Sleeper's weekly path and
-    ESPN's `leaguedefaults/3` path, cached on disk like the other public feeds,
-    since both are game-scope and need no credential. The league's own 38
-    `stat_categories` against 35 `stat_modifiers`, already parsed by
-    `server/src/platforms/yahoo/league.js`, applied to the components.
-  - Where it goes, proposed rather than settled: beside
-    `server/src/platforms/yahoo/inSeason.js`, which already joins a snapshot to
-    its feeds, with the source modules under `server/src/sources/`. The
-    alternative is a scoring module the client engine holds, on the argument
-    that the draft engine's purity is what makes it testable. Service-side is
-    proposed because the components come from feeds the service fetches and the
-    modifiers from a snapshot the service holds, so a client-side join would
-    ship both across the wire to compute what the service can. **Say so if that
-    is the wrong seam** -- it is an architecture question and this task should
-    not settle it silently.
-  - Why it is first: it needs no browser, no real league and no screen, and
-    every later task is wrong if it is wrong.
-  - Acceptance criteria: setting a synthetic league's rules to a source's own
-    preset reproduces that source's published points for the same player and
-    week, to 0.05, on both sources. A rule the league scores that the source
-    does not project is reported as unsupported, never silently zeroed. A
-    player the source did not project is dropped, not scored zero. ESPN's
-    prior-season row cannot be read as this season's. Sleeper's `pts_ppr` is
-    never read as the answer.
-  - Automated validation: `npm run server:test`, on synthetic feed records and
-    the synthetic snapshot `league.test.js` already uses. Include the two
-    preset reproductions above, the unsupported-rule report, and the
-    `seasonId` filter -- that last one checked by feeding a record set holding
-    both seasons under one week and asserting which is taken.
-  - Manual validation: none required. Nothing renders.
-  - What Y9.0 already establishes for it, so it is not re-derived: the ESPN
-    stat-id vocabulary read off ESPN's own `scoringItems`; that components
-    times modifiers reproduces both feeds to 98.0% and 99.8%; that Sleeper
-    scores an interception at -1 and ESPN at -2;
-    that ESPN's PPR pays 6 for a return touchdown Sleeper does not project;
-    that a future week's Sleeper record is a stale vintage whose own points
-    contradict its own components.
+    turns raw components into that league's points. Built as
+    `server/src/sources/sleeperProjections.js`,
+    `server/src/sources/espnProjections.js`,
+    `server/src/sources/components.js` and
+    `server/src/platforms/yahoo/scoring.js`. No endpoint and no screen: Y9.2
+    and Y9.3 own those.
+  - **The seam question is settled, by the owner rather than silently.** It goes
+    service-side, as proposed. The argument that decided it was not the one in
+    the proposal: Y9.4 needs the Yahoo-page panel to read one advice endpoint,
+    and a client-side join would have needed the draft path's `putAdvice`
+    pigeonhole, which leaves the panel blank whenever the app screen is closed.
+    Recorded in `DECISIONS.md`, 2026-09-09.
+  - Acceptance criteria, all met. Each source's own preset reproduces that
+    source's published points to 0.05 -- checked on fixtures for a quarterback,
+    a back, a receiver and a tight end on both desks, and once against the live
+    feeds at 246/252 and 243/244. A rule the league scores that the source does
+    not project is reported, never zeroed, and reported per source rather than
+    per player. A player nobody projected is dropped. ESPN's prior-season row
+    cannot be read as this season's. Sleeper's `pts_ppr` never appears in the
+    output at all, which one check asserts by serialising a row and looking.
+  - **The reproduction check was proved able to fail** before being trusted:
+    swapping Yahoo's rushing-yards id to receiving yards put Josh Allen at
+    18.45 against a published 21.11 and failed three checks.
+  - What this cost, and it is a real reduction in Phase 9: **kickers and team
+    defences get no projection from either desk, so a K or DEF slot cannot be
+    advised on.** Their components exist in both feeds and could not be
+    verified. Solving for Sleeper's kicker ruleset by least squares fitted all
+    32 kickers to within 0.008 while returning a 30-39 yard field goal at -0.29
+    points, and the control -- the same method on running backs, whose scoring
+    is known -- recovered a lost fumble at -0.68 against its true -2. An
+    underdetermined system fits whatever it is given. Eleven of Yahoo's 108
+    categories are scored; the rest report as unsupported.
+  - A defect found by looking at the live feed rather than by reasoning, and
+    fixed here rather than left for Y9.3: ESPN files a return-touchdown
+    projection against all 32 team defences, so the first reader put every
+    defence on the board at about 0.14 points under a league scoring return
+    touchdowns -- ranked against the other 31 and looking exactly like advice.
+    `SCOREABLE_POSITIONS` is the rule that stops it: the test is not whether any
+    component is present but whether the position's scoring can be represented.
+    ESPN's projected count fell 462 to 430, which is the 32.
+  - Also confirmed rather than re-derived, since Y9.1 said not to re-derive it:
+    Y9.0's twelve ESPN stat ids, by a second method. The median ratio between
+    ESPN's value and the Sleeper component naming the same quantity, over
+    players both desks project -- passing yards 0.986, receiving yards 0.991,
+    receptions 0.980. Correlation cannot do this, and that is worth keeping:
+    inside a position group every stat correlates above 0.95 with every other,
+    because they all scale with volume, so a correlation test matches a
+    quarterback's interceptions to his completions.
+  - Automated validation: 41 new checks in `npm run server:test`, taking it from
+    112 to 153, across `scoring.test.js`, `sleeperProjections.test.js`,
+    `espnProjections.test.js` and `components.test.js`. The `seasonId` filter is
+    checked in both directions, because a reader that just took the newest row
+    would pass a one-directional check.
+  - Local gate: typecheck clean, `server:test` 153, `bridge:test` 7,
+    `engine:test` green against an isolated service on 5179, build clean,
+    `shots` clean with no console errors, lint unchanged at 44. Three
+    `engine:test` suites skipped for want of `client/fixtures.local.json`, which
+    is the open task above and not this change.
+  - Manual validation: none required, and none possible -- nothing renders.
+    Both fetch paths were exercised against the live feeds once, since every
+    check is on a pure reader and a wrong URL or cache key would pass all of
+    them.
+  - One thing deliberately not built: a `scoreProjection` wrapper taking a feed
+    row, which had no caller. Y9.2 should add it when it has one.
   - Dependencies or blockers: none.
 
 - [ ] Y9.2: The best legal lineup, and the swaps that reach it.

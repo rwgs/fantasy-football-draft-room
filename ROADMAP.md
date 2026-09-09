@@ -8,8 +8,9 @@ delivered. Phases 3 through 6 are the Yahoo draft work currently in flight.
 Phases 7 through 11 are the Yahoo-first in-season extension requested on
 2026-09-08. Phase 7's discovery and Phase 8's league view are built, each with
 outstanding items named below; Phase 9 is split into tasks in
-[TASKS.md](TASKS.md) and unstarted; Phases 10 and 11 remain outcomes with no
-tasks written. See [PLAN.md](PLAN.md) for the approach, and `TASKS.md` for what
+[TASKS.md](TASKS.md) and started -- Y9.0's measurement and Y9.1's scoring join
+are built, Y9.2 to Y9.4 are not; Phases 10 and 11 remain outcomes with no tasks
+written. See [PLAN.md](PLAN.md) for the approach, and `TASKS.md` for what
 has actually been validated -- this document owns the order and the exit
 criteria, not the status of a build.
 
@@ -274,6 +275,14 @@ lineup is set in Yahoo, which is also why nothing here writes one.
 Exit: advice respects all supported rules and improves on or agrees with the
 current legal lineup. Unsupported rules or missing required data limit advice
 explicitly. The user still makes the changes in Yahoo.
+
+**One limit is now known rather than anticipated, and it narrows the phase.**
+Y9.1 established on 2026-09-09 that a kicker's and a team defence's components
+cannot be verified from what the two projection feeds publish, so neither is
+scored: **a K or DEF slot gets no projection and no advice.** Eleven of Yahoo's
+108 stat categories are scored and the rest report as unsupported, which the
+exit criterion above already required to be visible. See `DECISIONS.md`,
+2026-09-09, for why a table was not simply written anyway.
 
 Validation: small cases checked against exhaustive legal lineups, FLEX and
 SUPERFLEX traps, kickoff/lock boundaries, missing projections and screenshots.

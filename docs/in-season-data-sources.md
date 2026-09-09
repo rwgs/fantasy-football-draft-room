@@ -291,6 +291,31 @@ By position, and it is flat enough that no position needs treating differently:
 distance and a defence scores sacks and points allowed, so neither is
 reproducible from the twelve skill components, and neither was compared.
 
+Y9.1 went back to that on 2026-09-09 and established something stronger than
+"not compared": **a kicker's and a defence's components cannot be verified from
+what these feeds publish, so they are not scored at all.** Both feeds do publish
+them — Sleeper names `fgm_30_39`, `pts_allow_14_20`, `sack` and about seventy
+more, and the names look self-explanatory. The check that would confirm them is
+a regression of each feed's own published points onto its own components, and it
+does not work here because the system is underdetermined:
+
+| Fit | Rows | Free terms | Within 0.05 | What it recovered |
+| --- | --- | --- | --- | --- |
+| Sleeper kickers | 32 | 12 | 32/32 | a 30-39 yard field goal at **-0.29** points |
+| Sleeper defences | 32 | 21 | 32/32 | a blocked kick at **-4.22** points |
+| Control: running backs | 98 | 8 | 97/98 | rushing yards 0.0988 and rushing TDs 5.995 (both right), and a lost fumble at **-0.68** against its true -2 |
+
+The control is the whole finding. On a position whose scoring is known
+independently, the method recovers the high-volume terms correctly and gets the
+rare ones badly wrong — so a tiny residual on kickers says only that twelve free
+parameters fit thirty-two observations, not that the mapping is right. A table
+written from these fits would have been a guess with a statistic attached.
+
+The consequence is carried in `PLAN.md` and `DECISIONS.md`: a K or DEF slot gets
+no projection and no advice. What would change it is any source publishing a
+kicker's points against components it also publishes, so there is something to
+check a mapping against.
+
 ### The number a lineup recommendation actually acts on
 
 Absolute points are not what start/sit advice consumes — ordering is. Two

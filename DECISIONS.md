@@ -9,6 +9,98 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-09 The in-season scoring join is the service's, and only verified components get a number
+
+Status: Accepted. The seam was chosen by the repository owner when Y9.1 asked;
+the verification rule is a finding from building it. Constrains Y9.2 to Y9.4 and
+anything later that scores a projection.
+
+### Decision
+
+Two things, and the second is the one with teeth.
+
+**The scoring lives in the service**, as `server/src/platforms/yahoo/scoring.js`
+beside `inSeason.js`, with the weekly feeds as `sources/sleeperProjections.js`
+and `sources/espnProjections.js` cached on disk like the other public feeds. The
+alternative considered was a module in the client engine, on the good argument
+that the draft engine's purity is what makes it testable.
+
+**A component gets a number only if it has been reproduced against a feed's own
+published points.** Everything else is reported as an unsupported rule. In
+practice that means eleven of Yahoo's 108 stat categories are scored, and
+kickers and team defences are not scored at all -- so **a K or DEF slot gets no
+projection, from either desk.**
+
+### Why the service, and not the engine
+
+Because Y9.4 needs the Yahoo-page panel to read one advice endpoint, and the
+entry above already committed to the numbers having one home. Service-side gives
+that directly. Client-side would have needed the draft path's `putAdvice`
+pigeonhole -- the app computing and posting, the bridge collecting -- which for
+a draft is right, because the engine that prices a pick genuinely lives in the
+client, and which in season would mean the panel shows nothing unless the app
+screen happens to be open. A lineup is not set with the app open beside it.
+
+It also follows the data. The components come from feeds the service fetches and
+the modifiers from a snapshot the service holds, so a client-side join would
+ship both across the wire to compute what the service already has in hand.
+
+### Why only what was verified, which is the expensive half
+
+Because the failure mode of a guess here is invisible. A mis-mapped stat id
+produces a total of the right shape, in the right range, that sorts sensibly
+against the others and is simply not this league's points. Nothing downstream
+can tell, and the user cannot either.
+
+Three readings decided it, and the third is the one that changed the answer:
+
+- ESPN's own `scoringItems` names ids and never their meaning, and the twelve
+  offensive ids Y9.0 established were confirmed a second way -- the median ratio
+  between ESPN's value and the Sleeper component naming the same quantity, over
+  players both desks project. Passing yards 0.986, receiving yards 0.991,
+  receptions 0.980. Two desks measuring one quantity.
+- Correlation alone cannot do that, which is why the ratio was used. Inside a
+  position group every stat correlates above 0.95 with every other, because they
+  all scale with a player's volume, so a correlation test matches a
+  quarterback's interceptions to his completions.
+- **A good fit is not verification when the system is underdetermined.** Solving
+  for Sleeper's kicker ruleset by least squares fitted all 32 kickers to within
+  0.008 -- and returned a 30-39 yard field goal at -0.29 points and a blocked
+  kick, on the defensive fit, at -4.22. The control run settles it: the same
+  method on running backs, whose scoring is known, recovered a lost fumble at
+  -0.68 against its true -2. Twelve to twenty-one free parameters fit thirty-two
+  observations whatever they mean.
+
+So a kicker's and a defence's components could be tabulated but not checked, and
+this project does not put a number in front of a user that rests on a guess
+about what an undocumented field means.
+
+### The cost, accepted rather than discovered later
+
+**The first useful in-season release cannot advise on a kicker or a defence
+slot.** Y9.2's optimiser will have no projection for either, Y9.3's screen has
+to say so rather than showing a blank, and a league scoring field goals by
+distance or points allowed will see those rules listed as unsupported. That is a
+real reduction in what Phase 9 delivers and it is the honest one: the
+alternative was 32 defences ranked against each other on two hundredths of a
+return touchdown.
+
+It was nearly worse. ESPN files a return-touchdown projection against every team
+defence, so the first version of the reader -- which kept any row carrying any
+component -- put all 32 on the board at about 0.14 points under a league that
+scores return touchdowns. It looked exactly like advice. `SCOREABLE_POSITIONS`
+in `sources/components.js` is the rule that stops it: the test for whether a
+player is projected is not whether any component is present but whether the
+position's scoring can be represented at all.
+
+### What would reopen it
+
+A published vocabulary for either feed's kicker and defence fields, or any
+source that publishes a kicker's points against components it also publishes, so
+the mapping has something to be checked against. Yahoo publishing points at
+game scope would do it too, and it does not -- stats come back raw, which is the
+whole reason this file exists.
+
 ## 2026-09-08 Weekly advice lands on both surfaces, and the app screen goes first
 
 Status: Accepted, by the repository owner, asked before Phase 9 was split into

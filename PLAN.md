@@ -261,6 +261,14 @@ Each was observed, and each has a wrong answer that looks right:
 
 - A player with no projection is dropped, not zeroed. 463 of 3304 weekly records
   carried points.
+- **A kicker and a team defence have no projection at all, not a small one.**
+  Nothing in the verified component vocabulary scores a field goal, a points-
+  allowed bracket, a sack or a defensive touchdown, so the test for whether a
+  player is projected is not "is any component present" but "can this
+  position's scoring be represented". ESPN files a return-touchdown projection
+  against all 32 defences, and a reader keeping any row with any component put
+  every one of them on the board at about 0.14 points -- which sorts, ranks and
+  reads exactly like advice.
 - **A missing projection does not say why.** A bye and an unprojected bench
   player are the same absence: 109 players idle in week 8, none projected. The
   schedule is what tells them apart.
@@ -284,6 +292,7 @@ Each was observed, and each has a wrong answer that looks right:
 | Actual stat values | anything comparing advice to results | nothing had kicked off; every value read was zero |
 | ~~Whether the two projection sources agree~~ | ~~how to combine them~~ | **measured 2026-09-08**, and it releases this hold: see below |
 | A keeper or past-season league | those league types | unread; a past season is unreachable by construction |
+| **A kicker's and a team defence's projection** | **advice on a K or DEF slot** | **components exist in both feeds and neither could be verified; see below, 2026-09-09** |
 
 None of these blocks Phase 8, which displays a league rather than advising on
 one. Availability blocks Phase 10, and that is the one to close first with a
@@ -314,6 +323,18 @@ of them in the document:
 - **ESPN returns last season's weekly projection under the same week number**,
   on 896 of 1036 players. Only `seasonId` separates them, so a reader must
   filter on it or get a coin flip.
+
+**One more thing Y9.1 established, on 2026-09-09, and it costs Phase 9
+something.** A component gets a number only where it has been reproduced
+against a feed's own published points, which is eleven of Yahoo's 108 stat
+categories. Kickers and team defences are outside it: their components are
+published by both feeds and could not be verified, because the check that would
+verify them is underdetermined. Solving for Sleeper's kicker ruleset by least
+squares fits all 32 kickers to within 0.008 while returning a 30-39 yard field
+goal at -0.29 points, and the control -- running backs, whose scoring is known
+-- recovers a lost fumble at -0.68 against its true -2. So **a K or DEF slot
+gets no advice**, and the screen has to say so. `DECISIONS.md`, 2026-09-09,
+carries the reasoning and what would reopen it.
 
 ## Validation, sequencing and stop points
 
