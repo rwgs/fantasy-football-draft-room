@@ -112,6 +112,50 @@ function readPlayer(node) {
 }
 
 /**
+ * This week's matchups, and Yahoo's own projected total for each team.
+ *
+ * TWO ANSWERS OUT OF ONE FETCH, and the second is the only Yahoo projection
+ * this project has ever been able to reach. `docs/in-season-data-sources.md`
+ * records "projections of any kind: none found at any public path", re-checked
+ * 2026-09-09 against the game scope, where every `out=projected_points`
+ * variant is refused. That finding stands and is about the *game* scope. A
+ * league's scoreboard is a different resource behind the session cookie, and
+ * each team node in it carries `team_projected_points` beside `team_points` --
+ * which is the number Yahoo prints on its own matchup card.
+ *
+ * It is a TEAM TOTAL AND NOT A PER-PLAYER PROJECTION, which is why nothing
+ * downstream tries to re-seat a lineup with it. Yahoo's roster page shows a
+ * per-player Proj column too; no fantasy-v2 path is known to publish it, so
+ * this is what there is and the screen says as much rather than implying the
+ * column is merely empty.
+ *
+ * Who plays whom is the other half, and the snapshot had no way to say it
+ * before: `matchup_week` names the week being played and nothing paired the
+ * teams up.
+ */
+function readScoreboard(scoreboard) {
+  const league = pick(scoreboard.fantasy_content ?? {}, 'league', 'the scoreboard response');
+  const board = subResource(league, 'scoreboard');
+  return listOf(board['0']?.matchups)
+    .map((entry) => entry.matchup)
+    .filter(Boolean)
+    .map((matchup) => ({
+      week: toNumber(matchup.week),
+      teams: listOf(matchup['0']?.teams)
+        .map((entry) => entry.team)
+        .filter(Boolean)
+        .map((team) => ({
+          teamKey: flatten(team[0]).team_key ?? null,
+          // Yahoo's own projection for the whole team, as a number or null.
+          // Null is a scoreboard that did not carry one, never a zero: a team
+          // projected at nothing and a team Yahoo declined to project are
+          // different claims, and before kickoff `team_points` really is 0.00.
+          projectedPoints: toNumber(flatten(team[1]).team_projected_points?.total),
+        })),
+    }));
+}
+
+/**
  * One team's roster, as `/team/<key>/roster` answers it.
  *
  * `week` matters as much as the players do: a roster is a lineup for a week,
@@ -137,7 +181,7 @@ function readRoster(response) {
  * is not optional is honesty about which parts arrived, so anything missing is
  * `null` rather than an empty object that reads like an answer.
  */
-export function readSnapshot({ settings, teams, rosters, roster, profile } = {}) {
+export function readSnapshot({ settings, teams, rosters, roster, profile, scoreboard } = {}) {
   if (!settings) throw new Error('A snapshot needs at least the league settings.');
 
   const leagueNode = pick(settings.fantasy_content ?? {}, 'league', 'the settings response');
@@ -162,6 +206,43 @@ export function readSnapshot({ settings, teams, rosters, roster, profile } = {})
   // profile's guid appears against exactly one team's manager.
   const ownTeamKey = ownGuid
     ? teamList.find((team) => team.managers.some((m) => m.guid === ownGuid))?.teamKey ?? null
+    : null;
+
+  /*
+   * WHO YOU PLAY THIS WEEK, AND WHAT YAHOO PROJECTS EVERY TEAM AT.
+   *
+   * Optional, and old readers do not send it at all -- the fetch was added on
+   * 2026-09-09 and a copy installed before then posts a snapshot without it.
+   * So a missing scoreboard is `null` throughout rather than an empty list of
+   * matchups, on the same rule the rosters follow: nothing claimed is better
+   * than a claim that reads as a league where nobody plays anybody.
+   *
+   * Malformed is treated as missing rather than fatal. Every other part of a
+   * snapshot is worth having without this one, and a scoreboard is the newest
+   * and least load-bearing thing the reader fetches.
+   */
+  let matchups = null;
+  if (scoreboard) {
+    try {
+      matchups = readScoreboard(scoreboard);
+    } catch {
+      matchups = null;
+    }
+  }
+
+  /*
+   * The team you are playing, which is a question about your own key and so
+   * cannot be answered before the guid has settled which key is yours. Null
+   * where no scoreboard came, where the guid found no team, or where the
+   * matchup holds one team and no opponent -- three different silences that
+   * all mean the screen has nobody to put first, which is the only thing the
+   * caller does with it.
+   */
+  const mine = matchups && ownTeamKey
+    ? matchups.find((m) => m.teams.some((t) => t.teamKey === ownTeamKey)) ?? null
+    : null;
+  const opponentTeamKey = mine
+    ? mine.teams.find((t) => t.teamKey !== ownTeamKey)?.teamKey ?? null
     : null;
 
   /*
@@ -214,6 +295,13 @@ export function readSnapshot({ settings, teams, rosters, roster, profile } = {})
     },
     ownGuid,
     ownTeamKey,
+    /*
+     * Whom you play, and Yahoo's own projected total for every team in the
+     * league. Null where the reader sent no scoreboard, which an installed
+     * copy older than 2026-09-09 does not.
+     */
+    matchups,
+    opponentTeamKey,
     teams: teamList,
     rosters: rostersOut,
     // Whether the copy of the reader that posted this can read every roster.

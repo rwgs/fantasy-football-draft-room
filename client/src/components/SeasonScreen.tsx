@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { maskLeague, maskTeam } from '../anon';
 import type {
-  LineupDesk, LineupRead,
+  LineupDesk, LineupRead, LineupTeam,
   SeasonFeed, SeasonLeagueHeld, SeasonPoolRecord, SeasonRead, SeasonRoster, SeasonSlot,
 } from '../engine/types';
 
@@ -140,12 +140,24 @@ function inSlotOrder<T extends { selectedPosition: string | null }>(
   return [...players].sort((a, b) => at(a) - at(b));
 }
 
-function Roster({ roster, name, anonymous, index, pooled, slots }: {
+function Roster({ roster, name, anonymous, index, pooled, slots, desks, team, opponent }: {
   roster: SeasonRoster; name: string; anonymous: boolean; index: number;
   /** Whether the pool answered at all, which decides what a miss may be called. */
   pooled: boolean;
   /** The league's slots, which is what puts the roster in a readable order. */
   slots: SeasonSlot[];
+  /**
+   * Which projection columns this table carries, in the order they are shown.
+   *
+   * Passed in rather than worked out here, because every roster on the page has
+   * to carry the same columns: these tables are read down as much as across,
+   * and a team whose desk failed cannot be one column narrower than the rest.
+   */
+  desks: string[];
+  /** This team's projections, or null before the lineup request has answered. */
+  team: LineupTeam | null;
+  /** Whether this is the team the user plays this week. */
+  opponent: boolean;
 }) {
   const held = roster.players.length;
   const ordered = inSlotOrder(roster.players, slots);
@@ -154,6 +166,15 @@ function Roster({ roster, name, anonymous, index, pooled, slots }: {
       <div className="season-roster-head">
         <b>{maskTeam(name, index, roster.own, anonymous)}</b>
         {roster.own && <span className="chip" aria-pressed="true">yours</span>}
+        {/*
+          * WHY THE ORDERING IS LABELLED AND NOT LEFT TO BE INFERRED. This team
+          * is first among the rivals because it is the one being played, and a
+          * list reordered with nothing saying why is a list the reader has to
+          * take on trust -- indistinguishable from the league's own order
+          * happening to start there. Not `aria-pressed`, which is the mark for
+          * the user's own team and the thing `shots` counts.
+          */}
+        {opponent && <span className="chip">this week&rsquo;s opponent</span>}
         <span className="hint">
           {held + ' players'}
           {roster.week != null ? ' · week ' + roster.week : ''}
@@ -186,13 +207,21 @@ function Roster({ roster, name, anonymous, index, pooled, slots }: {
           * width from whatever is left over.
           */}
         <colgroup>
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '23%' }} />
+          <col style={{ width: '11%' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '5%' }} />
           <col style={{ width: '8%' }} />
-          <col style={{ width: '27%' }} />
-          <col style={{ width: '13%' }} />
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '9%' }} />
-          <col style={{ width: '29%' }} />
+          {/*
+            * Status takes whatever the projection columns leave, which is why
+            * it alone is unsized. The table is `table-layout: fixed`, so one
+            * unsized column is the remainder exactly rather than a measurement
+            * of its own contents -- and the count of desk columns is the same
+            * for every roster on the page, so they all still line up.
+            */}
+          <col />
+          {desks.map((key) => <col key={key} style={{ width: '9%' }} />)}
         </colgroup>
         <thead>
           <tr>
@@ -203,6 +232,7 @@ function Roster({ roster, name, anonymous, index, pooled, slots }: {
             <th className="num">Bye</th>
             <th className="num">Owned</th>
             <th>Status</th>
+            {desks.map((key) => <th key={key} className="num">{deskName(key)}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -231,9 +261,52 @@ function Roster({ roster, name, anonymous, index, pooled, slots }: {
                   // only be made when the pool actually answered.
                   : pooled ? 'not in the pool' : ''}
               </td>
+              {desks.map((key) => (
+                <td key={key} className="mono num">
+                  {deskCell(team, p.playerKey, key)}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
+        {/*
+          * THE TOTALS, AND WHY THEY ARE A `tfoot` AND NOT TWO MORE ROWS. The
+          * body of this table is the roster, one row per player, and `shots`
+          * reads its first column to prove the starting lineup is contiguous.
+          * A total sitting in `tbody` would be a row whose slot is not a slot,
+          * in the check that exists to catch exactly that.
+          */}
+        {!!desks.length && !!team && (
+          <tfoot>
+            <tr>
+              {/*
+                * "Starters" and not "Total", because the number is the lineup
+                * as it stands with the bench left out -- and with the seats no
+                * desk projects left out too, which is the kicker and the
+                * defence. The column above it shows those as no projection at
+                * all rather than as nothing scored, so the two agree.
+                */}
+              <td colSpan={7}>Starters</td>
+              {desks.map((key) => (
+                <td key={key} className="mono num">{pts(team.totals[deskKey(key)]?.now)}</td>
+              ))}
+            </tr>
+            <tr>
+              <td colSpan={7} className="hint">Best possible</td>
+              {desks.map((key) => (
+                <td key={key} className="mono num hint">
+                  {/*
+                    * Null for Yahoo, and it is a statement rather than a gap: a
+                    * best lineup is a re-seating, a re-seating needs a number
+                    * against each player, and Yahoo publishes a team total and
+                    * no per-player projection this project can reach.
+                    */}
+                  {pts(team.totals[deskKey(key)]?.best)}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
 
       {!roster.players.length && <p className="hint">This roster came back empty.</p>}
@@ -244,9 +317,38 @@ function Roster({ roster, name, anonymous, index, pooled, slots }: {
 /** A number of points, at the precision a projection deserves and no more. */
 const pts = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1));
 
-/** How the desks are labelled, so a column heading is a desk and not a field. */
-const DESK_NAMES: Record<string, string> = { sleeper: 'Sleeper', espn: 'ESPN' };
+/**
+ * How the desks are labelled, so a column heading is a desk and not a field.
+ *
+ * Yahoo is here and is not a projection desk in the sense the other two are.
+ * It publishes a total for a team and no number against a player -- see
+ * `LineupTeam` -- so it heads a column that is blank all the way down and
+ * carries a total underneath. That is worth a column rather than a footnote:
+ * it is the figure on Yahoo's own matchup card, and it is the one number the
+ * user can check this screen against without leaving it.
+ */
+const DESK_NAMES: Record<string, string> = { sleeper: 'Sleeper', espn: 'ESPN', yahoo: 'Yahoo' };
 const deskName = (key: string) => DESK_NAMES[key] || key;
+
+/** The desk keys as `LineupTeam` holds them, which is the same set of names. */
+const deskKey = (key: string) => key as keyof LineupTeam['totals'];
+
+/**
+ * One desk's number for one player, or the reason there is not one.
+ *
+ * Blank and not a dash for Yahoo, deliberately. A dash reads as "no projection
+ * for this player", which would be a claim about the player; the truth is that
+ * Yahoo publishes nothing per player at all, and the column heading plus the
+ * total underneath say that better than fifteen dashes would.
+ */
+function deskCell(team: LineupTeam | null, playerKey: string, key: string) {
+  if (key === 'yahoo' || !team) return '';
+  const held = team.points[playerKey];
+  const value = held ? held[key as 'sleeper' | 'espn'] : null;
+  // Not zero. Nobody projected him, which is a different statement from a
+  // projection of nothing -- the same rule the week's own table follows.
+  return value == null ? <span className="hint">none</span> : pts(value);
+}
 
 /**
  * One desk's answer: what the lineup scores now, what the best one scores, and
@@ -431,6 +533,13 @@ function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
     .filter((entry) => entry.names && entry.names.length);
 
   /*
+   * Yahoo's own projected total for this team, which comes off the league
+   * scoreboard rather than out of a desk and so survives both desks failing.
+   * Null where the installed reader is old enough to have sent no scoreboard.
+   */
+  const ownYahoo = lineup?.teams?.find((t) => t.teamKey === lineup.teamKey)?.totals.yahoo ?? null;
+
+  /*
    * The starting lineup as one block, then the bench, on the league's own slot
    * list and the same `inSlotOrder` the rosters below use.
    *
@@ -516,11 +625,41 @@ function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
           </div>
         )}
 
-        {!!desks.length && (
+        {(!!desks.length || !!ownYahoo) && (
           <div className="season-advice">
             {desks.map((key) => (
               <DeskAdvice key={key} desk={advice!.desks[key]} name={deskName(key)} />
             ))}
+            {/*
+              * YAHOO BESIDE THE DESKS, AND SAYING WHAT IT IS NOT.
+              *
+              * It sits here because it is the number the user is going to
+              * compare the two desks against -- it is what Yahoo's own matchup
+              * card shows -- and because it survives what the desks do not: it
+              * comes off the league scoreboard, so a week where both feeds fall
+              * over still has this.
+              *
+              * It recommends nothing and cannot. A best lineup is a re-seating
+              * and a re-seating needs a number against each player; Yahoo
+              * publishes a Proj column on its own roster page and no
+              * fantasy-v2 path this project can reach publishes it. Said out
+              * loud rather than left as a missing "best", because a total with
+              * no best beside it otherwise reads as a desk that failed.
+              */}
+            {!!ownYahoo && (
+              <div className="season-desk">
+                <div className="season-desk-head">
+                  <b>{deskName('yahoo')}</b>
+                  <span className="hint">{pts(ownYahoo.now) + ' projected'}</span>
+                </div>
+                <p className="hint">
+                  Yahoo&rsquo;s own figure for the whole team, from its matchup card. It
+                  publishes no number against each player that this app can reach, so there
+                  is nothing here to re-seat and no best lineup of its own &mdash; only the
+                  total, to check the two desks against.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -911,10 +1050,44 @@ export default function SeasonScreen({
    * The rosters to list, each still carrying the place it holds in the league's
    * own list. The index is what names a team when names are hidden, so taking
    * it from the filtered array would renumber every team below the user's.
+   *
+   * THE TEAM BEING PLAYED COMES FIRST, which is the one departure from the
+   * league's own order and is worth it: of the eleven rosters below, one is the
+   * roster this week is actually decided against, and leaving it in team order
+   * puts it anywhere. A stable partition rather than a sort, so everything else
+   * keeps the order Yahoo gave it, and `at` is untouched -- the label a masked
+   * team wears is its place in the league and not its place in this list.
+   *
+   * The key can come from either request. `/lineup` carries it so a screen
+   * showing the week's advice need not have fetched the league, and the
+   * snapshot carries it because that is where it was read; whichever answered
+   * first is right, and both are null where the installed reader sent no
+   * scoreboard.
    */
-  const listed = (league?.rosters ?? [])
+  const opponentKey = lineup?.opponentTeamKey ?? snapshot?.opponentTeamKey ?? null;
+  const shown = (league?.rosters ?? [])
     .map((roster, at) => ({ roster, at }))
     .filter(({ roster }) => !(ownAbove && roster.own));
+  const isOpponent = (roster: SeasonRoster) => !!opponentKey && roster.teamKey === opponentKey;
+  const listed = [
+    ...shown.filter(({ roster }) => isOpponent(roster)),
+    ...shown.filter(({ roster }) => !isOpponent(roster)),
+  ];
+
+  /*
+   * The projection columns every roster below carries, and the same set for all
+   * of them: these tables are read down the page as much as across, so a team
+   * whose desk happened to fail must not be a column narrower than the rest.
+   *
+   * Yahoo is appended only where a scoreboard actually came, because its column
+   * is blank down the roster and carries a total alone -- an empty one with no
+   * total under it would be a column that says nothing at all.
+   */
+  const teamsByKey = new Map((lineup?.teams ?? []).map((team) => [team.teamKey, team]));
+  const anyYahoo = (lineup?.teams ?? []).some((team) => team.totals.yahoo);
+  const rosterDesks = lineup?.advice
+    ? [...lineup.advice.answered, ...(anyYahoo ? ['yahoo'] : [])]
+    : (anyYahoo ? ['yahoo'] : []);
   const scored = snapshot?.scoring.filter((s) => s.points != null) ?? [];
 
   return (
@@ -1125,6 +1298,21 @@ export default function SeasonScreen({
             </span>
           </div>
           <div className="setup-body">
+            {/*
+              * Said once, above the lot, rather than under each of eleven
+              * tables. What it has to explain is the shape of the totals: they
+              * leave out the bench, and they leave out the kicker and the
+              * defence too, which no desk projects at all.
+              */}
+            {!!rosterDesks.length && (
+              <p className="hint">
+                {'Each total is that team’s starters only. The seats no desk projects '
+                  + '— kicker and defence — are left out of it rather than counted as '
+                  + 'nothing, so a total is lower than the week Yahoo will actually score.'}
+                {anyYahoo && ' Yahoo publishes a total for a team and no number against each '
+                  + 'player, so its column carries the total alone.'}
+              </p>
+            )}
             {league && listed.length
               ? listed.map(({ roster, at }) => (
                 <Roster
@@ -1138,6 +1326,9 @@ export default function SeasonScreen({
                   index={at}
                   pooled={league.joined.pool}
                   slots={league.slots}
+                  desks={rosterDesks}
+                  team={teamsByKey.get(roster.teamKey ?? '') ?? null}
+                  opponent={isOpponent(roster)}
                 />
               ))
               : (

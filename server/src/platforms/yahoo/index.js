@@ -622,13 +622,13 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
    * a fetch that failed, and would then refuse to advise on a full lineup while
    * looking as though it had.
    */
-  const scored = (desk) => scoreRoster({
-    players: own.players,
+  const scored = (desk, players) => scoreRoster({
+    players,
     scoring: snapshot.scoring,
     byKey: desk.value ? desk.value.byKey : null,
   });
-  const sleeperScored = scored(sleeper);
-  const espnScored = scored(espn);
+  const sleeperScored = scored(sleeper, own.players);
+  const espnScored = scored(espn, own.players);
 
   const slots = resolveSlots(snapshot.slots, vocabulary.value
     ? vocabulary.value.rosterPositions
@@ -643,6 +643,73 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
     // `locksKnown` comes back false and the screen has to say so.
     locked: null,
     week,
+  });
+
+  /*
+   * EVERY TEAM'S WEEK, NOT ONLY THE USER'S.
+   *
+   * A weekly decision is about the league and not about one roster: what the
+   * team you are playing is projected to score is the number that says whether
+   * a lineup is good enough, and who is startable on somebody else's bench is
+   * what a waiver or a trade is judged against. The reader already sends every
+   * roster, so the only thing missing was scoring them.
+   *
+   * SCORED THROUGH `lineupAdvice` AND NOT THROUGH A SECOND SUM, which is the
+   * whole reason this reuses the function above rather than adding up points
+   * here. A rival's total has to mean exactly what the user's own total means
+   * or the comparison is between two different measurements -- same exclusion
+   * of the seats no desk projects, same refusal to invent a zero for a player
+   * on bye. Its `moves` and `disputed` are computed and dropped, which costs
+   * nothing measurable on a roster of this size and buys that guarantee.
+   */
+  const yahooProjected = new Map();
+  for (const matchup of snapshot.matchups ?? []) {
+    for (const team of matchup.teams) {
+      if (team.teamKey) yahooProjected.set(team.teamKey, team.projectedPoints);
+    }
+  }
+
+  const teams = (snapshot.rosters ?? []).map((roster) => {
+    const bySleeper = scored(sleeper, roster.players);
+    const byEspn = scored(espn, roster.players);
+    const its = lineupAdvice({
+      slots,
+      players: roster.players,
+      sources: { sleeper: bySleeper.points, espn: byEspn.points },
+      locked: null,
+      week,
+    });
+
+    // A desk that did not answer is absent rather than zero, exactly as it is
+    // for the user's own team. `lineupAdvice` keys `desks` only by what
+    // answered, so this reads that rather than assuming both did.
+    const totalsFor = (name) => {
+      const desk = its.desks[name];
+      return desk ? { now: desk.currentPoints, best: desk.points } : null;
+    };
+
+    /*
+     * Yahoo's own projection is a TEAM TOTAL AND HAS NO BEST, and the null says
+     * why rather than leaving a reader to wonder. A best lineup is a
+     * re-seating, and a re-seating needs a number against each player; Yahoo
+     * publishes one on its roster page and at no fantasy-v2 path this project
+     * can reach. So there is a total to show and nothing to re-seat, which is a
+     * different thing from a best that happens to equal the total.
+     */
+    const yahoo = yahooProjected.get(roster.teamKey);
+
+    return {
+      teamKey: roster.teamKey,
+      points: Object.fromEntries(roster.players.map((player) => [player.playerKey, {
+        sleeper: bySleeper.points ? bySleeper.points.get(player.playerKey) ?? null : null,
+        espn: byEspn.points ? byEspn.points.get(player.playerKey) ?? null : null,
+      }])),
+      totals: {
+        sleeper: totalsFor('sleeper'),
+        espn: totalsFor('espn'),
+        yahoo: yahoo == null ? null : { now: yahoo, best: null },
+      },
+    };
   });
 
   /*
@@ -685,6 +752,17 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
     editable: own.editable,
     advice,
     roster,
+    /*
+     * Every roster in the league, scored. The user's own is in here too, so a
+     * caller needs no special case for it -- and it is the only place its
+     * Yahoo projected total appears, since that comes off the scoreboard rather
+     * than out of a desk.
+     */
+    teams,
+    // Whom the user plays this week, or null where the installed reader is old
+    // enough to have sent no scoreboard. Carried here as well as on the
+    // snapshot so a screen showing the week's advice need not fetch the league.
+    opponentTeamKey: snapshot.opponentTeamKey ?? null,
     /*
      * The rules this league scores that a desk cannot, per desk rather than per
      * player. A league scoring defensive touchdowns has no component behind it

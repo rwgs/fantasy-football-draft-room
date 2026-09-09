@@ -61,6 +61,16 @@ const TEAMS = {
   fantasy_content: { league: [{}, { teams: { 0: { team: [[{ team_id: '1' }]] } } }] },
 };
 const ROSTER = { fantasy_content: { team: [[{ team_key: 'nfl.l.1.t.1' }], { roster: {} }] } };
+/*
+ * The scoreboard, which the reader fetches for two things at once: who you play
+ * and Yahoo's own projected total. Its own branch below, before `/teams`, since
+ * neither substring is in the other but the roster branch would take it.
+ */
+const SCOREBOARD = {
+  fantasy_content: {
+    league: [{}, { scoreboard: { 0: { matchups: { count: 0 } } } }],
+  },
+};
 
 /**
  * What the service answers for the week's advice, in the endpoint's own shape.
@@ -110,7 +120,9 @@ let leagues = 0;
  * Returns what it posted to the service and what its panel says, which between
  * them are everything it does.
  */
-function reader({ mode = 'userscript', every = null, advice = ADVICE, reachable = true } = {}) {
+function reader({
+  mode = 'userscript', every = null, advice = ADVICE, reachable = true, scoreboardOk = true,
+} = {}) {
   leagues += 1;
   const league = String(966000000 + leagues);
   const posted = [];
@@ -179,6 +191,10 @@ function reader({ mode = 'userscript', every = null, advice = ADVICE, reachable 
     assert.ok(!opts || !opts.headers || !opts.headers.cookie, 'the reader sent a cookie');
     if (at.includes('profile')) return { ok: true, json: async () => PROFILE };
     if (at.includes('/settings')) return { ok: true, json: async () => SETTINGS };
+    if (at.includes('/scoreboard')) {
+      if (!scoreboardOk) throw new Error('Yahoo refused the scoreboard');
+      return { ok: true, json: async () => SCOREBOARD };
+    }
     if (at.includes('/teams')) return { ok: true, json: async () => TEAMS };
     if (at.includes('/roster')) return { ok: true, json: async () => ROSTER };
     throw new Error('a request nobody expected: ' + at);
@@ -210,7 +226,8 @@ test('it reads the league on load, without being clicked', async () => {
   assert.equal(r.posted.length, 1);
   const [body] = r.posted;
   // Yahoo's own JSON, unread. Every bit of the interpreting is the service's.
-  assert.deepEqual(Object.keys(body).sort(), ['profile', 'rosters', 'settings', 'teams']);
+  assert.deepEqual(Object.keys(body).sort(),
+    ['profile', 'rosters', 'scoreboard', 'settings', 'teams']);
   assert.equal(body.rosters.length, 1, 'the roster is read per team, so one team is one roster');
   assert.match(r.said(), /Read Test League/);
 });
@@ -348,4 +365,29 @@ test('a bookmarklet copy asks for no advice, since its panel does not stay', asy
 
   assert.equal(r.posted.length, 1, 'it still reads the league');
   assert.deepEqual(r.asked, [], 'it fetched advice its panel would drop nine seconds later');
+});
+
+test('it reads the scoreboard, which is what says who you are playing', () => {
+  // Its own request rather than something dug out of the teams response: the
+  // team list pairs nobody up, and `matchup_week` names the week and not the
+  // opponent.
+  const r = reader({ every: 0 });
+  return r.settle().then(() => {
+    const [body] = r.posted;
+    assert.ok(body.scoreboard, 'the snapshot went without a scoreboard');
+  });
+});
+
+test('a scoreboard Yahoo refuses costs the matchup and not the read', () => {
+  /*
+   * The newest and least load-bearing thing the reader fetches, so it is caught
+   * rather than awaited bare. Everything else in the snapshot is worth having
+   * without it, and the service reads a null here as "not sent".
+   */
+  const r = reader({ every: 0, scoreboardOk: false });
+  return r.settle().then(() => {
+    assert.equal(r.posted.length, 1, 'a refused scoreboard took the whole read with it');
+    assert.equal(r.posted[0].scoreboard, null);
+    assert.match(r.said(), /Read Test League/);
+  });
 });

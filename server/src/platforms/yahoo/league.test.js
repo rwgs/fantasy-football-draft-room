@@ -152,6 +152,59 @@ const rosterResponse = (teamKey = '470.l.111.t.7') => ({
   },
 });
 
+/**
+ * The scoreboard, which pairs the teams up and carries Yahoo's own projection.
+ *
+ * A team node here is `[metadata, points]` where the second half holds
+ * `team_points` and `team_projected_points`. Before kickoff the first really is
+ * "0.00" and the second is the number Yahoo prints on its matchup card, so the
+ * fixture keeps both: a reader that took the wrong one would report every team
+ * as projected to score nothing and look exactly like a league before kickoff.
+ */
+const scoreboardResponse = () => ({
+  fantasy_content: {
+    league: [
+      { league_key: '470.l.111' },
+      {
+        scoreboard: {
+          week: '3',
+          0: {
+            matchups: list([
+              {
+                matchup: {
+                  week: '3', status: 'preevent',
+                  0: {
+                    teams: list([
+                      {
+                        team: [
+                          [{ team_key: '470.l.111.t.7' }, { team_id: '7' }, { name: 'Mine' }],
+                          {
+                            team_points: { coverage_type: 'week', week: '3', total: '0.00' },
+                            team_projected_points: { coverage_type: 'week', week: '3', total: '130.70' },
+                          },
+                        ],
+                      },
+                      {
+                        team: [
+                          [{ team_key: '470.l.111.t.1' }, { team_id: '1' }, { name: 'First' }],
+                          {
+                            team_points: { coverage_type: 'week', week: '3', total: '0.00' },
+                            team_projected_points: { coverage_type: 'week', week: '3', total: '122.17' },
+                          },
+                        ],
+                      },
+                    ]),
+                  },
+                },
+              },
+            ]),
+          },
+        },
+      },
+    ],
+  },
+});
+
 /** The one metadata block that is a plain object rather than a split-up one. */
 const profileResponse = () => ({
   fantasy_content: {
@@ -173,6 +226,7 @@ const full = () => readSnapshot({
   teams: teamsResponse(),
   rosters: [rosterResponse()],
   profile: profileResponse(),
+  scoreboard: scoreboardResponse(),
 });
 
 test('the league is read out of the first half of a two-part resource', () => {
@@ -472,4 +526,63 @@ test('the list is bounded with the store, so it cannot grow without limit', () =
   }
   assert.equal(listSnapshots().length, 8);
   assert.equal(listSnapshots()[0].leagueId, '411');
+});
+
+test('the scoreboard says who you play, answered from your own team key', () => {
+  // Not a position in the list and not the other team in the first matchup:
+  // the guid settles which key is yours, and the opponent is whoever shares
+  // that key's matchup.
+  assert.equal(full().opponentTeamKey, '470.l.111.t.1');
+});
+
+test("Yahoo's projected total is read, and never its actual points", () => {
+  // Both are on the node and before kickoff the actual one is 0.00, so taking
+  // the wrong half reports the whole league as projected to score nothing.
+  const [matchup] = full().matchups;
+  const mine = matchup.teams.find((t) => t.teamKey === '470.l.111.t.7');
+  const theirs = matchup.teams.find((t) => t.teamKey === '470.l.111.t.1');
+  assert.equal(mine.projectedPoints, 130.7);
+  assert.equal(theirs.projectedPoints, 122.17);
+});
+
+test('a reader too old to send a scoreboard claims no matchup rather than an empty one', () => {
+  // An installed copy older than 2026-09-09 posts no scoreboard at all. Null
+  // is "not sent"; an empty list would be a claim that nobody plays anybody.
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    profile: profileResponse(),
+  });
+  assert.equal(snap.matchups, null);
+  assert.equal(snap.opponentTeamKey, null);
+});
+
+test('a scoreboard that will not parse costs the matchup and not the league', () => {
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    profile: profileResponse(),
+    scoreboard: { fantasy_content: { nothing: true } },
+  });
+  assert.equal(snap.matchups, null);
+  assert.equal(snap.opponentTeamKey, null);
+  // The rest of the snapshot is unaffected, which is the point of catching it.
+  assert.equal(snap.leagueKey, '470.l.111');
+  assert.equal(snap.rosters.length, 1);
+});
+
+test('an opponent needs your own team found first, so no guid means no opponent', () => {
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    scoreboard: scoreboardResponse(),
+  });
+  assert.equal(snap.ownTeamKey, null);
+  assert.equal(snap.opponentTeamKey, null);
+  // The matchups are still read: they are a fact about the league rather than
+  // about you, and only the pairing to your key could not be made.
+  assert.equal(snap.matchups.length, 1);
 });

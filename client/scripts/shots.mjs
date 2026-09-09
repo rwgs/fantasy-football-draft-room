@@ -283,6 +283,21 @@ function shownLeague(page, name) {
 }
 
 /**
+ * This week's pairings, with the user's team deliberately not paired next door.
+ *
+ * Team 2 is the user's -- see the profile in `postSnapshot` -- and pairing them
+ * with team 5 puts the opponent four rosters down the league's own order, so a
+ * screen that failed to move it to the top would photograph visibly wrong.
+ */
+function pairings(teams) {
+  const out = [[2, 5]];
+  const left = [];
+  for (let t = 1; t <= teams; t += 1) if (t !== 2 && t !== 5) left.push(t);
+  for (let i = 0; i + 1 < left.length; i += 2) out.push([left[i], left[i + 1]]);
+  return out;
+}
+
+/**
  * Post a league snapshot the way the reader bookmarklet does.
  *
  * Yahoo's own envelope, invented managers, and real players off the live board
@@ -456,6 +471,49 @@ async function postSnapshot(id, teams, { old = false } = {}) {
        * either way.
        */
       profile: { fantasy_content: { users: { count: 1, 0: { user: [{ guid: 'GUID-MINE' }] } } } },
+      /*
+       * The scoreboard, which is what says who is being played. The user is
+       * team 2 and the fixture pairs them against team 5 rather than against a
+       * neighbour, so "the opponent is listed first" is a real reordering: in
+       * the league's own order team 5 sits four rosters down the page.
+       *
+       * `team_points` is 0.00 beside `team_projected_points`, which is what a
+       * real scoreboard carries before kickoff and is the trap the reader has
+       * to miss -- taking the wrong half reports every team at nothing.
+       */
+      scoreboard: {
+        fantasy_content: {
+          league: [
+            { league_key: key },
+            {
+              scoreboard: {
+                week: '3',
+                0: {
+                  matchups: list(pairings(teams).map(([a, b]) => ({
+                    matchup: {
+                      week: '3',
+                      status: 'preevent',
+                      0: {
+                        teams: list([a, b].map((t) => ({
+                          team: [
+                            [{ team_key: key + '.t.' + t }, { team_id: String(t) }],
+                            {
+                              team_points: { coverage_type: 'week', week: '3', total: '0.00' },
+                              team_projected_points: {
+                                coverage_type: 'week', week: '3', total: (95 + t * 3.5).toFixed(2),
+                              },
+                            },
+                          ],
+                        }))),
+                      },
+                    },
+                  }))),
+                },
+              },
+            },
+          ],
+        },
+      },
     }),
   });
   /*
@@ -590,13 +648,69 @@ async function yahooSeason(browser, viewport) {
   if (await weekHead.locator('.chip').count() !== 1) {
     throw new Error("the week's panel does not mark the team it advises on as yours");
   }
-  const marks = await page.locator('.season-roster-head .chip').count();
+  /*
+   * Filtered by the word rather than counting every chip, which it used to do.
+   * A rival now wears one too -- the team being played is marked as such -- and
+   * a bare count would read that as the own-team mark having leaked back into
+   * the list, which is the opposite of what this checks.
+   */
+  const marks = await page.locator('.season-roster-head .chip')
+    .filter({ hasText: 'yours' }).count();
   if (marks) {
     throw new Error("the user's own roster is still listed among the rivals, " + marks + ' marked');
   }
   const rivals = await page.locator('.season-roster').count();
   if (rivals !== 7) {
     throw new Error('expected the other 7 of 8 rosters listed, found ' + rivals);
+  }
+
+  /*
+   * THE TEAM BEING PLAYED IS AT THE TOP OF THE REST, and it is marked as the
+   * reason it is there. The fixture pairs the user's team 2 against team 5, so
+   * in the league's own order this roster sits four down the page: a screen
+   * that did not reorder would put "Team 3" here and pass any check that only
+   * asked whether the mark existed somewhere.
+   */
+  const firstRival = page.locator('.season-roster').first().locator('.season-roster-head');
+  const firstRivalName = (await firstRival.locator('b').innerText()).trim();
+  if (firstRivalName !== 'Team 5') {
+    throw new Error('the team being played is not listed first, found ' + firstRivalName);
+  }
+  if (!await firstRival.locator('.chip').filter({ hasText: 'opponent' }).count()) {
+    throw new Error('the opponent is listed first and nothing says why');
+  }
+
+  /*
+   * AND EVERY ROSTER CARRIES ITS TOTALS. Read off the rendered footer rather
+   * than the endpoint: the numbers are live and change weekly, so what is
+   * asserted is the shape -- a starters total and a best under every column,
+   * on every team, with the bench left out of both.
+   *
+   * `Best possible` is checked to be no smaller than `Starters` for the two
+   * desks that publish per-player numbers. That is the one thing about these
+   * numbers that must hold whatever the week says: the best legal lineup is a
+   * maximum over the lineups the roster can make, and the one it has now is one
+   * of them. A best below it would mean the seating had lost points.
+   */
+  for (const block of await page.locator('.season-roster').all()) {
+    const rows = await block.locator('tfoot tr').all();
+    if (rows.length !== 2) {
+      throw new Error('a roster shows ' + rows.length + ' total rows, expected a total and a best');
+    }
+    const read = async (row) => (await row.locator('td').allInnerTexts())
+      .slice(1).map((cell) => cell.trim());
+    const now = await read(rows[0]);
+    const best = await read(rows[1]);
+    if (!now.length) throw new Error('a roster shows no projected total at all');
+    now.forEach((value, at) => {
+      // The dash is the screen's word for "no claim", which is what Yahoo's
+      // column carries in the best row and is not a failure.
+      if (value === '—' || best[at] === '—') return;
+      if (Number(best[at]) + 0.05 < Number(value)) {
+        throw new Error('a best lineup scores under the one already set: '
+          + best[at] + ' against ' + value);
+      }
+    });
   }
 
   /*
@@ -883,6 +997,13 @@ async function main() {
     // The user's own roster, which is the week's panel: it is not in the list
     // below, because everything that list would say about it is said there.
     await shoot(page, '.panel:has(.season-desk)', 'season-roster');
+    /*
+     * The rest of the league, which the full-page shot scales down past
+     * reading. It is where the projections per team live -- a column each for
+     * the desks, the team being played at the top, and the totals under every
+     * one of them -- so it is worth its own photograph.
+     */
+    await shoot(page, '.panel:has(.season-roster)', 'season-rivals');
 
     if (errors.length) failures.push('yahoo-season: ' + errors.join(' | '));
     await page.close();

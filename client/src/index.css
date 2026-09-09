@@ -2107,6 +2107,20 @@ input[type='range']::-moz-range-thumb {
    rather than hides. The draft's roster panel dims an empty slot the same way. */
 .season-table tr[data-bench='true'] td { opacity: 0.55; }
 
+/* The totals under a roster: what the lineup as it stands is projected to
+   score, and what its best legal arrangement would. Set apart from the players
+   by a full-strength rule, because the last body row already has a soft one and
+   two the same weight would read the totals as one more player. The second row
+   is dimmed -- it is the hypothetical, and the eye should land on the first. */
+.season-table tfoot td {
+  padding-top: 6px;
+  border-bottom: none;
+  font-weight: 600;
+}
+
+.season-table tfoot tr:first-child td { border-top: 1px solid var(--line); }
+.season-table tfoot tr + tr td { padding-top: 0; font-weight: 400; }
+
 /* A grid rather than a wrapped row, so a value sits with its own rule and with
    no other. Thirty-five pairs inline left the pairing to the eye and the eye
    got it wrong. */

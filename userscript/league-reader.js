@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo league reader
 // @namespace    fantasy-football-draft-room
-// @version      1.2.0
+// @version      1.3.0
 // @description  Read your own Yahoo league in season - settings, scoring, teams and rosters - and hand it to the draft room running on your machine. Reads only; never writes to Yahoo.
 // @match        https://*.fantasysports.yahoo.com/f1/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
@@ -443,9 +443,22 @@
       const profile = await readJson('/users;use_login=1/profile');
       const leagueKey = 'nfl.l.' + where.leagueId;
 
-      const [settings, teams] = await Promise.all([
+      /*
+       * The scoreboard rides alongside, and it answers two things nothing else
+       * here could. It pairs the teams up, so the app can put the team you are
+       * playing at the top of the league rather than leaving it in team order;
+       * and each team node carries `team_projected_points`, which is the number
+       * Yahoo prints on its own matchup card and the only Yahoo projection this
+       * project has ever been able to reach.
+       *
+       * It is caught rather than awaited bare. Everything else in a snapshot is
+       * worth having without it, and a league whose scoreboard will not come
+       * should still read -- the service takes a null here as "not sent".
+       */
+      const [settings, teams, scoreboard] = await Promise.all([
         readJson('/league/' + leagueKey + '/settings'),
         readJson('/league/' + leagueKey + '/teams'),
+        readJson('/league/' + leagueKey + '/scoreboard').catch(() => null),
       ]);
 
       /*
@@ -475,7 +488,7 @@
       const res = await fetch(SERVICE + '/api/yahoo/league/' + where.leagueId + '/snapshot', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ settings, teams, rosters, profile }),
+        body: JSON.stringify({ settings, teams, rosters, profile, scoreboard }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || ('the service answered ' + res.status));

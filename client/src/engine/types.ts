@@ -930,6 +930,20 @@ export interface SeasonTeam {
   managers: { guid: string | null; nickname: string | null }[];
 }
 
+/**
+ * One pairing, with Yahoo's own projection for each side.
+ *
+ * `projectedPoints` is a TEAM TOTAL and the only Yahoo projection this project
+ * can reach: `docs/in-season-data-sources.md` records none at any public game
+ * path, and this comes off the league scoreboard behind the session cookie.
+ * Yahoo prints a per-player Proj column on its own roster page; no fantasy-v2
+ * path is known to publish it, so there is a total here and nothing per player.
+ */
+export interface LeagueMatchup {
+  week: number | null;
+  teams: { teamKey: string | null; projectedPoints: number | null }[];
+}
+
 /** The league as the browser read it, before anything was joined to it. */
 export interface LeagueSnapshot {
   leagueKey: string;
@@ -952,6 +966,15 @@ export interface LeagueSnapshot {
   trades: { endDate: string | null; ratifyType: string | null };
   ownGuid: string | null;
   ownTeamKey: string | null;
+  /**
+   * This week's pairings, and **null where the reader sent no scoreboard**.
+   *
+   * An installed copy older than 2026-09-09 does not fetch one. Null is "not
+   * sent"; an empty list would be a claim that nobody plays anybody.
+   */
+  matchups: LeagueMatchup[] | null;
+  /** Whom you play, or null where no scoreboard came or the guid found no team. */
+  opponentTeamKey: string | null;
   teams: SeasonTeam[];
   rosters: { teamKey: string | null; week: number | null; players: unknown[] }[];
   /**
@@ -1170,6 +1193,40 @@ export interface LineupRosterPlayer {
 }
 
 /**
+ * What one desk makes of a whole team: the lineup it has now, and its best.
+ *
+ * `best` is null for Yahoo alone, and the null is a statement rather than a
+ * gap. A best lineup is a re-seating and a re-seating needs a number against
+ * each player; Yahoo publishes a team total and no per-player projection this
+ * project can reach, so there is nothing to re-seat. That is a different thing
+ * from a best that happens to equal the total.
+ */
+export interface LineupTeamTotal {
+  /** What the lineup as it stands scores, with the bench and IR left out. */
+  now: number;
+  best: number | null;
+}
+
+/**
+ * Every team in the league, scored the same way the user's own team is.
+ *
+ * Scored through the same `lineupAdvice` rather than a second sum, so a rival's
+ * total means exactly what the user's means: the same exclusion of the seats no
+ * desk projects, and the same refusal to invent a zero for a player on bye.
+ */
+export interface LineupTeam {
+  teamKey: string | null;
+  /** Each desk's number per player, by player key. Null is nobody projected him. */
+  points: Record<string, { sleeper: number | null; espn: number | null }>;
+  /** Null for a desk that did not answer, which is not a total of zero. */
+  totals: {
+    sleeper: LineupTeamTotal | null;
+    espn: LineupTeamTotal | null;
+    yahoo: LineupTeamTotal | null;
+  };
+}
+
+/**
  * This week's lineup advice for the user's own team.
  *
  * BOTH DESKS, NEVER AVERAGED, which is Y9.0's measurement and not a
@@ -1205,6 +1262,10 @@ export interface LineupRead {
     locksKnown: boolean;
   } | null;
   roster?: LineupRosterPlayer[];
+  /** Every roster in the league, scored. The user's own is in here too. */
+  teams?: LineupTeam[];
+  /** Whom the user plays, or null where the installed reader sent no scoreboard. */
+  opponentTeamKey?: string | null;
   /** The league's own rules each desk cannot score, per desk rather than per player. */
   unsupported?: {
     sleeper: { statId: string; name: string; points: number; reason: string }[];
