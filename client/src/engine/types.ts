@@ -1040,11 +1040,10 @@ export interface SeasonLeagueList {
 /**
  * One seat of the league's starting lineup, and who is in it.
  *
- * `id` distinguishes two seats of the same slot, which a slot name cannot: a
+ * `index` distinguishes two seats of the same slot, which a slot name cannot: a
  * league starting two backs has two `RB` seats and they are not the same seat.
  */
 export interface LineupSeat {
-  id: string;
   slot: string;
   index: number;
   accepts: string[];

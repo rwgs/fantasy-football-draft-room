@@ -121,6 +121,20 @@ written down as unknowable and which Yahoo publishes outright.
 
 ### Fixed
 
+**A player both desks start is agreement, not two disagreements.** Reported from
+a real board on 2026-09-09: a lineup with two `RB` seats showed Christian
+McCaffrey started by Sleeper in one and by ESPN in the other, and the screen
+named him on both sides of the disputed table while reporting nothing as
+agreed. The seats of a slot are interchangeable, so that is one disagreement
+about the other back, not two about him.
+
+Each desk sorts its candidates by its own points, so the two hand out the seats
+of a slot in different orders, and comparing them seat by seat read the shuffle
+as a difference of opinion. It is the same defect the swap table had and fixed
+once already, one level up: agreement and dispute are now settled per slot, and
+whoever is left over in a slot pairs up by each desk's own ranking rather than
+by the arbitrary order the matching seated them.
+
 **Un-starring a player takes him out of your Yahoo queue.** Reported live in
 league 876392 on 2026-09-07, by the run that first proved the write works at
 all: the star could add and could never take back. Nothing distinguishes the

@@ -590,6 +590,35 @@ test('two desks agreeing report agreement, which is a stronger claim than one de
   ]);
 });
 
+test('a player both desks start in the same slot is agreement, not two disputes', () => {
+  /*
+   * The two-interchangeable-seats defect one level up from `lineupMoves`.
+   * Candidates are sorted by each desk's own points, so the desks hand out the
+   * seats of a slot in different orders, and a player both of them start comes
+   * out of the matching in `RB#0` on one desk and `RB#1` on the other. Seen on
+   * a real board: Christian McCaffrey started by both desks, reported as two
+   * disputed seats and nothing agreed.
+   */
+  const slots = [slot('RB', 2, ['RB'])];
+  const players = [
+    player('mccaffrey', ['RB'], 'BN'), player('etienne', ['RB'], 'BN'),
+    player('dowdle', ['RB'], 'BN'),
+  ];
+  const sleeper = pointsOf({ mccaffrey: 18, etienne: 12, dowdle: 9 });
+  const espn = pointsOf({ dowdle: 15, mccaffrey: 13, etienne: 8 });
+
+  const advice = lineupAdvice({ slots, players, sources: { sleeper, espn } });
+
+  // Both desks start him at RB, so there is nothing for the user to decide.
+  assert.deepEqual(advice.agreed, [{ slot: 'RB', player: 'mccaffrey' }]);
+
+  // And exactly one real disagreement: the other RB seat.
+  assert.equal(advice.disputed.length, 1);
+  assert.deepEqual(advice.disputed[0].picks.map((pick) => pick.player),
+    ['etienne', 'dowdle']);
+  assert.equal(advice.disputed[0].slot, 'RB');
+});
+
 test('a desk that did not answer is absent, and one that answered with nothing is not', () => {
   const slots = [slot('WR', 1, ['WR'])];
   const players = [player('wr1', ['WR'], 'WR')];

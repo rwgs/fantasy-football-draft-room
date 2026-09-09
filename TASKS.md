@@ -2182,6 +2182,43 @@ calculation and need neither a browser nor a real league.
     new modules into any route it serves.
   - Dependencies or blockers: none. Y9.4 can start; it reads this endpoint.
 
+- [x] Y9.3a: A player both desks start is agreement, not two disagreements.
+  - **Reported from a real board on 2026-09-09, with a screenshot.** A lineup
+    with two `RB` seats showed Christian McCaffrey started by Sleeper in one and
+    by ESPN in the other, and the disputed table named him on both sides while
+    reporting nothing as agreed. One disagreement about the other back, shown as
+    two about him -- and it hid the one seat that is actually in dispute.
+  - The fault is the one Y9.3 already found and fixed in `lineupMoves`, one
+    level up and left there: `lineupAdvice` compared the desks by `seat.id`.
+    Each desk sorts its candidates by its own points, so the two hand out the
+    seats of a slot in different orders, and the shuffle read as a difference of
+    opinion. Y9.2's own note on the seat `id` says what it was for -- comparing
+    two desks seat by seat -- so the field went with the comparison. Nothing
+    else read it.
+  - `agreed` and `disputed` are now settled per slot, on `lineupMoves`'
+    reasoning. Whoever is left in a slot after the players every desk starts
+    pairs up by each desk's own ranking rather than by the order the matching
+    seated them, which would set a desk's 20-point pick against the other's
+    5-point one and report a spread that is an artifact of the matching.
+  - The check that fails on the old code: `a player both desks start in the same
+    slot is agreement, not two disputes` in `server/src/lineup.test.js`, three
+    backs on the bench and two `RB` seats, with the desks ordering them
+    differently. It asserts one agreed player and one disputed seat.
+  - **The `shots` fixture was already triggering it, which is the demonstration
+    rather than an assertion.** Photographed either side of the fix on the same
+    fixture: before, `2 seats the two desks fill differently` with Chase Brown
+    on both sides of the table; after, `One seat`, Omarion Hampton against
+    Ashton Jeanty, and Chase Brown reported as agreed. So the screen the owner
+    reported was reproducible without a real league.
+  - Local gate: `server:test` 184, typecheck clean, `bridge:test` 7,
+    `engine:test` green, build clean, `shots` clean with no console errors, lint
+    unchanged. Driven against an isolated service and client on 5179 and 5180,
+    restarted between the before and after runs; 5178 was never touched.
+  - Manual validation outstanding: the owner's own board, which is where it was
+    reported. `engine:test`'s two fixture suites skipped, since
+    `client/fixtures.local.json` is absent here.
+  - Dependencies or blockers: none.
+
 - [ ] Y9.4: The same reading over Yahoo's own league pages.
   - Scope: a panel on the league page, on the pattern `userscript/draft-panel.js`
     proves -- one element holding a shadow root, pointer-transparent except its

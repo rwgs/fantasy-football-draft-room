@@ -94,15 +94,7 @@ export function startingSeats(slots = []) {
     }
     const count = Number.isFinite(slot.count) ? slot.count : 0;
     for (let index = 0; index < count; index += 1) {
-      /*
-       * `id` because two desks are compared seat by seat and each desk's
-       * lineup is computed separately, so it holds its own seat objects.
-       * Comparing those by identity silently matched nothing and reported
-       * every seat as disputed, including the ones both desks agreed on.
-       */
-      seats.push({
-        id: `${slot.position}#${index}`, slot: slot.position, index, accepts: slot.accepts,
-      });
+      seats.push({ slot: slot.position, index, accepts: slot.accepts });
     }
   }
 
@@ -417,44 +409,76 @@ export function lineupAdvice({
   const agreed = [];
   if (names.length > 1) {
     const { seats } = desks[names[0]];
-    for (const s of seats) {
-      const picks = names.map((name) => ({
-        desk: name,
-        player: desks[name].lineup.find((entry) => entry.seat.id === s.id)?.player ?? null,
-      }));
-      const keys = new Set(picks.map(({ player }) => player?.playerKey ?? null));
-      if (keys.size === 1) {
-        if (picks[0].player) agreed.push({ slot: s.slot, player: nameFor(picks[0].player) });
-        continue;
-      }
+    const valueOf = (name, player) => sources[name].get(player.playerKey) ?? 0;
+
+    /*
+     * BY SLOT AND NOT BY SEAT, which is `lineupMoves`' grouping and the same
+     * defect one level up from it. The seats of a slot are interchangeable, and
+     * each desk seats its candidates in its own order of points, so a player
+     * both desks start falls out of one matching in the first `RB` seat and out
+     * of the other in the second. Compared seat by seat that read as two
+     * disagreements and no agreement: seen on a real board, where Christian
+     * McCaffrey was started by both desks and named in both disputed rows. He is
+     * not a decision the user has to make, and putting him in those rows hid
+     * the one seat that is.
+     */
+    for (const slot of new Set(seats.map((s) => s.slot))) {
+      const started = names.map((name) => desks[name].lineup
+        .filter((entry) => entry.seat.slot === slot)
+        .map((entry) => entry.player));
+
+      const everyone = started[0].filter((player) => started
+        .every((lineup) => lineup.some((other) => other.playerKey === player.playerKey)));
+      for (const player of everyone) agreed.push({ slot, player: nameFor(player) });
+
       /*
-       * How far apart the desks are about this seat, taken as the widest view
-       * any one of them holds of the players it is choosing between. A desk that
-       * separates them by a point is reporting a coin flip; one that separates
-       * them by six is reporting a real difference that the other desk
-       * contradicts, which is more worth a reader's attention rather than less.
+       * Whoever is left pairs up as the seats actually in dispute, each desk's
+       * remainder taken in its own order of points. Any pairing is legal, since
+       * the seats are interchangeable, but pairing them as the matching happened
+       * to hand them out could set a desk's 20-point pick against the other's
+       * 5-point one, and report a spread that is an artifact of the matching
+       * rather than a difference of opinion.
        */
-      let spread = 0;
-      for (const name of names) {
-        const values = picks
-          .map(({ player }) => (player ? sources[name].get(player.playerKey) : null))
-          .filter((value) => typeof value === 'number');
-        if (values.length > 1) spread = Math.max(spread, Math.max(...values) - Math.min(...values));
+      const settled = new Set(everyone.map((player) => player.playerKey));
+      const left = names.map((name, at) => started[at]
+        .filter((player) => !settled.has(player.playerKey))
+        .sort((a, b) => valueOf(name, b) - valueOf(name, a)));
+      const rows = Math.max(...left.map((lineup) => lineup.length));
+
+      for (let row = 0; row < rows; row += 1) {
+        const picks = names.map((name, at) => ({ desk: name, player: left[at][row] ?? null }));
+        /*
+         * How far apart the desks are about this seat, taken as the widest view
+         * any one of them holds of the players it is choosing between. A desk
+         * that separates them by a point is reporting a coin flip; one that
+         * separates them by six is reporting a real difference that the other
+         * desk contradicts, which is more worth a reader's attention rather
+         * than less.
+         */
+        let spread = 0;
+        for (const name of names) {
+          const values = picks
+            .map(({ player }) => (player ? sources[name].get(player.playerKey) : null))
+            .filter((value) => typeof value === 'number');
+          if (values.length > 1) {
+            spread = Math.max(spread, Math.max(...values) - Math.min(...values));
+          }
+        }
+        disputed.push({
+          slot,
+          picks: picks.map(({ desk, player }) => ({
+            desk,
+            player: player ? nameFor(player) : null,
+            points: Object.fromEntries(names.map((name) => [
+              name, player ? sources[name].get(player.playerKey) ?? null : null,
+            ])),
+          })),
+          spread,
+          // Whether the disagreement is worth acting on or is two desks
+          // splitting hairs. Reported, not applied: nothing here picks a winner.
+          material: spread >= MATERIAL_SPREAD,
+        });
       }
-      disputed.push({
-        slot: s.slot,
-        picks: picks.map(({ desk, player }) => ({
-          desk,
-          player: player ? nameFor(player) : null,
-          points: Object.fromEntries(names.map((name) => [
-            name, player ? sources[name].get(player.playerKey) ?? null : null,
-          ])),
-        })),
-        spread,
-        // Whether the disagreement is worth acting on or is two desks splitting
-        // hairs. Reported, not applied: nothing here picks the winner.
-        material: spread >= MATERIAL_SPREAD,
-      });
     }
   }
 
