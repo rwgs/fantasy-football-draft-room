@@ -9,6 +9,68 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-09 The week's advice goes in the reader's panel, not a panel of its own
+
+Status: Accepted, by the repository owner. Supersedes the delivery half of
+`TASKS.md`'s Y9.4, which planned a separate bookmarklet; the acceptance criteria
+in that task are unchanged and are what this was built against.
+
+### Decision
+
+The advice over Yahoo's league pages is painted by
+`userscript/league-reader.js`, in the panel it already draws, immediately after
+each read. It is not a second install. `draft-panel.js` stays as it is: the
+draft room and the league page are different pages doing different jobs.
+
+### Why the plan changed
+
+Y9.4 was written on 2026-09-08, when the reader was a bookmarklet that ran only
+when clicked. A panel showing advice therefore had to be its own thing, because
+there was nothing already running on the league page to put it in.
+
+The entry above changed that the same day the panel was asked for. The reader is
+now a userscript that runs on every league page load and polls, so there *is*
+something already there — and it knows the one thing a separate panel would have
+to guess: when a fresh reading landed. The advice is fetched straight after the
+post that produced it, so what is on screen is always the reading above it. A
+separate panel would have had to poll the service on a timer and would still
+have shown advice from a snapshot it could not date.
+
+Against that, the cost of a second install: a second build to keep current, a
+second thing to go stale, and a second manager or bookmark for the user.
+
+### Cost, stated plainly
+
+**The advice display now rides inside a userscript**, and the 2026-09-05 panel
+decision refused exactly that — "a thing that needs no privileges should not
+inherit the failure modes of one that does". That reasoning was about the
+*bridge*, which must be injected at `document-start`. It does not transfer here:
+reading the league and showing what the app makes of it are one job on one page,
+and the reading already needs the manager. There is no privilege the display
+inherits that the reader was not already carrying.
+
+What is real is that a manager that stops running loses both halves at once. The
+answer is the same as the entry above: the bookmarklet still exists and still
+reads, the panel is visible whenever a beat is running, and the reader's build
+report is the piece still to build.
+
+**The advice sentences are a second copy of the app's**, with nothing checking
+they agree — the cost Y9.4 accepted in advance and the same one the draft take
+line already carries. `reader.test.mjs` pins the panel's own wording against a
+fixture of the endpoint's shape, which catches the panel drifting from the
+endpoint but not the panel drifting from the app's screen.
+
+### Rejected
+
+**A separate bookmarklet, per Y9.4 as written.** Above.
+
+**Letting the panel set a lineup.** Never considered seriously and recorded so
+nobody proposes it as an obvious extension: `SPEC.md` gives recommendations
+only, and setting the lineup stays the user's action in the page underneath.
+The one write this project makes to a platform is the draft queue, and the
+reasoning that justified it does not reach a roster move.
+
+
 ## 2026-09-09 The league reader is a userscript as well, and polls on a beat the user sets
 
 Status: Accepted, by the repository owner, on the condition the original entry

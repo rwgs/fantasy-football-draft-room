@@ -189,9 +189,14 @@ there; `never` makes it read on load only. Either way it says what it read,
 bottom right, and the service then answers `GET
 /api/yahoo/league/<league>/snapshot` with it.
 
-The page says which to choose and why. The short version: a userscript manager
-can go stale in silence and a bookmarklet cannot, so the bookmarklet is still
-there.
+The userscript's panel also shows the week's advice — what each desk would
+start and bench, who they agree on, and the one player they do not — off the
+same endpoint the app's screen reads. Setting the lineup stays your own action
+in the page underneath.
+
+The page says which install to choose and why. The short version: a userscript
+manager can go stale in silence and a bookmarklet cannot, so the bookmarklet is
+still there.
 
 **It only works on a Yahoo page**, which is the one way it differs from the
 panel. It reads Yahoo with the session your browser already holds, so this

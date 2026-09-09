@@ -137,6 +137,122 @@
     } catch { /* denied, so this session only; the beat below still changes */ }
   }
 
+  // ---- What the app makes of it -------------------------------------------
+
+  /*
+   * The advice, read back off the service and painted here.
+   *
+   * WHY IT IS IN THIS PANEL AND NOT A SECOND ONE. `TASKS.md` planned it as its
+   * own bookmarklet, on `draft-panel.js`'s pattern, and that was written before
+   * this file became a userscript. Now that it is, a second install would be a
+   * second thing to go stale and would have to poll the service and guess when
+   * a read had landed. This knows: the advice is fetched immediately after the
+   * post that produced it, so what is on screen is always the reading above it.
+   *
+   * It reads one address on the loopback. It never asks Yahoo for anything, and
+   * it never writes a lineup -- setting it stays the user's own action, in the
+   * page underneath. See `SPEC.md`.
+   */
+  let advised = '';
+
+  /**
+   * Anything from Yahoo or the service, safe to put in the panel.
+   *
+   * The names in here are a league's real players and real team names, arriving
+   * as text and going into markup. Escaped rather than trusted: this runs in the
+   * user's own signed-in Yahoo page, which is the last place to be relaxed about
+   * putting a string somebody else chose into `innerHTML`.
+   */
+  const esc = (text) => String(text === null || text === undefined ? '' : text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  /** How a desk is labelled, so a heading is a desk and not a field name. */
+  const DESK_LABEL = { sleeper: 'Sleeper', espn: 'ESPN' };
+
+  const points = (n) => (typeof n === 'number' ? n.toFixed(1) : '—');
+  const line = (text, colour) => `<div style="color:${colour || '#b9c2bd'}">${text}</div>`;
+
+  function adviceHtml(got) {
+    /*
+     * NO ADVICE IS NOT AN EMPTY LINEUP, and the service already says which of
+     * the several reasons it is. A panel that painted nothing here would be the
+     * failure the app's own screen was fixed for.
+     */
+    if (!got || !got.advice) {
+      return line(esc((got && (got.error || got.hint)) || 'No advice came back.'), '#e0b96c');
+    }
+
+    const advice = got.advice;
+    const answered = advice.answered || [];
+    if (!answered.length) {
+      return line('No projection desk answered, so there is nothing to advise.', '#e0b96c');
+    }
+
+    const desks = answered.map((key) => {
+      const desk = advice.desks[key];
+      /*
+       * A gain of null is not a gain of zero: a player in the lineup has no
+       * projection from this desk, so the difference is missing a term of
+       * unknown size. The app's screen makes the same distinction.
+       */
+      const gain = desk.gain === null || desk.gain === undefined ? 'gain unknown'
+        : desk.gain > 0 ? '+' + points(desk.gain) : 'no change';
+      const moves = desk.moves.length
+        ? desk.moves.map((move) => line(
+          '<span style="color:#6b7370">' + esc(move.slot) + '</span> '
+            + (move.out ? 'bench ' + esc(move.out.name) + ' → ' : 'start ')
+            + '<b style="color:#e8e6e3">' + esc(move.in.name) + '</b>',
+        )).join('')
+        : line('leaves the lineup as it is', '#6b7370');
+      return '<div style="margin-top:6px">'
+        + line('<b style="color:#e8e6e3">' + esc(DESK_LABEL[key] || key) + '</b> '
+          + points(desk.currentPoints) + ' now · ' + points(desk.points) + ' best · ' + gain)
+        + moves + '</div>';
+    }).join('');
+
+    // Who both desks start, and who they do not. The second is the decision;
+    // the first is why the rest of the roster is not in this list.
+    const agreed = advice.agreed && advice.agreed.length
+      ? line('Both desks start ' + advice.agreed.map((a) => esc(a.player)).join(', ') + '.',
+        '#6b7370')
+      : '';
+    const disputed = advice.disputed && advice.disputed.length
+      ? line('They disagree about ' + advice.disputed.map((row) => row.picks
+        .map((pick) => esc(pick.player || 'nobody') + (pick.slot ? ' ' + esc(pick.slot) : ''))
+        .join(' or ')).join('; ') + '.', '#e9c46a')
+      : '';
+
+    /*
+     * Said here as well as on the app's screen, and it belongs here more: this
+     * panel is on the page where the moves get made. Yahoo publishes no kickoff
+     * time at any scope, so advice offered as though nothing had locked is
+     * advice to make moves Yahoo may refuse.
+     */
+    const locks = advice.locksKnown ? ''
+      : line('Locks are not known — check each move is still allowed.', '#6b7370');
+
+    return '<div style="margin-top:9px; padding-top:8px; border-top:1px solid #2a3230;'
+      + ' white-space:normal">'
+      + line('<b style="color:#e8e6e3">This week</b>'
+        + (got.week ? ' <span style="color:#6b7370">week ' + esc(got.week) + '</span>' : ''))
+      + desks + agreed + disputed + locks
+      + '</div>';
+  }
+
+  /** Read the advice for the league just posted, and never throw over it. */
+  async function readAdvice(leagueId) {
+    try {
+      const res = await fetch(SERVICE + '/api/yahoo/league/' + leagueId + '/lineup');
+      advised = adviceHtml(await res.json());
+    } catch (err) {
+      // Said rather than left blank, on the same rule as everything else here:
+      // a panel that shows nothing gives nowhere to look.
+      advised = line('Could not reach the advice on ' + SERVICE + ': '
+        + esc(err && err.message ? err.message : err), '#e06c6c');
+    }
+  }
+
   // ---- Saying what happened --------------------------------------------
 
   /*
@@ -173,11 +289,12 @@
 
     host.shadowRoot.innerHTML = `
       <div style="position:fixed; right:16px; bottom:16px; z-index:2147483647;
-                  max-width:380px; padding:12px 14px; border-radius:8px;
+                  max-width:380px; max-height:72vh; overflow:auto;
+                  padding:12px 14px; border-radius:8px;
                   background:#0f1211; color:${colour}; border:1px solid #2a3230;
                   font:13px/1.5 -apple-system, Segoe UI, Roboto, sans-serif;
                   box-shadow:0 6px 24px rgba(0,0,0,.45); white-space:pre-wrap;">
-        <b style="color:#e8e6e3">Draft room</b><br>${text}${control}
+        <b style="color:#e8e6e3">Draft room</b><br>${text}${advised}${control}
       </div>`;
 
     if (!AUTO) {
@@ -348,14 +465,30 @@
       // because "7 rosters" in an 8 team league is the interesting number and
       // "7 rosters" alone is not. A roster that failed is named on the same
       // message rather than in one that this would replace a moment later.
-      show('Read ' + (body.name || 'the league') + ': ' + (body.teams || []).length
+      const said = 'Read ' + esc(body.name || 'the league') + ': ' + (body.teams || []).length
         + ' teams, ' + slots + ' starting slots, ' + (body.scoring || []).length
         + ' scoring rules, ' + read.length + ' rosters holding ' + players + ' players.'
         + (missing.length ? '\nTeam' + (missing.length > 1 ? 's ' : ' ') + missing.join(', ')
           + ' did not answer, so ' + (missing.length > 1 ? 'those rosters are' : 'that roster is')
           + ' missing.' : '')
-        + (STAMPED ? '' : '\n(running from source, not a stamped copy)'),
-      missing.length ? 'bad' : undefined);
+        + (STAMPED ? '' : '\n(running from source, not a stamped copy)');
+      const tone = missing.length ? 'bad' : undefined;
+      show(said, tone);
+
+      /*
+       * Then the advice, and only where the panel stays to hold it. As a
+       * bookmarklet this message fades after nine seconds, so advice painted
+       * under it would be gone before it was read, and the app's own screen is
+       * a better place to have put it.
+       *
+       * Painted in a second pass rather than awaited before the first, so the
+       * reading is on screen while the advice is being worked out. It is the
+       * slower half: the service scores every roster against two desks.
+       */
+      if (AUTO) {
+        await readAdvice(where.leagueId);
+        show(said, tone);
+      }
     } catch (err) {
       // Every fault is said out loud. A bookmarklet that fails silently is
       // worse than no bookmarklet, because there is nowhere to look.

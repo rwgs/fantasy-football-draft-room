@@ -62,6 +62,42 @@ const TEAMS = {
 };
 const ROSTER = { fantasy_content: { team: [[{ team_key: 'nfl.l.1.t.1' }], { roster: {} }] } };
 
+/**
+ * What the service answers for the week's advice, in the endpoint's own shape.
+ *
+ * Trimmed to the fields the panel reads and no further, so a field it stops
+ * reading shows up here as a field nothing needs.
+ */
+const desk = (now, best, gain, moves) => ({
+  currentPoints: now, points: best, gain, moves,
+});
+const ADVICE = {
+  read: true,
+  week: 3,
+  advice: {
+    answered: ['sleeper', 'espn'],
+    desks: {
+      sleeper: desk(8.9, 12.5, 3.6, [{
+        slot: 'RB',
+        out: { playerKey: 'p1', name: 'Saquon Barkley' },
+        in: { playerKey: 'p2', name: 'Omarion Hampton' },
+      }]),
+      // No moves and no gain, which is the other thing a desk can say.
+      espn: desk(9.5, 9.5, 0, []),
+    },
+    agreed: [{ player: 'Chase Brown', slot: 'RB' }],
+    disputed: [{
+      picks: [
+        { desk: 'sleeper', player: 'Omarion Hampton', slot: 'RB', points: {} },
+        { desk: 'espn', player: 'Ashton Jeanty', slot: 'W/R/T', points: {} },
+      ],
+      spread: 0.4,
+      material: false,
+    }],
+    locksKnown: false,
+  },
+};
+
 let leagues = 0;
 
 /**
@@ -70,10 +106,11 @@ let leagues = 0;
  * Returns what it posted to the service and what its panel says, which between
  * them are everything it does.
  */
-function reader({ mode = 'userscript', every = null } = {}) {
+function reader({ mode = 'userscript', every = null, advice = ADVICE, reachable = true } = {}) {
   leagues += 1;
   const league = String(966000000 + leagues);
   const posted = [];
+  const asked = [];
   const store = new Map();
   if (every !== null) store.set('draftroom.readerMinutes', String(every));
 
@@ -111,6 +148,18 @@ function reader({ mode = 'userscript', every = null } = {}) {
 
   const fetch_ = async (url, opts) => {
     const at = String(url);
+    /*
+     * Before the snapshot branch, because both addresses start
+     * `/api/yahoo/league/<id>` and the advice is the one with a tail. Getting
+     * that order wrong is silent: the advice read lands on the snapshot branch,
+     * `opts` is undefined, and the reader's own catch turns the type error into
+     * a panel that says the service is unreachable.
+     */
+    if (at.includes('/lineup')) {
+      asked.push(at);
+      if (!reachable) throw new Error('connection refused');
+      return { ok: true, json: async () => advice };
+    }
     if (at.includes('/api/yahoo/league/')) {
       assert.ok(at.includes(league), 'a reader posted to a league that is not its own');
       posted.push(JSON.parse(opts.body));
@@ -142,6 +191,8 @@ function reader({ mode = 'userscript', every = null } = {}) {
   return {
     league,
     posted,
+    /** Every advice read, so a copy that asked for none can be told apart. */
+    asked,
     store,
     said: () => shadow.innerHTML,
     settle: (ms = 400) => new Promise((done) => { setTimeout(done, ms); }),
@@ -199,4 +250,89 @@ test('the userscript panel offers the beat and marks the one in force', async ()
   // is a panel that cannot tell a running beat from a stopped one.
   assert.match(said, /data-min="10"[^>]*#7fca88/);
   assert.equal(r.posted.length, 1, 'the default is a beat, so this has not fired yet');
+});
+
+test('it paints the advice the app would show, off the same endpoint', async () => {
+  const r = reader({ every: 0 });
+  await r.settle();
+
+  assert.equal(r.asked.length, 1, 'the advice was read once, after the snapshot');
+  assert.match(r.asked[0], new RegExp('/api/yahoo/league/' + r.league + '/lineup'));
+
+  const said = r.said();
+  // The swap, named as the seat the user edits and the two players in it.
+  assert.match(said, /RB/);
+  assert.match(said, /bench Saquon Barkley/);
+  assert.match(said, /Omarion Hampton/);
+  // Both desks, with what each makes of the lineup as it stands.
+  assert.match(said, /Sleeper<\/b> 8\.9 now · 12\.5 best · \+3\.6/);
+  assert.match(said, /ESPN<\/b> 9\.5 now · 9\.5 best · no change/);
+  assert.match(said, /leaves the lineup as it is/);
+  // And the two halves of the disagreement, the same way the screen puts them.
+  assert.match(said, /Both desks start Chase Brown/);
+  assert.match(said, /disagree about Omarion Hampton RB or Ashton Jeanty W\/R\/T/);
+  /*
+   * The locks caution belongs here more than on the app's screen, because this
+   * panel is on the page where the moves get made and Yahoo publishes no
+   * kickoff time at any scope.
+   */
+  assert.match(said, /Locks are not known/);
+});
+
+test('a gain of null is unknown and never a gain of nothing', async () => {
+  // A starter this desk cannot score, so the difference between the two totals
+  // is missing a term of unknown size. Zero there would be a confident claim.
+  const advice = structuredClone(ADVICE);
+  advice.advice.desks.sleeper.gain = null;
+  const r = reader({ every: 0, advice });
+  await r.settle();
+
+  assert.match(r.said(), /gain unknown/);
+  assert.doesNotMatch(r.said(), /\+0\.0/);
+});
+
+test('advice that cannot be reached is said out loud, not left blank', async () => {
+  const r = reader({ every: 0, reachable: false });
+  await r.settle();
+
+  // The reading still stands: the league was read, only the advice was not.
+  assert.equal(r.posted.length, 1);
+  assert.match(r.said(), /Read Test League/);
+  assert.match(r.said(), /Could not reach the advice/);
+});
+
+test('a refusal from the service is repeated rather than painted as no advice', async () => {
+  // Read, and not advisable. The service says which of several reasons, and a
+  // panel that showed nothing here would be the defect the app's screen fixed.
+  const r = reader({
+    every: 0,
+    advice: { read: true, advice: null, error: 'No roster in this snapshot matched your account.' },
+  });
+  await r.settle();
+
+  assert.match(r.said(), /No roster in this snapshot matched your account/);
+});
+
+test('a name out of Yahoo cannot put markup into the panel', async () => {
+  /*
+   * These names are a real league's real players, arriving as text and going
+   * into `innerHTML` on the user's own signed-in Yahoo page. Escaped rather
+   * than trusted, which is cheap here and is the last place to be relaxed
+   * about it.
+   */
+  const advice = structuredClone(ADVICE);
+  advice.advice.agreed = [{ player: '<img src=x onerror="alert(1)">', slot: 'RB' }];
+  const r = reader({ every: 0, advice });
+  await r.settle();
+
+  assert.doesNotMatch(r.said(), /<img src=x/);
+  assert.match(r.said(), /&lt;img src=x/);
+});
+
+test('a bookmarklet copy asks for no advice, since its panel does not stay', async () => {
+  const r = reader({ mode: 'bookmarklet', every: 0 });
+  await r.settle();
+
+  assert.equal(r.posted.length, 1, 'it still reads the league');
+  assert.deepEqual(r.asked, [], 'it fetched advice its panel would drop nine seconds later');
 });

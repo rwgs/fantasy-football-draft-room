@@ -56,9 +56,11 @@ same player.
   `league-reader.js` is the in-season half and a separate install: one file
   served two ways, as a bookmarklet that reads once and as a userscript that
   reads on page load and then on a beat the user sets. The service stamps which,
-  because nothing inside a script can tell how it was invoked. It does not
-  report its build back yet, so a stale reader polls perfectly while posting a
-  shape the service has moved on from.
+  because nothing inside a script can tell how it was invoked. The userscript
+  copy also paints the week's advice in that panel, off the same endpoint the
+  app's screen reads, which is where Y9.4 landed rather than in a second
+  install. It does not report its build back yet, so a stale reader polls
+  perfectly while posting a shape the service has moved on from.
 
 Nothing is generated or built into the tree. `client/dist` is a build output
 and `server/data/cache` is a cache; neither is edited by hand.

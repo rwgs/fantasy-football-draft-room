@@ -12,6 +12,22 @@ fixed.
 
 ### Added
 
+**The week's advice, over Yahoo's own league page.** The reader's panel now
+shows what the app makes of the league it just read: what each desk would start
+and bench, what the lineup scores now against the best one available, who both
+desks agree on, and the one player they do not. It is the same endpoint the
+app's screen reads, so the two agree by construction rather than by care.
+
+It sits in the panel the reader already draws rather than being a second thing
+to install, which is a change of plan the reader's own beat made possible: the
+advice is fetched straight after the reading that produced it, so what is on
+screen is never advice about a snapshot it cannot date. A caution rides with it
+that matters more here than on the app's screen, because this is the page where
+the moves get made - Yahoo publishes no kickoff time at any scope, so whether a
+player has already locked is not known, and each move wants checking before it
+is set. Nothing here sets a lineup; that stays your action in the page
+underneath.
+
 **The league reader can keep itself current.** It installs as a userscript now
 as well as a bookmarklet, from the same file and the same page: pick the
 bookmarklet for one reading when you click it, or the userscript to have your

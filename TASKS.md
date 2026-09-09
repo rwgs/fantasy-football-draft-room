@@ -1933,8 +1933,13 @@ are divided between them and none was dropped.
 
 Split from `PLAN.md` and from Y9.0's measurement, which released the hold Phase
 9 was carrying. The split was written on 2026-09-08 and stopped at, on the
-owner's instruction; **implementation resumed on 2026-09-09 and Y9.1 is
-built.** Y9.2 onward is unstarted. Each is one reviewable outcome.
+owner's instruction; **implementation resumed on 2026-09-09 and Y9.0 to Y9.4
+are built**, with Y9.3a and Y9.3b two rounds of one defect the owner reported
+from a real board. Each is one reviewable outcome.
+
+The one thing that did not go as split: Y9.4's panel is the league reader's own
+rather than a second install, because Y8.7 made the reader a userscript on the
+same day and put something on that page already. See `DECISIONS.md`.
 
 Two surfaces, in the order the 2026-09-08 decision set: the app's screen first,
 a panel over Yahoo's league pages second. The first two tasks are pure
@@ -2334,29 +2339,73 @@ calculation and need neither a browser nor a real league.
     is absent here.
   - Dependencies or blockers: none.
 
-- [ ] Y9.4: The same reading over Yahoo's own league pages.
-  - Scope: a panel on the league page, on the pattern `userscript/draft-panel.js`
-    proves -- one element holding a shadow root, pointer-transparent except its
-    close button, no storage, no key handler, no focus. Installed from the
-    service as a bookmarklet and build-stamped, as both the panel and the
-    league reader already are. It reads the advice endpoint on the loopback and
-    paints it. It never talks to Yahoo and never writes a lineup.
-  - Acceptance criteria: the panel's swaps and numbers are the screen's, from
-    the same endpoint. A click where it sits still reaches the page underneath.
-    It says when it cannot reach the service instead of showing nothing. Its
-    build stamp reports a stale copy the way the other two do.
-  - Automated validation: the endpoint and the build stamp, in
-    `npm run server:test`. **The rendering cannot be checked** -- `shots`
-    drives this app and the panel renders on a Yahoo page, which is the same
-    gap the draft panel has and is recorded in the 2026-09-08 decision rather
-    than discovered here.
-  - Manual validation: required, and it is the only validation of the
-    rendering. On the real league page, beside the app, confirming the two
-    agree.
-  - Known cost, accepted in advance: the advice sentences become a second copy
-    with nothing checking they agree, exactly as the take line already is. See
-    `DECISIONS.md`, 2026-09-08.
-  - Dependencies or blockers: Y9.3.
+- [x] Y9.4: The same reading over Yahoo's own league pages.
+  - **Delivered in the reader's own panel rather than a panel of its own**, on
+    the owner's decision, which is the one thing below that does not match the
+    scope as written. Recorded as `DECISIONS.md`, 2026-09-09, "The week's advice
+    goes in the reader's panel": the scope was written on 2026-09-08 when the
+    reader ran only when clicked, so a panel had to be its own install because
+    nothing was already on the page. Y8.7 changed that the same day the panel
+    was asked for.
+  - Scope as built: `userscript/league-reader.js` fetches
+    `GET /api/yahoo/league/<id>/lineup` on the loopback straight after each
+    post, and paints it under the reading in the panel it already draws. One
+    element holding a shadow root, no key handler, no focus. It never asks
+    Yahoo for anything and never writes a lineup. Only the userscript copy asks
+    for it -- the bookmarklet's panel fades after nine seconds, so advice under
+    it would be gone before it was read.
+  - What the arrangement buys over a separate panel, and it is the reason rather
+    than the tidiness: **it knows when a fresh reading landed.** The advice is
+    read immediately after the post that produced it, so what is on screen is
+    always the reading above it. A separate panel would have polled a timer and
+    shown advice from a snapshot it could not date.
+  - Acceptance criteria, all met:
+    - **The panel's swaps and numbers are the screen's, from the same
+      endpoint.** Demonstrated rather than asserted: the panel was rendered
+      against a live payload from a spare service holding the same fixture the
+      app's screen was photographed from, and the two agree line for line --
+      `Sleeper 8.9 now · 12.5 best · +3.6`, `ESPN 9.5 now · 12.8 best · +3.3`,
+      the same four moves each, the same four agreed players, and the same one
+      disagreement.
+    - **It says when it cannot reach the service** instead of showing nothing,
+      and repeats the service's own refusal where the league was read but cannot
+      be advised on. Both are checked, and the first showed up for real during
+      the render: the harness pointed at 5178 while the fixture was on 5179, and
+      the panel said so.
+    - A click where it sits still reaches the page underneath **except on the
+      beat control and the advice block**, which is a departure worth naming:
+      the panel takes the mouse in userscript mode because it now has a control
+      and can scroll. The bookmarklet's panel is still pointer-transparent.
+    - Its build stamp is the one Y8.7 added. **It still does not report back**,
+      so a stale copy is not detected -- carried from Y8.7 rather than fixed
+      here, and named in both decisions.
+  - Automated validation: `npm run reader:test`, now 11 cases. Six are new and
+    cover this: the panel paints the advice off the endpoint, a gain of null
+    reads as unknown rather than as nothing, an unreachable service is said out
+    loud, a refusal is repeated rather than painted as no advice, **a player
+    name out of Yahoo cannot put markup in the panel**, and the bookmarklet copy
+    asks for no advice at all.
+    - The escaping check earned its place: these names go into `innerHTML` on
+      the user's own signed-in Yahoo page, which is the last place to be relaxed
+      about it. The league name on the reading line was already interpolated
+      unescaped and now is not.
+    - **A harness defect the tests found first.** The fake `fetch` matched the
+      snapshot address before the advice address, and both start
+      `/api/yahoo/league/<id>`. The advice read landed on the snapshot branch,
+      `opts` came back undefined, and the reader's own catch turned the type
+      error into a panel reporting the service unreachable -- a green run
+      testing nothing. The ordering now carries a note.
+  - Manual validation: **required and outstanding.** The rendering was
+    photographed out of the real markup with real data, which is more than Y9.4
+    expected to be possible, but not on a Yahoo page. The owner has the
+    userscript installed and the panel appearing; what is unconfirmed is the
+    advice block on their own league beside the app.
+  - Known cost, accepted in advance and unchanged: the advice sentences are a
+    second copy with nothing checking they agree with the app's, exactly as the
+    draft take line already is. `reader.test.mjs` pins the panel against the
+    endpoint's shape, not against the screen.
+  - Dependencies or blockers: Y9.3 for the endpoint, Y8.7 for the panel that
+    holds this.
 
 ### Subsequent task planning
 
