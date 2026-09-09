@@ -1018,7 +1018,9 @@ Phase 4: prove the platform seam against real leagues.
 
 ## Planned next: Yahoo-first in-season advice
 
-Requested 2026-09-08. Planning only; all implementation tasks below are unstarted.
+Requested 2026-09-08, and no longer planning only: Phases 7 and 8 are built and
+Phase 9 is part built, each task carrying its own recorded result. Read the
+checkboxes rather than this line for what is done.
 The current draft tasks above remain open with their recorded validation gaps.
 See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 
@@ -2009,28 +2011,81 @@ calculation and need neither a browser nor a real league.
     row, which had no caller. Y9.2 should add it when it has one.
   - Dependencies or blockers: none.
 
-- [ ] Y9.2: The best legal lineup, and the swaps that reach it.
-  - Scope: a pure calculation over a scored snapshot. Eligibility from each
-    player's `eligible_positions` and the composite slots the 2026-09-08 join
-    decision already resolves; the best legal lineup by projected points; the
-    swaps from the current lineup to it and the projected difference; locked
-    players fixed; byes, IR and missing projections handled as data rather than
-    as zeros.
-  - Acceptance criteria: the greedy-flex trap is beaten -- a lineup filled
-    best-player-first into the first slot that fits must be shown to lose to
-    this, on a case where it does. A locked player never moves. A player with
-    no projection is never recommended in. Where the two sources order two
-    players oppositely and separate them by less than the three points Y9.0
-    identified, the advice reports the disagreement rather than
-    picking a side.
-  - Automated validation: `npm run engine:test` against exhaustive enumeration
-    of every legal lineup for small rosters, which is tractable at eight or
-    nine slots and is the only check that proves an optimum rather than
-    asserting one. Plus the flex trap, a locked player, a bye, and a roster
-    where the best legal lineup is the current one, which must produce no
-    advice rather than a zero-point swap.
-  - Manual validation: none required at this task; the surface is Y9.3.
-  - Dependencies or blockers: Y9.1.
+- [x] Y9.2: The best legal lineup, and the swaps that reach it.
+  - Scope: a pure calculation over a scored snapshot, built as
+    `server/src/lineup.js`. Eligibility from each player's `eligible_positions`
+    and the composite slots the 2026-09-08 join decision already resolves; the
+    best legal lineup by projected points; the swaps from the current lineup to
+    it and the projected difference; locked players fixed; byes, IR and missing
+    projections handled as data rather than as zeros. No endpoint and no
+    screen: Y9.3 owns those.
+  - Acceptance criteria, all met. The greedy-flex trap is beaten and the wrong
+    algorithm is written out in the test rather than described, so it can be
+    run: best-first scores 30 where the optimum is 38. A locked player never
+    moves, starting or benched, and is never named in a move either way. A
+    player with no projection is never seated. Two desks that fill a seat
+    differently report the disagreement carrying each desk's view of both
+    players, and nothing picks a side.
+  - **The algorithm earns its place, which took a second wrong algorithm to
+    establish.** A player is worth the same points in every seat he can fill,
+    so this is not the assignment problem: the seatable sets form a transversal
+    matroid and greedy by points is optimal, provided "still fits" is answered
+    by an augmenting path rather than by looking for a free seat. That is the
+    whole difference between this and best-first.
+  - Why `client/src/engine/roster.ts`'s `bestLineup` could not simply be reused,
+    found by looking rather than assumed: **it is exact there and its comment is
+    right.** In the draft engine a player has exactly one position, so each
+    dedicated slot's candidates are a subset of the flex's, the slot family is
+    laminar, and dedicated-first is optimal. Yahoo's `eligible_positions` breaks
+    that -- it really lists players as `WR,TE` -- and the family stops being
+    laminar. A check was added for exactly this: the dedicated-first greedy
+    scores 44 where the optimum is 57. Without it nothing justified the harder
+    algorithm over the one already in the repository. No defect in the draft
+    path; its shortcut simply does not transfer.
+  - Two bugs the checks caught rather than review. Preferring "any seat of the
+    slot a player is in" instead of the seat he actually occupies made two backs
+    in `RB` swap places: the total was right to the penny and the advice was two
+    moves that change nothing, which is exactly the zero-point swap the criteria
+    forbid. And each desk's lineup holds its own seat objects, so comparing
+    seats across desks by identity matched nothing and reported every seat as
+    disputed, including the agreed ones. Seats now carry an `id`.
+  - Automated validation: 22 checks in `npm run server:test`, taking it from
+    153 to 175, in `lineup.test.js`. The enumeration is a brute force written
+    from the rules and sharing no code with the implementation, over six roster
+    shapes including a dual-eligible player, a superflex, two flexes and more
+    seats than players -- so the two agreeing is evidence rather than a
+    tautology. **The suite bites:** removing the augmenting path leaves
+    best-first and fails exactly two checks, the trap and the enumeration, and
+    no others.
+  - Not `engine:test` as this task first said, and the reason is Y9.1's own
+    decision. That entry moved the seam service-side on 2026-09-09, after this
+    task was written; there is no endpoint in this slice, and AGENTS.md routes
+    what no caller can see to `server:test`. Y9.3 adds the endpoint and its
+    checks go to `engine:test` with the rest. The substance is unchanged: the
+    enumeration is the check either way.
+  - Locks are an **input**, not something this slice can discover. Yahoo
+    publishes no kickoff time at any scope and ESPN is the only source that has
+    one, so `locked` is a Set of player keys or null, and null is carried out as
+    `locksKnown: false` rather than read as "nothing is locked" -- the second is
+    a claim, and it is the claim that produces advice to make moves the user can
+    no longer make. Reading kickoff times is not built and is not Y9.2.
+  - Deliberately not built, on Y9.1's own reasoning: the `scoreProjection`
+    wrapper it deferred. `lineupAdvice` takes points as a Map per desk, so the
+    wrapper still has no caller, and adding it now would be Y9.3's endpoint
+    plumbing written before the endpoint that shapes it exists.
+  - Local gate: typecheck clean, `server:test` 175, `bridge:test` 7,
+    `engine:test` green against an isolated service on 5179, build clean,
+    `shots` clean with no console errors, lint unchanged at 44 warnings. Three
+    `engine:test` suites skipped for want of `client/fixtures.local.json`, which
+    is the open task above and not this change.
+  - Manual validation: none required and none possible -- nothing renders, and
+    no endpoint reaches it. The surface is Y9.3.
+  - Worth knowing: 5178 read STALE throughout, truthfully, because a new file
+    under `server/src` changed after that process started. It was not restarted,
+    since nothing imports `lineup.js` -- checked, not assumed -- so every route
+    the client touches behaves identically, and a restart would have cost
+    whatever that service was holding.
+  - Dependencies or blockers: none.
 
 - [ ] Y9.3: The weekly advice screen.
   - Scope: the advice on the app's own in-season surface, `SeasonScreen.tsx` or
