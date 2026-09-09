@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { maskLeague, maskTeam } from '../anon';
 import type {
-  SeasonFeed, SeasonLeagueHeld, SeasonRead, SeasonRoster, SeasonSlot,
+  SeasonFeed, SeasonLeagueHeld, SeasonPlayer, SeasonRead, SeasonRoster, SeasonSlot,
 } from '../engine/types';
 
 /**
@@ -106,12 +106,36 @@ function slotLine(slot: SeasonSlot): string {
     + list.slice(0, -1).join(', ') + ' or ' + list[list.length - 1] + ')';
 }
 
-function Roster({ roster, name, anonymous, index, pooled }: {
+/**
+ * The roster in the order a person reads it: the starting lineup in the
+ * league's own slot order, then the bench, then IR.
+ *
+ * YAHOO'S OWN ORDER IS NOT THAT, and the difference was reported from a real
+ * league: it returned `QB RB RB WR WR TE W/R/T` and then eight bench players
+ * and *then* the started kicker and defence, so the starting lineup was not
+ * contiguous and the two slots hardest to guess at were furthest from the top.
+ *
+ * The order comes from the league's own slot list rather than a table of
+ * positions written here, so a league that starts things in a different order
+ * reads in that order. `sort` is stable, so two players in one slot keep the
+ * order Yahoo gave them, and a slot the list does not mention sorts last rather
+ * than throwing the roster away.
+ */
+function inSlotOrder(players: SeasonPlayer[], slots: SeasonSlot[]): SeasonPlayer[] {
+  const rank = new Map(slots.map((slot, at) => [slot.position, at]));
+  const at = (p: SeasonPlayer) => rank.get(p.selectedPosition ?? '') ?? slots.length;
+  return [...players].sort((a, b) => at(a) - at(b));
+}
+
+function Roster({ roster, name, anonymous, index, pooled, slots }: {
   roster: SeasonRoster; name: string; anonymous: boolean; index: number;
   /** Whether the pool answered at all, which decides what a miss may be called. */
   pooled: boolean;
+  /** The league's slots, which is what puts the roster in a readable order. */
+  slots: SeasonSlot[];
 }) {
   const held = roster.players.length;
+  const ordered = inSlotOrder(roster.players, slots);
   return (
     <div className="season-roster">
       <div className="season-roster-head">
@@ -147,7 +171,7 @@ function Roster({ roster, name, anonymous, index, pooled }: {
           </tr>
         </thead>
         <tbody>
-          {roster.players.map((p) => (
+          {ordered.map((p) => (
             <tr key={p.playerKey} data-bench={p.selectedPosition === 'BN' || p.selectedPosition === 'IR'}>
               <td className="mono">{p.selectedPosition ?? '—'}</td>
               <td>{p.name ?? p.playerKey}</td>
@@ -474,12 +498,28 @@ export default function SeasonScreen({
             </span>
           </div>
           <div className="setup-body">
+            {/*
+              * ONE CELL PER RULE, AND THE VALUE NOT IN MONO.
+              *
+              * Both parts were reported as one complaint from a real league:
+              * "passing yards says 9.94". It says 0.04, and the reading was
+              * correct about the screen being wrong. Two causes compounded.
+              * IBM Plex Mono sets a dotted zero, which at 12px bold fills in
+              * and reads as a nine — fine for the whole numbers the rest of the
+              * app puts in mono, and not for a two-decimal scoring rate. And
+              * thirty-five value-and-name pairs wrapped inline were separated
+              * by less space than the eye needs to pair them, so which number
+              * belonged to which rule was a guess.
+              *
+              * So each rule is its own cell in a grid, which makes the pairing
+              * structural rather than spatial, and the value is set in the body
+              * face, whose zero cannot be read as anything else.
+              */}
             <div className="season-scoring">
               {scored.map((rule) => (
-                <span key={rule.statId} className="hint">
-                  <b className="mono">{rule.points}</b>
-                  {' '}
-                  {rule.name || rule.abbr || rule.statId}
+                <span key={rule.statId} className="season-rule">
+                  <b>{rule.points}</b>
+                  <span className="hint">{rule.name || rule.abbr || rule.statId}</span>
                 </span>
               ))}
             </div>
@@ -529,6 +569,7 @@ export default function SeasonScreen({
                   anonymous={anonymous}
                   index={at}
                   pooled={league.joined.pool}
+                  slots={league.slots}
                 />
               ))
               : (

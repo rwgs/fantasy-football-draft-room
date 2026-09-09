@@ -314,17 +314,21 @@ async function postSnapshot(id, teams, { old = false } = {}) {
   });
 
   /*
-   * Nine each, and the last three benched.
+   * Nine each, benched in the MIDDLE, which is the part that matters.
    *
-   * The bench rows are the point of going past the starting slots: they render
-   * differently, dimmed rather than hidden, and a fixture where every player is
-   * started would photograph a path the app does not usually take. Which
-   * position each is started at is left as their own, since the fixture is not
-   * trying to be a legal lineup — the slots panel above is what says what a
-   * legal one would be.
+   * Yahoo returns a roster in its own order, and that order puts a started
+   * kicker and defence *after* the eight bench players, observed in a real
+   * league. So the fixture mirrors it: two benched players with a started one
+   * behind them. A fixture that put the bench last would photograph a screen
+   * that happened to look right, and would not have caught the bug at all.
+   *
+   * The bench rows earn their place twice over, since they render dimmed rather
+   * than hidden. Which position each starter is started at is left as their
+   * own; the fixture is not trying to be a legal lineup, and the slots panel is
+   * what says what a legal one would be.
    */
   const HELD = 9;
-  const BENCHED = 3;
+  const BENCHED = new Set([6, 7]);
   const rosters = Array.from({ length: teams }, (_, t) => ({
     fantasy_content: {
       team: [
@@ -338,7 +342,7 @@ async function postSnapshot(id, teams, { old = false } = {}) {
                 .map((p, i) => player(
                   p,
                   20000 + t * HELD + i,
-                  i >= HELD - BENCHED ? 'BN' : p.position,
+                  BENCHED.has(i) ? 'BN' : p.position,
                 ))),
             },
           },
@@ -499,6 +503,23 @@ async function yahooSeason(browser, viewport) {
   const offered = page.locator('.season-held .chip');
   if (!await offered.count()) {
     throw new Error('a league that has been read was not offered in the picker');
+  }
+
+  /*
+   * The starting lineup has to read as one block, and the fixture posts it in
+   * Yahoo's order, which does not. Reported from a real league: the started
+   * kicker and defence came back after the eight bench players, so the two
+   * slots hardest to guess at sat furthest from the top.
+   */
+  const slotColumn = await page.locator('.season-roster').first()
+    .locator('tbody tr td:first-child')
+    .allInnerTexts();
+  const bench = slotColumn.findIndex((slot) => slot.trim() === 'BN');
+  if (bench < 0) throw new Error('the fixture benched nobody, so this checks nothing');
+  const startedAfter = slotColumn.slice(bench + 1).filter((slot) => slot.trim() !== 'BN');
+  if (startedAfter.length) {
+    throw new Error('a started player sits below the bench: ' + startedAfter.join(', ')
+      + ' in ' + slotColumn.join(' '));
   }
 
   /*

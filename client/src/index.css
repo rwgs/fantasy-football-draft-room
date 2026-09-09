@@ -2099,13 +2099,31 @@ input[type='range']::-moz-range-thumb {
    rather than hides. The draft's roster panel dims an empty slot the same way. */
 .season-table tr[data-bench='true'] td { opacity: 0.55; }
 
+/* A grid rather than a wrapped row, so a value sits with its own rule and with
+   no other. Thirty-five pairs inline left the pairing to the eye and the eye
+   got it wrong. */
 .season-scoring {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 3px 20px;
 }
 
-.season-scoring b { color: var(--chalk); }
+.season-rule {
+  display: grid;
+  grid-template-columns: 3.4em 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+/* The body face, not the mono. IBM Plex Mono sets a dotted zero, which at this
+   size reads as a nine: 0.04 was reported as 9.94 from a real league. Right
+   aligned so a column of values lines up on the decimal point. */
+.season-rule b {
+  color: var(--chalk);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 
 /* Choosing which league the in-season view is looking at: the ones already read
    as buttons, and a field for the first time or after a restart. */

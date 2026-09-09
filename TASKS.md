@@ -1346,10 +1346,13 @@ See [PLAN.md](PLAN.md) for the approach and ROADMAP.md Phases 7-11 for outcomes.
 ### Phase 8 tasks, in order
 
 Split from the contract in `PLAN.md`, "What discovery settled". **Phase 8 was
-authorized 2026-09-08 and every task in it is built, Y8.5 added after the owner
-found the screen unreachable. Phase 8 is **not complete**: comparing every
-roster and setting against Yahoo, player by player, still needs doing, and no
-second real league has been tried.** Each is
+authorized 2026-09-08 and every task in it is built, with Y8.5 and Y8.6 added
+from what the owner found testing it. **Phase 8's exit criteria are now met on
+the reading side**: the owner confirmed against their real league that all
+rosters match and the own-team mark is on their team. Still open: the scoring
+was called "ok" rather than checked rule by rule, and no second real league has
+been tried, so switching between two of them is unexercised outside the
+harness.** Each is
 one reviewable outcome. They deliberately stop short of advice: Phase 8 shows a
 league, and nothing in it recommends anything.
 
@@ -1642,12 +1645,16 @@ are divided between them and none was dropped.
     ages are separate with the league dated "read in your browser", bench rows
     dim rather than vanish, and the own-team mark lands on the second roster
     because the guid says so rather than the position in the list.
-  - **Outstanding, and it is the criterion this task exists to meet:** reading
-    the owner's real league through the bookmarklet and comparing all eight
-    rosters and every setting against Yahoo. Only the account holder can do it,
-    it needs a signed-in browser, and **it has never been done for every
-    roster** — the reader only ever fetched one before Y8.3a. Everything above
-    is synthetic or public data.
+  - **Now done, by the owner, and it is the criterion this task existed to
+    meet.** Read through the bookmarklet against their real league on
+    2026-09-08: **all rosters match Yahoo**, and the "yours" mark is on their
+    own team. That is the first confirmation the multi-roster read works at all
+    — the reader only ever fetched one roster before Y8.3a, so seven of the
+    eight had never been read by anything. Everything before this was synthetic
+    or public data.
+  - Still not confirmed rule by rule: the scoring was called "ok" rather than
+    checked against Yahoo line by line. The one number queried in it turned out
+    to be correct and unreadable, which is Y8.6.
   - Driven throughout against an isolated pair, a service on 5179 and a client
     on 5180 pointed at it, rather than restarting 5178, which had been up for
     hours and could have been mirroring a draft.
@@ -1809,6 +1816,56 @@ are divided between them and none was dropped.
     `react(refs)` advisory as the twenty-one other saved settings in `App.tsx`,
     and doing it differently for one of twenty-two would be the worse choice.
   - Dependencies: Y8.4.
+
+- [x] Y8.6: Two rendering faults the owner found in their own league.
+  - Both reported from the real league on screen, and both were the screen
+    rather than the reading: the parsed snapshot was correct in each case.
+  - **"Passing yards says 9.94."** It says `0.04`, and the reading was right
+    about the screen being wrong. Two causes compounded. `.mono` is IBM Plex
+    Mono, which sets a **dotted zero**; at 12px bold the dot fills in and `0`
+    reads as `9`, which is harmless for the whole numbers the rest of the app
+    puts in mono and not for a two-decimal scoring rate. And thirty-five
+    value-and-name pairs wrapped inline were separated by an 18px gap, less than
+    the eye needs, so which number belonged to which rule was a guess. Fixed
+    both: each rule is its own cell in a grid, so the pairing is structural
+    rather than spatial, and the value is set in the body face, whose zero
+    cannot be read as anything else.
+  - **The started kicker and defence sat below the bench.** Yahoo returns a
+    roster in its own order, and for this league that order is `QB RB RB WR WR
+    TE W/R/T` then eight bench players and *then* the started `K` and `DEF`.
+    So the starting lineup was not contiguous and the two slots hardest to guess
+    at were furthest from the top. New `inSlotOrder` sorts by the league's own
+    slot list rather than a table of positions written into the client, so a
+    league that starts things in another order reads in that order; `sort` is
+    stable, so players within a slot keep Yahoo's order, and a slot the list
+    does not mention sorts last rather than throwing the roster away.
+  - Diagnosed from the owner's own held snapshot rather than guessed at: the
+    service was still holding league `876392`, so the parsed scoring was read
+    back — 35 valued rules, `Passing Yards` at `0.04`, every value right — and
+    the parsed slots too, `K` and `DEF` both `STARTING` and both ahead of `BN`.
+    That is what established the fault was rendering. The glyph was then
+    confirmed by photographing the value at four times scale.
+  - Automated validation: **a `shots` check that reproduces the reported bug.**
+    The fixture used to bench its last three players, so the bench came last and
+    a screen that happened to look right would have passed. It now benches two
+    in the *middle*, mirroring Yahoo, and the check asserts no started player
+    appears below the bench. **Confirmed by rendering Yahoo's order instead:**
+    the check fails with `RB RB WR WR RB WR BN BN RB`, naming the offender.
+  - Manual validation: **done against the real league**, before and after. The
+    scoring panel now reads as four columns of right-aligned values against
+    their rules, `0.04 Passing Yards` unmistakable, and the roster reads
+    `QB RB RB WR WR TE W/R/T K DEF` then the bench.
+  - Not done: grouping the scoring by the `group` Yahoo supplies — `passing`,
+    `fgs`, `pts_allow` and ten more. It would cluster 38 rules into something
+    even easier to scan, and it needs a readable label per slug, which is a
+    vocabulary to invent rather than read. Left because the complaint was a
+    misread number and that is fixed; worth doing if the panel is still a wall.
+  - Local gate: typecheck clean, `server:test` 112, `bridge:test` 7,
+    `engine:test` green, build clean, `shots` clean with no console errors, lint
+    unchanged at 44. Driven against an isolated service and client on 5179 and
+    5180; the real-league checks read the snapshot 5178 was already holding and
+    posted nothing to it.
+  - Dependencies: Y8.5.
 
 ### Subsequent task planning
 
