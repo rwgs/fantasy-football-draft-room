@@ -224,6 +224,25 @@ app.get('/userscript/yahoo-draft-bridge.user.js', (_req, res) => {
 const PANEL_MARK = '__PANEL_BUILD__';
 const READER_MARK = '__READER_BUILD__';
 
+/**
+ * How the reader was installed, stamped into the copy handed out.
+ *
+ * One file serves both installs and nothing inside a script can tell how it was
+ * invoked, so the difference that matters -- whether it re-reads on its own --
+ * is decided here, where the two addresses already are. A bookmarklet that left
+ * a poller running in the page would contradict its own install page.
+ */
+const READER_MODE = '__READER_MODE__';
+
+/** The reader's source with both stamps applied, for one of the two installs. */
+function readerFor(mode) {
+  const source = readerSource();
+  return atServiceOrigin(
+    source.replace(READER_MARK, panelBuild(source)).replace(READER_MODE, mode),
+    PORT,
+  );
+}
+
 function panelSource() {
   return readFileSync(join(HERE, '..', '..', 'userscript', 'draft-panel.js'), 'utf8');
 }
@@ -294,23 +313,38 @@ app.get('/league-reader.js', (_req, res) => {
 });
 
 /**
- * Where the league reader is installed from.
+ * The reader as a userscript, which is the copy that reads on its own.
  *
- * The panel's page with one difference that matters enough to say twice: the
- * panel runs anywhere with a DOM, and this only works on a Yahoo page, because
- * the whole point of it is the session cookie the browser attaches there.
+ * Its own address and its own `@match`, never folded into the bridge: the
+ * bridge is injected at `document-start` to wrap `WebSocket` and this needs
+ * none of that, so sharing an install would hand this every way that one can
+ * fail. See `DECISIONS.md`, 2026-09-09.
+ */
+app.get('/userscript/yahoo-league-reader.user.js', (_req, res) => {
+  // The extension is what makes a manager offer to install rather than the
+  // browser offering to display, so the type must not make it a download.
+  res.type('text/javascript; charset=utf-8');
+  res.set('cache-control', 'no-store');
+  res.send(readerFor('userscript'));
+});
+
+/**
+ * Where the league reader is installed from, either way.
+ *
+ * The panel's page with two differences. This only works on a Yahoo page,
+ * because the whole point of it is the session cookie the browser attaches
+ * there. And it offers two installs of one file rather than one: the
+ * bookmarklet below, and the userscript above that reads on a beat.
  */
 app.get('/league-reader', (_req, res) => {
-  const source = readerSource();
-  const href = 'javascript:' + encodeURIComponent(
-    atServiceOrigin(source.replace(READER_MARK, panelBuild(source)), PORT),
-  );
+  const href = 'javascript:' + encodeURIComponent(readerFor('bookmarklet'));
   res.type('html').set('cache-control', 'no-store').send(`<!doctype html>
 <html><head><meta charset="utf-8"><title>League reader</title><style>
  body { font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1211;
         color: #e8e6e3; margin: 0; padding: 40px; }
  main { max-width: 620px; margin: 0 auto; }
  h1 { font-size: 20px; margin: 0 0 4px; }
+ h2 { font-size: 15px; margin: 28px 0 0; color: #e8e6e3; }
  p { color: #b9c2bd; }
  a.bm { display: inline-block; margin: 18px 0; padding: 10px 16px; background: #1a201e;
         border: 1px solid #b78a2e; border-radius: 6px; color: #e9c46a;
@@ -322,17 +356,38 @@ app.get('/league-reader', (_req, res) => {
 <p>Reads your Yahoo league in season - the settings, the scoring, every team and
    your own roster - and hands it to this machine. It reads only; it changes
    nothing in Yahoo and never sends a pick, a claim or a cookie anywhere.</p>
-<p><b>Drag this to your bookmarks bar:</b></p>
+<h2>Either one reading, or a reading that keeps itself current</h2>
+<p>Both are the same file. The bookmarklet reads once, when you click it. The
+   userscript reads whenever your league page loads and then again on a beat you
+   set, so a lineup you change in Yahoo reaches the app on its own.</p>
+
+<p><b>One reading - drag this to your bookmarks bar:</b></p>
 <a class="bm" href="${href}">Read league</a>
 <ol>
   <li>Drag the button above onto your bookmarks bar. Clicking it here does nothing.</li>
   <li>Open your Yahoo league - the page whose address has <code>/f1/</code> and a number in it.</li>
   <li>Click the bookmark. It says what it read, bottom right.</li>
 </ol>
-<p><b>It has to be clicked on a Yahoo page.</b> It reads Yahoo using the session
+
+<p><b>Or keep it current - install this into your userscript manager:</b></p>
+<a class="bm" href="/userscript/yahoo-league-reader.user.js">Install league reader</a>
+<ol>
+  <li>Click it. Your manager offers to install; the bookmarklet needs no manager.</li>
+  <li>Open your league. It reads by itself and a small panel stays, bottom right.</li>
+  <li>Set the beat in that panel - every 10 minutes to begin with, or
+      <code>never</code> to read only when the page loads.</li>
+</ol>
+<p><b>Worth knowing before you choose.</b> A userscript manager is a place a
+   script can go stale in silence: this project lost three mock drafts to one
+   that served, stored and listed as current while running a copy three versions
+   old. The bookmarklet cannot fail that way, which is why it is still here. If
+   the panel never appears, the manager is not running this - check the
+   per-extension <b>Allow user scripts</b> control, which is separate from
+   developer mode and from the permission itself.</p>
+
+<p><b>Either way it runs on a Yahoo page.</b> It reads Yahoo using the session
    your browser already holds, which is why this service can never do it alone -
-   and why clicking it on any other tab reaches nothing.</p>
-<p>Click it again whenever you want a fresh reading. Nothing refreshes on its own.</p>
+   and why clicking the bookmark on any other tab reaches nothing.</p>
 </main></body></html>`);
 });
 

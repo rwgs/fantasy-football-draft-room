@@ -12,6 +12,29 @@ fixed.
 
 ### Added
 
+**The league reader can keep itself current.** It installs as a userscript now
+as well as a bookmarklet, from the same file and the same page: pick the
+bookmarklet for one reading when you click it, or the userscript to have your
+league read whenever its page loads and then again on a beat you set. Ten
+minutes by default, adjustable from the small panel it leaves on the Yahoo page,
+and `never` there is the bookmarklet's behaviour if you would rather ask for
+each reading yourself.
+
+What this buys is that a lineup you change in Yahoo reaches the app without
+being fetched by hand, and that restarting the service costs nothing but a wait
+- the snapshot it drops is read again on the next beat.
+
+Two limits worth knowing. It still only reads while a Yahoo tab is open,
+because the session cookie that makes any of this work lives there and never
+here, so the app cannot hold a current picture of a league nobody has opened.
+And a userscript manager is a place a script can go stale in silence - this
+project lost three mock drafts to exactly that - so the bookmarklet is kept
+rather than replaced, the install page names the per-extension control to check
+when nothing appears, and the panel stays visible for as long as a beat is
+running. The reader does not yet report its build back the way the bridge does;
+until it can, a stale one polls perfectly while posting a shape the service has
+moved on from. See `DECISIONS.md`, 2026-09-09.
+
 **A Yahoo league can be read outside a draft, though nothing shows it yet.**
 Groundwork for in-season advice, and worth stating plainly: the service can now
 be handed your league — the settings, the exact scoring, every team, and your

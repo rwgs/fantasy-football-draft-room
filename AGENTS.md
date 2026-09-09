@@ -53,6 +53,12 @@ same player.
   says nothing. Sleeper needs nothing like it. The one thing this project sends
   to a league platform leaves from here: a draft queue, behind a setting that is
   off, and never a pick. See `DECISIONS.md` before widening that.
+  `league-reader.js` is the in-season half and a separate install: one file
+  served two ways, as a bookmarklet that reads once and as a userscript that
+  reads on page load and then on a beat the user sets. The service stamps which,
+  because nothing inside a script can tell how it was invoked. It does not
+  report its build back yet, so a stale reader polls perfectly while posting a
+  shape the service has moved on from.
 
 Nothing is generated or built into the tree. `client/dist` is a build output
 and `server/data/cache` is a cache; neither is edited by hand.
@@ -115,6 +121,7 @@ npm --prefix client run lint    # oxlint
 npm run engine:test      # the engine self-test. See below: needs the service up.
 npm run server:test      # node --test, for service code no endpoint can show
 npm run bridge:test      # runs the userscript against a fake room. Needs nothing
+npm run reader:test      # runs the league reader against a fake league. Needs nothing
 npm run shots            # photograph the app in a real browser. Needs the client up
 npm run build            # tsc -b, then the Vite production build
 ```
@@ -132,6 +139,16 @@ the userscript was the one part of this project that no check touched and a live
 draft was the only thing that had ever exercised it. It is slow for its size —
 each case waits out the bridge's own idle beat — and it forces its own exit,
 because a bridge that stopped rescheduling itself would be the bug.
+
+`npm run reader:test` is the same arrangement for `userscript/league-reader.js`,
+which since 2026-09-09 installs as a userscript as well as a bookmarklet and
+polls on a beat the user sets. It stamps the mode the service stamps and passes
+`document`, `window`, `location` and `fetch` in as parameters rather than
+replacing globals, so two readers cannot read each other's league. Slow for the
+same reason and worse: the reader floors its own beat at five seconds, so a case
+that proves it came back has to outlast one. What neither check can see is the
+browser — see the note below on "Allow user scripts", which applies to the
+reader now too.
 
 What it cannot see is the browser: the userscript manager, whether the installed
 copy is the current one, and Chrome's loopback permission. The app now answers

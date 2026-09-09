@@ -1,12 +1,44 @@
+// ==UserScript==
+// @name         Yahoo league reader
+// @namespace    fantasy-football-draft-room
+// @version      1.0.0
+// @description  Read your own Yahoo league in season - settings, scoring, teams and rosters - and hand it to the draft room running on your machine. Reads only; never writes to Yahoo.
+// @match        https://*.fantasysports.yahoo.com/f1/*
+// @downloadURL  http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
+// @updateURL    http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
+// @run-at       document-idle
+// @grant        none
+// ==/UserScript==
+
 /*
  * Read a Yahoo league in season, and hand it to the draft room service.
  *
- * A bookmarklet, on the same reasoning as `draft-panel.js` and for the same
- * reason it is not part of `yahoo-draft-bridge.user.js`. The bridge has to be a
- * userscript: it wraps `WebSocket` before Yahoo's own bundle builds one, and
- * only code injected at `document-start` can do that. This needs none of it.
- * It makes three ordinary fetches when you click it, plus one per team for the
- * rosters. See `DECISIONS.md`, 2026-09-08, for the decision and what it costs.
+ * ONE FILE, TWO INSTALLS, AND THE MODE IS STAMPED IN RATHER THAN GUESSED.
+ *
+ * As a userscript it runs itself on your league page and then re-reads on a
+ * beat, so a lineup you change in Yahoo reaches the app without a click. As a
+ * bookmarklet it does exactly what it always did: reads once, when clicked,
+ * and refreshes nothing on its own.
+ *
+ * Both are this file. The service stamps the mode into the copy it hands out --
+ * see `MODE` below, and note that the mark is written nowhere else in this
+ * file, because the substitution takes the first occurrence and a mention in a
+ * comment would be the one it landed on. Nothing inside a script can tell how
+ * it was invoked, and a bookmarklet that quietly left a poller running in the
+ * page would be a surprise the install page promised the opposite of.
+ *
+ * The bookmarklet is kept and not replaced. `DECISIONS.md` chose it over a
+ * userscript for one reason that has not gone away -- a userscript manager is a
+ * place a script goes stale in silence, and 2026-09-07 cost three mock drafts
+ * to exactly that -- so it stays as the install that cannot fail without
+ * saying so. See the 2026-09-09 entry for what reopened the question: an
+ * in-season screen now consumes the snapshot, which is the condition the
+ * original decision named.
+ *
+ * It is still not part of `yahoo-draft-bridge.user.js`. The bridge has to be a
+ * userscript for a reason this does not share: it wraps `WebSocket` before
+ * Yahoo's own bundle builds one, and only code injected at `document-start` can
+ * do that. Sharing an install would give this every way that one can fail.
  *
  * WHAT IT SENDS, AND WHAT IT NEVER SENDS
  *
@@ -45,6 +77,66 @@
   const BUILD = '__READER_BUILD__';
   const STAMPED = BUILD !== '__READER' + '_BUILD__';
 
+  /*
+   * How this copy was installed, and so whether it re-reads on its own.
+   *
+   * Stamped by the service on the way out, per the note at the top of the file.
+   * Unstamped means the source is being read live -- by a check, or by hand --
+   * and that reads as the bookmarklet's behaviour, because a one-shot is the
+   * safe thing to be wrong about. A check that wants the beat stamps the mark
+   * the way the service does, which is the same substitution and not a stub.
+   */
+  const MODE = '__READER_MODE__';
+  const AUTO = MODE === 'userscript';
+
+  // ---- How often ---------------------------------------------------------
+
+  /*
+   * The beat, in minutes, kept where every other setting in this project is
+   * kept: the user's own browser. This one has to live on Yahoo's origin rather
+   * than the app's, because that is the only origin this code ever runs on and
+   * no page can read another's storage.
+   *
+   * Zero means read on load and never again, which is the whole of the
+   * difference between the two installs made adjustable instead of fixed.
+   *
+   * The floor is a runaway guard and not a preference. `OFFERED` is what the
+   * panel will set, so nothing a user clicks can get near it; it exists because
+   * the value is a number in storage that a hand could edit to 0.001 and point
+   * eleven requests a second at somebody else's service.
+   */
+  const MINUTES_KEY = 'draftroom.readerMinutes';
+  const DEFAULT_MINUTES = 10;
+  const FLOOR_MS = 5000;
+  const OFFERED = [0, 5, 10, 15, 30, 60];
+
+  function minutes() {
+    try {
+      const raw = window.localStorage.getItem(MINUTES_KEY);
+      /*
+       * NOTHING SET AND A DELIBERATE ZERO ARE DIFFERENT ANSWERS, and both ways
+       * of collapsing them are wrong. `|| DEFAULT` reads a chosen `never` as
+       * unset and starts polling anyway. `Number(raw)` alone reads unset as
+       * zero, because `Number(null)` is 0, and a fresh install would then never
+       * come back while the panel lit `never` -- which is what this did until
+       * `reader.test.mjs` asked what the default was.
+       */
+      if (raw === null || raw === '') return DEFAULT_MINUTES;
+      const held = Number(raw);
+      return Number.isFinite(held) && held >= 0 ? held : DEFAULT_MINUTES;
+    } catch {
+      // Storage can be denied outright. That is not a reason to stop reading,
+      // only a reason to stop remembering, so the default stands.
+      return DEFAULT_MINUTES;
+    }
+  }
+
+  function setMinutes(value) {
+    try {
+      window.localStorage.setItem(MINUTES_KEY, String(value));
+    } catch { /* denied, so this session only; the beat below still changes */ }
+  }
+
   // ---- Saying what happened --------------------------------------------
 
   /*
@@ -61,20 +153,87 @@
       document.body.appendChild(host);
     }
     const colour = tone === 'bad' ? '#e06c6c' : tone === 'busy' ? '#b9c2bd' : '#7fca88';
+    const every = minutes();
+
+    /*
+     * The beat control, and only where there is a beat. As a bookmarklet this
+     * panel is a message that goes away again, and giving that a setting
+     * nothing acts on would be an invitation to set it.
+     */
+    const button = (m) => `<button data-min="${m}" style="margin:2px 1px 0;
+        padding:2px 7px; border-radius:4px; cursor:pointer; font:inherit;
+        background:${m === every ? '#22302a' : '#1a201e'};
+        border:1px solid ${m === every ? '#7fca88' : '#2a3230'};
+        color:${m === every ? '#7fca88' : '#b9c2bd'};">${m || 'never'}</button>`;
+    const control = AUTO ? `
+      <div style="margin-top:9px; padding-top:8px; border-top:1px solid #2a3230;
+                  color:#b9c2bd; white-space:normal;">
+        Read again every ${OFFERED.map(button).join('')} ${every ? 'min' : ''}
+      </div>` : '';
+
     host.shadowRoot.innerHTML = `
       <div style="position:fixed; right:16px; bottom:16px; z-index:2147483647;
                   max-width:380px; padding:12px 14px; border-radius:8px;
                   background:#0f1211; color:${colour}; border:1px solid #2a3230;
                   font:13px/1.5 -apple-system, Segoe UI, Roboto, sans-serif;
                   box-shadow:0 6px 24px rgba(0,0,0,.45); white-space:pre-wrap;">
-        <b style="color:#e8e6e3">Draft room</b><br>${text}
+        <b style="color:#e8e6e3">Draft room</b><br>${text}${control}
       </div>`;
-    // Nothing here takes the mouse, so a click where it sits still reaches the
-    // page underneath. It goes on its own after a while.
-    host.shadowRoot.firstElementChild.style.pointerEvents = 'none';
-    clearTimeout(show.timer);
-    if (tone !== 'busy') show.timer = setTimeout(() => host.remove(), 9000);
+
+    if (!AUTO) {
+      // Nothing here takes the mouse, so a click where it sits still reaches
+      // the page underneath. It goes on its own after a while.
+      host.shadowRoot.firstElementChild.style.pointerEvents = 'none';
+      clearTimeout(show.timer);
+      if (tone !== 'busy') show.timer = setTimeout(() => host.remove(), 9000);
+      return;
+    }
+
+    /*
+     * The panel stays where there is a beat, which is the point rather than an
+     * oversight: a reader polling a league every ten minutes for the rest of
+     * the season should not be invisible while it does it. It is the only place
+     * that says the beat is running and the only place that can stop it.
+     *
+     * Listeners are attached after every render because the render replaces the
+     * markup and takes the old ones with it.
+     */
+    for (const control_ of host.shadowRoot.querySelectorAll('button[data-min]')) {
+      control_.addEventListener('click', () => {
+        setMinutes(Number(control_.dataset.min));
+        plan();
+        show(text, tone);
+      });
+    }
   }
+
+  // ---- The beat ----------------------------------------------------------
+
+  let beat = null;
+  let reading = false;
+
+  /**
+   * Schedule the next read, or do not, which is the same decision either way.
+   *
+   * Called after every read including a failed one, because a beat that stopped
+   * on one refused request would be a reader that quietly went back to being a
+   * bookmarklet, and the panel would still say it was running.
+   */
+  function plan() {
+    clearTimeout(beat);
+    beat = null;
+    const every = minutes();
+    if (!AUTO || !every) return;
+    beat = setTimeout(() => { run(); }, Math.max(every * 60000, FLOOR_MS));
+  }
+
+  /*
+   * NOT GATED ON WHETHER THE TAB IS VISIBLE, which is worth saying because
+   * skipping a hidden tab is the obvious thing and it would break the feature.
+   * The point of the beat is that the league page sits in a background tab
+   * while the user looks at the app in another one, so the tab doing the
+   * reading is the tab nobody is looking at, nearly always.
+   */
 
   // ---- Which league ----------------------------------------------------
 
@@ -109,6 +268,20 @@
   // ---- The run ----------------------------------------------------------
 
   async function run() {
+    /*
+     * One read at a time. Eleven requests take a moment, so a beat can fall
+     * inside the previous read on a slow connection, and two snapshots of one
+     * league in flight would race over which landed last.
+     */
+    if (reading) return;
+
+    /*
+     * Neither of these schedules a beat, and both return before `reading` is
+     * taken. An address cannot change without a navigation and a navigation
+     * loads this file again, so a reader that cannot find a league here will
+     * never find one -- repeating the same complaint every ten minutes would
+     * be the only thing it ever did.
+     */
     if (!/fantasysports\.yahoo\.com$/.test(location.hostname)) {
       show('This has to run on your Yahoo league page — it reads Yahoo using the '
         + 'session your browser already holds, which no other tab has.', 'bad');
@@ -117,10 +290,11 @@
     const where = leagueFromUrl();
     if (!where) {
       show('No league in this address. Open your league — the page whose address '
-        + 'has <b>/f1/</b> and a number in it — and click this there.', 'bad');
+        + 'has <b>/f1/</b> and a number in it.', 'bad');
       return;
     }
 
+    reading = true;
     show('Reading league ' + where.leagueId + '…', 'busy');
 
     try {
@@ -187,6 +361,10 @@
       // worse than no bookmarklet, because there is nowhere to look.
       show(String(err && err.message ? err.message : err)
         + '\n\nIf that names the service, check it is running on ' + SERVICE + '.', 'bad');
+    } finally {
+      reading = false;
+      // After the failure as well as the success. See `plan`.
+      plan();
     }
   }
 

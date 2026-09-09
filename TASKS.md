@@ -1869,6 +1869,66 @@ are divided between them and none was dropped.
     posted nothing to it.
   - Dependencies: Y8.5.
 
+- [x] Y8.7: Let the reader keep the league current on its own.
+  - **Asked for by the owner on 2026-09-09, from using the screen Y9.3 built.**
+    The click was in the way twice over: a service restart drops the snapshot,
+    so the advice screen answered "nothing read yet" until the bookmarklet was
+    clicked again, and a lineup changed in Yahoo did not reach the app at all
+    until it was.
+  - Not a new decision so much as a deferred one coming due. The 2026-09-08
+    entry did not reject a userscript; it named the condition -- "a screen that
+    consumes the snapshot" -- and Y9.3 is that screen. Recorded as
+    `DECISIONS.md`, 2026-09-09, which narrows the earlier entry rather than
+    superseding it: the bookmarklet is kept.
+  - Scope, and the owner set the shape: one file served two ways. The
+    bookmarklet is unchanged. The userscript reads on page load and then every
+    N minutes, N in `localStorage` on Yahoo's origin, default 10, zero meaning
+    read on load only. The panel it draws carries the control and stays visible
+    while a beat runs. The service stamps which mode a served copy is, because
+    nothing inside a script can tell how it was invoked.
+  - The check is `npm run reader:test`, five cases against the real file: it
+    reads on load without being clicked, it comes back on the beat, zero never
+    comes back, and a bookmarklet copy starts no beat **whatever the setting
+    says** -- that last one set to the short beat, so a copy that read the
+    setting and ignored its own mode fails rather than passes slowly. The fifth
+    reads the panel.
+  - **It found a defect while being written, which is the reason it exists.**
+    `minutes()` read an unset value through `Number(null)`, which is `0`, so
+    every fresh install would have polled never while the panel lit `never` --
+    the exact failure the file's own comment warned about, arrived at from the
+    other side. Nothing but asking "what is the default" would have shown it.
+  - A second one the harness forced: `__READER_MODE__` was written in the file's
+    own comment as well as in the constant, and `String.replace` takes the first
+    occurrence, so the service stamped the comment and every copy ran as a
+    bookmarklet. The existing build mark carries a note saying it appears
+    exactly once for this reason; the new mark now carries the same note.
+  - Deliberately not built, and it is the one thing that leaves the userscript
+    weaker than the bridge: **the reader does not report its build back.** The
+    bridge stamps a build and the running copy reports it, so the masthead can
+    say when an install is behind. The reader stamps it and nothing reads it
+    back, which means a stale reader polls perfectly while posting a shape the
+    service has moved on from -- 2026-09-07 with a slower fuse. Next piece of
+    work, named in `DECISIONS.md` under what this costs, and the reason the
+    bookmarklet is kept in the meantime.
+  - Also rejected rather than overlooked: gating the beat on tab visibility,
+    which would break the case the feature is for, since the league page is in
+    the background tab nearly always. And persisting the snapshot to disk, which
+    would have solved the restart complaint more cheaply and is refused by
+    `SPEC.md` rather than by preference.
+  - Local gate: `reader:test` 5, `bridge:test` 7, `server:test` 185, typecheck
+    clean, `engine:test` green, build clean, `shots` clean with no console
+    errors, lint unchanged. Both served copies were checked for real against a
+    spare service on 5179: the userscript stamps `MODE = 'userscript'`, the
+    bookmarklet stamps `'bookmarklet'`, both carry the same build and both had
+    their service origin rewritten to the running port. The install page was
+    photographed.
+  - Manual validation outstanding, and it is the half no check reaches: install
+    it into a real userscript manager, on a real league page, and confirm the
+    panel appears and the beat runs. `reader:test` cannot see the manager, and
+    the "Allow user scripts" control that cost three mock drafts is exactly what
+    it cannot see.
+  - Dependencies: Y8.5, and Y9.3 for the condition that reopened the decision.
+
 ### Phase 9 tasks, in order
 
 Split from `PLAN.md` and from Y9.0's measurement, which released the hold Phase

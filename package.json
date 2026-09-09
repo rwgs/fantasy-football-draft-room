@@ -16,7 +16,8 @@
     "engine:test": "npm --prefix client run engine:test",
     "shots": "npm --prefix client run shots",
     "server:test": "npm --prefix server test",
-    "bridge:test": "node --test --test-force-exit --test-concurrency=1 userscript/bridge.test.mjs"
+    "bridge:test": "node --test --test-force-exit --test-concurrency=1 userscript/bridge.test.mjs",
+    "reader:test": "node --test --test-force-exit --test-concurrency=1 userscript/reader.test.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

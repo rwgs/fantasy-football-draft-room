@@ -9,6 +9,110 @@ be recovered by reading the code. Routine implementation choices belong in the
 diff. This project comments its own reasoning unusually thoroughly, so most of
 what would otherwise land here is already next to the code it explains.
 
+## 2026-09-09 The league reader is a userscript as well, and polls on a beat the user sets
+
+Status: Accepted, by the repository owner, on the condition the original entry
+named. Narrows `The in-season reader is a bookmarklet, like the panel`
+(2026-09-08) without superseding it: the bookmarklet stays and is still the
+install this project points a new user at first.
+
+### Decision
+
+`userscript/league-reader.js` is served two ways from one source. As a
+bookmarklet from `/league-reader`, unchanged: one reading, when clicked. As a
+userscript from `/userscript/yahoo-league-reader.user.js`, matched to
+`/f1/*`, it reads when the league page loads and then again every N minutes
+while the tab is open. N lives in `localStorage` on Yahoo's own origin, defaults
+to 10, and zero means read on load and never again.
+
+The service stamps which mode the copy it hands out is, because nothing inside
+a script can tell how it was invoked and the two behaviours must not be guessed
+at. It is not folded into `yahoo-draft-bridge.user.js`; that was rejected in the
+2026-09-08 entry and nothing here reopens it.
+
+### Why now, and not on 2026-09-08
+
+The earlier entry did not reject a userscript. It deferred it, and named the
+condition:
+
+> it should be reopened if the workflow turns out to want it — in particular if
+> a league tab stays open all season, when a userscript could poll and keep the
+> snapshot warm with no interaction at all. Wait for a screen that consumes the
+> snapshot before judging that: there is none yet, and refresh ergonomics
+> guessed at without one are guessed at.
+
+Y9.3 built that screen. The owner then used it, and the click became the thing
+in the way: a service restart drops the snapshot, so the weekly advice screen
+answered "nothing read yet" until the bookmarklet was clicked again, and a
+lineup changed in Yahoo did not reach the app at all until it was. That is the
+workflow the deferral was waiting to see.
+
+The setting is what makes it one decision rather than two. The 2026-09-08 entry
+argued a click is a fair price "at the frequency in-season advice is actually
+used", which is a claim about a frequency nobody had measured. A beat the user
+sets does not need that claim to be right, and zero is the old behaviour still
+available to anyone who agrees with it.
+
+### What it costs, stated plainly
+
+**A userscript manager is a place a script goes stale in silence, and that has
+not changed.** It is the whole reason the panel stopped being a userscript and
+the reason this was a bookmarklet first: 2026-09-07 cost three mock drafts to a
+manager that served, stored and listed 1.3.0 while running 1.0.0, and the cause
+was a per-extension "Allow user scripts" control that was off while the
+permission itself was granted — a state in which nothing registers, nothing
+injects and nothing complains.
+
+Three things hold against it, and the third is not built yet:
+
+- **The bookmarklet is kept.** Whatever the manager does, there is an install
+  that cannot fail without saying so, and the install page says which is which
+  and names the control to check.
+- **The panel stays on screen while a beat is running**, rather than fading like
+  the bookmarklet's message. A reader polling somebody's league for a season
+  should not be invisible, and it is the only place that can stop it.
+- **The reader does not report its build back.** The bridge does — `bridge.js`
+  stamps a build into the copy it serves and the running copy reports it, so the
+  masthead can say when an install is behind. The reader stamps the build and
+  nothing reads it back. Until that exists a stale reader polls perfectly while
+  posting a shape the service has moved on from, which is the 2026-09-07 failure
+  with a slower fuse. It is the next piece of work and not a hypothetical.
+
+**It only reads while a Yahoo tab is open.** No beat makes the service able to
+fetch a league: `/fantasy/v2/league/…` is 401 without the cookie and the service
+must never hold one. So the app still cannot hold a current picture of a league
+nobody has opened, and this narrows that rather than fixing it.
+
+**It is eleven requests a beat** in an eight-team league — three league
+resources and one per roster. At ten minutes that is about 1,600 a day against
+Yahoo from the user's own session. The offered intervals are 5 minutes and up
+and the code floors any hand-edited value at five seconds, which is a runaway
+guard rather than a rate limit.
+
+### Rejected
+
+**Gating the beat on tab visibility.** The obvious economy, and it would break
+the feature: the whole shape of this is a league page sitting in a background
+tab while the user looks at the app in another, so the tab doing the reading is
+the tab nobody is looking at nearly always. Skipping hidden tabs would stop
+exactly the case it was built for.
+
+**Persisting the snapshot to disk so a restart keeps it.** This would have
+addressed the complaint that started the conversation more cheaply, and it is
+refused by requirement rather than by preference: `SPEC.md` keeps private league
+snapshots out of the disk cache, and the 2026-09-08 entry on fetching Yahoo's
+public half turns that into the boundary the whole arrangement rests on —
+"public player data on disk, private league data in memory only". A beat reaches
+the same outcome without touching it, because a reader that polls re-reads a few
+minutes after a restart on its own.
+
+**Putting the interval in the app's settings, where every other setting lives.**
+It cannot go there. The app is a different origin, no page can read another's
+storage, and the service holds no user state by design. Yahoo's own origin is
+the only place the reader can both write and read, so the control has to be on
+the panel it draws there.
+
+
 ## 2026-09-09 The in-season scoring join is the service's, and only verified components get a number
 
 Status: Accepted. The seam was chosen by the repository owner when Y9.1 asked;

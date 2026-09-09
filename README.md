@@ -180,10 +180,18 @@ outside a draft — the settings, the scoring, every team, and your own roster �
 but nothing in the app displays it yet. What works today is the reading and the
 route that keeps it.
 
-Open <http://127.0.0.1:5178/league-reader> and drag the button to your bookmarks
-bar. Open your league — the page whose address has `/f1/` and a number in it —
-and click the bookmark. It says what it read, bottom right, and the service then
-answers `GET /api/yahoo/league/<league>/snapshot` with it.
+Open <http://127.0.0.1:5178/league-reader>, which offers the same reader two
+ways. Drag the bookmarklet to your bookmarks bar and it reads once, when you
+click it on your league page — the page whose address has `/f1/` and a number in
+it. Install the userscript instead and it reads whenever that page loads and
+then again every ten minutes, or whatever beat you set in the panel it leaves
+there; `never` makes it read on load only. Either way it says what it read,
+bottom right, and the service then answers `GET
+/api/yahoo/league/<league>/snapshot` with it.
+
+The page says which to choose and why. The short version: a userscript manager
+can go stale in silence and a bookmarklet cannot, so the bookmarklet is still
+there.
 
 **It only works on a Yahoo page**, which is the one way it differs from the
 panel. It reads Yahoo with the session your browser already holds, so this
@@ -521,7 +529,7 @@ draft-room/
 ├── userscript/              runs on Yahoo's page, not served from here
 │   ├── yahoo-draft-bridge.user.js   carries the room's frames to the service
 │   ├── draft-panel.js               the board's reading, over the draft room
-│   └── league-reader.js             reads a Yahoo league in season
+│   └── league-reader.js             reads a Yahoo league in season, on a beat
 └── client/                  React and TypeScript, built with Vite
     └── src/
         ├── config.ts        your leagues and your name, read from the env
