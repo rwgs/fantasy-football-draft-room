@@ -1241,6 +1241,12 @@ export interface LineupTeam {
   totals: {
     sleeper: LineupTeamTotal | null;
     espn: LineupTeamTotal | null;
+    /**
+     * Null for a scrape that covered only some of this team's starters, as
+     * well as for one that never ran. A sum missing terms of unknown size is
+     * not a smaller sum, and `yahooPublished` below is the better answer where
+     * there is one -- which for Yahoo, unlike the other two desks, there is.
+     */
     yahoo: LineupTeamTotal | null;
     /**
      * What Yahoo's own scoreboard says this team is projected at.

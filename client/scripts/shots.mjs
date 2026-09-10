@@ -382,19 +382,34 @@ async function postSnapshot(id, teams, { old = false } = {}) {
   const skillProj = (t, i) => Number((19.4 - i * 1.4 + t * 0.15).toFixed(2));
   const unscoredProj = (t, i) => Number((8.6 - i * 1.2 + t * 0.1).toFixed(2));
 
-  const projections = Array.from({ length: teams }, (_, t) => ({
-    teamId: String(t + 1),
-    players: [
-      ...Array.from({ length: HELD }, (_, i) => ({
-        id: String(20000 + t * HELD + i),
-        pts: skillProj(t, i),
-      })),
-      ...UNSCORED.map((p, i) => ({
-        id: String(29000 + t * UNSCORED.length + i),
-        pts: unscoredProj(t, i),
-      })),
-    ],
-  }));
+  /*
+   * AND ONE TEAM'S PAGE HALF ANSWERS, because a real league was found in
+   * exactly that state: the scrape reached all seventeen players on the user's
+   * own team and one or two on everybody else's. Summed, that put a team
+   * Yahoo's own card projects at 124.98 on this screen at 0.0.
+   *
+   * So the last team gets two of its nine, and its published total stays whole
+   * -- the scoreboard is Yahoo's own arithmetic and does not care what the page
+   * yielded. What the screen must then show under its Yahoo column is that
+   * published figure and not a sum of the two, which is what the check below
+   * reads off the rendered footer.
+   */
+  const PARTIAL = teams;
+
+  const projections = Array.from({ length: teams }, (_, t) => {
+    const skill = Array.from({ length: HELD }, (_, i) => ({
+      id: String(20000 + t * HELD + i),
+      pts: skillProj(t, i),
+    }));
+    const rest = UNSCORED.map((p, i) => ({
+      id: String(29000 + t * UNSCORED.length + i),
+      pts: unscoredProj(t, i),
+    }));
+    return {
+      teamId: String(t + 1),
+      players: t + 1 === PARTIAL ? skill.slice(0, 2) : [...skill, ...rest],
+    };
+  });
 
   /*
    * What Yahoo's scoreboard says the team is projected at, summed from the
@@ -589,6 +604,10 @@ async function postSnapshot(id, teams, { old = false } = {}) {
     throw new Error('posted ' + want + ' rosters and the service read '
       + (body.rosters || []).length);
   }
+
+  // Handed back so a check can hold the screen to the fixture's own arithmetic
+  // rather than to a number written twice.
+  return { partialTeam: PARTIAL, published: Array.from({ length: teams }, (_, t) => publishedFor(t)) };
 }
 
 /**
@@ -643,7 +662,7 @@ async function yahooSeason(browser, viewport) {
   await page.screenshot({ path: join(OUT, 'season-unread.png') });
   console.log('  season-unread.png');
 
-  await postSnapshot(id, 8);
+  const { partialTeam, published } = await postSnapshot(id, 8);
   await page.getByRole('button', { name: 'Read again' }).click();
   await shownLeague(page, 'The Sunday League').waitFor({ state: 'visible', timeout: ROOM_WAIT });
 
@@ -801,6 +820,34 @@ async function yahooSeason(browser, viewport) {
           + best[at] + ' against ' + value);
       }
     });
+  }
+
+  /*
+   * A TEAM WHOSE ROSTER PAGE HALF ANSWERED SHOWS YAHOO'S OWN FIGURE.
+   *
+   * The fixture gives this one team two of its nine per-player numbers, which
+   * is the shape a real league came back in. Added up, that is a team card
+   * projects at 120-odd shown at 0.0 -- a number the screen has no business
+   * printing, since it is not a smaller total but a total missing terms. So
+   * the published figure stands in its place, and this reads it off the
+   * rendered footer against the fixture's own arithmetic.
+   *
+   * Yahoo is the last column, as the desk order puts it, and `Starters` is the
+   * first of the two footer rows.
+   */
+  const partialBlock = page.locator('.season-roster').filter({
+    has: page.locator('.season-roster-head b', { hasText: new RegExp('^Team ' + partialTeam + '$') }),
+  });
+  if (await partialBlock.count() !== 1) {
+    throw new Error('the half-answered team is not on the page as Team ' + partialTeam);
+  }
+  const partialTotals = (await partialBlock.locator('tfoot tr').first().locator('td')
+    .allInnerTexts()).map((cell) => cell.trim());
+  const shown = partialTotals[partialTotals.length - 1];
+  const owed = published[partialTeam - 1];
+  if (Math.abs(Number(shown) - owed) > 0.05) {
+    throw new Error('a team scraped over two of nine starters totals its Yahoo column at '
+      + shown + ', where the published figure is ' + owed.toFixed(1));
   }
 
   /*

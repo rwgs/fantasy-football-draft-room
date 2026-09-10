@@ -709,12 +709,33 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
       week,
     });
 
-    // A desk that did not answer is absent rather than zero, exactly as it is
-    // for the user's own team. `lineupAdvice` keys `desks` only by what
-    // answered, so this reads that rather than assuming both did.
+    /*
+     * A desk that did not answer is absent rather than zero, exactly as it is
+     * for the user's own team. `lineupAdvice` keys `desks` only by what
+     * answered, so this reads that rather than assuming both did.
+     *
+     * AND A YAHOO TOTAL OVER SOME OF THE STARTERS IS NOT A YAHOO TOTAL. The
+     * roster page is scraped per team, and a page that half answers leaves the
+     * desk holding a number for one starter in nine. Summing that gave a team
+     * Yahoo's own scoreboard puts at 124.98 a total of 0.0 on this screen --
+     * measured, from a real league, where the scrape reached every player on
+     * the user's own team and almost none on anybody else's.
+     *
+     * So it reports as the state it actually is: no per-player total, and the
+     * published figure showing in its place, which is the same state an older
+     * reader that never scraped at all produces and needs nothing new to say
+     * it. `gain` is already null for the same reason a few lines up in
+     * `lineup.js` -- a sum missing terms of unknown size is not a smaller sum.
+     *
+     * Yahoo alone, because Yahoo alone has something better to fall back on.
+     * A partial Sleeper or ESPN total is all there is from that desk, and
+     * withholding it would trade a number that understates for no number.
+     */
     const totalsFor = (name) => {
       const desk = its.desks[name];
-      return desk ? { now: desk.currentPoints, best: desk.points } : null;
+      if (!desk) return null;
+      if (name === 'yahoo' && desk.unscoredStarters.length) return null;
+      return { now: desk.currentPoints, best: desk.points };
     };
 
     /*

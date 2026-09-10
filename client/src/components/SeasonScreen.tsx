@@ -376,7 +376,8 @@ function deskCell(team: LineupTeam | null, playerKey: string, desk: DeskColumn) 
  *
  * Yahoo has two numbers that are not the same number -- see `LineupTeam` --
  * and this is where the choice between them is made. Where the roster page was
- * scraped, Yahoo is an ordinary desk with an ordinary best. Where it was not,
+ * scraped over every starter, Yahoo is an ordinary desk with an ordinary best.
+ * Where it was not -- never scraped, or scraped over only part of the lineup --
  * the scoreboard's published team total is all there is: a real total, and no
  * best, because there is nothing per player to re-seat.
  */
