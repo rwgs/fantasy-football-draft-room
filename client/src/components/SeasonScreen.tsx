@@ -118,6 +118,25 @@ function slotLine(slot: SeasonSlot): string {
 }
 
 /**
+ * What the status column says: Yahoo's own word, or which absence this is.
+ *
+ * A code is spelt out where Yahoo spelt it out, and never read as an injury:
+ * `NA` is 44% of the pool and means unrostered rather than hurt.
+ *
+ * A PLAYER THE POOL HOLDS AND SAYS NOTHING ABOUT IS HEALTHY. The status fields
+ * arrive only when Yahoo has something to report, so their absence is the
+ * report and not a gap in it. "Nothing reported" was the first wording, and
+ * against four fifths of every roster it read as data this app had failed to
+ * get. The two real gaps keep words of their own: a pool that answered and
+ * does not hold him says so, and a pool that never answered leaves the status
+ * genuinely unknown.
+ */
+function statusWord(pool: SeasonPoolRecord | null, pooled: boolean): string {
+  if (pool) return pool.statusFull || pool.status || 'healthy';
+  return pooled ? 'not in the pool' : 'unknown';
+}
+
+/**
  * The roster in the order a person reads it: the starting lineup in the
  * league's own slot order, then the bench, then IR.
  *
@@ -253,16 +272,7 @@ function Roster({ roster, name, anonymous, index, pooled, slots, desks, team, op
               <td className="mono num">
                 {p.pool ? (p.pool.percentOwned == null ? '—' : p.pool.percentOwned + '%') : ''}
               </td>
-              <td className="hint">
-                {p.pool
-                  // Yahoo's own code, spelt out where it spelt it out. Never
-                  // read as an injury: `NA` is 44% of the pool and means
-                  // unrostered rather than hurt.
-                  ? (p.pool.statusFull || p.pool.status || 'nothing reported')
-                  // "Not in the pool" is a claim about the player, and it can
-                  // only be made when the pool actually answered.
-                  : pooled ? 'not in the pool' : ''}
-              </td>
+              <td className="hint">{statusWord(p.pool, pooled)}</td>
               {desks.map((desk) => (
                 <td key={desk.key} className="mono num">
                   {deskCell(team, p.playerKey, desk)}
@@ -888,16 +898,7 @@ function Advice({ lineup, loading, error, team, slots, pool, pooled }: {
                     <td className="mono num">
                       {held ? (held.percentOwned == null ? '—' : held.percentOwned + '%') : ''}
                     </td>
-                    <td className="hint">
-                      {held
-                        // Yahoo's own code, spelt out where it spelt it out.
-                        // Never read as an injury: `NA` is 44% of the pool and
-                        // means unrostered rather than hurt.
-                        ? (held.statusFull || held.status || 'nothing reported')
-                        // "Not in the pool" is a claim about the player, and it
-                        // can only be made when the pool actually answered.
-                        : pooled ? 'not in the pool' : ''}
-                    </td>
+                    <td className="hint">{statusWord(held, pooled)}</td>
                     {tableDesks.map((desk) => (
                       <td key={desk.key} className="mono num">
                         {/*
