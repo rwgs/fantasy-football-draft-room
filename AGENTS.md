@@ -69,6 +69,11 @@ same player.
   — a missing column reports nothing found, never nobody projected — and the
   app reconciles the total against the scoreboard's own. See
   `docs/in-season-data-sources.md`.
+  Both carry an `@version` in their header, and a change to what either one
+  does has to raise it. A userscript manager replaces an install when that
+  number rises and not when the bytes change, so a fix served without one
+  reaches nobody and says so nowhere. The build the service stamps is a hash
+  of the source and follows on its own; this is the version kept by hand.
 
 Nothing is generated or built into the tree. `client/dist` is a build output
 and `server/data/cache` is a cache; neither is edited by hand.
