@@ -975,6 +975,14 @@ export interface LeagueSnapshot {
   matchups: LeagueMatchup[] | null;
   /** Whom you play, or null where no scoreboard came or the guid found no team. */
   opponentTeamKey: string | null;
+  /**
+   * Yahoo's own per-player projection, by team key and then by player id.
+   *
+   * Scraped off each team's roster page, because Yahoo publishes it at no API
+   * path at all. **Null where the installed reader never looked** — any copy
+   * older than 2026-09-09 — which is not the same as a league nobody projected.
+   */
+  projections: Record<string, Record<string, number>> | null;
   teams: SeasonTeam[];
   rosters: { teamKey: string | null; week: number | null; players: unknown[] }[];
   /**
@@ -1173,7 +1181,18 @@ export interface LineupDispute {
   material: boolean;
 }
 
-/** A rostered player with both desks' numbers and what he could actually fill. */
+/**
+ * The projection desks, by the key each is held under.
+ *
+ * Yahoo is one of them and is unlike the other two: Sleeper and ESPN publish
+ * components that `scoring.js` turns into this league's points, while Yahoo's
+ * number arrives already scored under the league's own rules, because it is
+ * what its roster page prints. So no scoring rule can be missing from a Yahoo
+ * total, and its `unsupported` list is empty rather than absent.
+ */
+export type DeskKey = 'sleeper' | 'espn' | 'yahoo';
+
+/** A rostered player with every desk's number and what he could actually fill. */
 export interface LineupRosterPlayer {
   playerKey: string;
   name: string | null;
@@ -1189,7 +1208,7 @@ export interface LineupRosterPlayer {
    * starter and still cannot play there.
    */
   fills: string[];
-  points: { sleeper: number | null; espn: number | null };
+  points: Record<DeskKey, number | null>;
 }
 
 /**
@@ -1217,12 +1236,25 @@ export interface LineupTeamTotal {
 export interface LineupTeam {
   teamKey: string | null;
   /** Each desk's number per player, by player key. Null is nobody projected him. */
-  points: Record<string, { sleeper: number | null; espn: number | null }>;
+  points: Record<string, Record<DeskKey, number | null>>;
   /** Null for a desk that did not answer, which is not a total of zero. */
   totals: {
     sleeper: LineupTeamTotal | null;
     espn: LineupTeamTotal | null;
     yahoo: LineupTeamTotal | null;
+    /**
+     * What Yahoo's own scoreboard says this team is projected at.
+     *
+     * NOT THE SAME NUMBER AS `yahoo`, and kept apart on purpose. `yahoo` is the
+     * desk: the roster page's per-player figures, seated and totalled the way
+     * the other two desks are. This is the figure Yahoo computed itself and
+     * prints on its matchup card.
+     *
+     * They ought to agree, and showing both is the only check there is on a
+     * column scraped from a page with no contract. Folding them into one field
+     * would throw that away.
+     */
+    yahooPublished: number | null;
   };
 }
 
@@ -1266,13 +1298,14 @@ export interface LineupRead {
   teams?: LineupTeam[];
   /** Whom the user plays, or null where the installed reader sent no scoreboard. */
   opponentTeamKey?: string | null;
-  /** The league's own rules each desk cannot score, per desk rather than per player. */
-  unsupported?: {
-    sleeper: { statId: string; name: string; points: number; reason: string }[];
-    espn: { statId: string; name: string; points: number; reason: string }[];
-  };
+  /**
+   * The league's own rules each desk cannot score, per desk rather than per
+   * player. Yahoo's is empty rather than absent: its number is this league's
+   * points already, so no rule can be missing from it.
+   */
+  unsupported?: Record<DeskKey, { statId: string; name: string; points: number; reason: string }[]>;
   /** Rostered players a desk never projected, named rather than counted. */
-  unprojected?: { sleeper: string[] | null; espn: string[] | null };
+  unprojected?: Record<DeskKey, string[] | null>;
   feeds: {
     league: SeasonFeed;
     sleeper: SeasonFeed;

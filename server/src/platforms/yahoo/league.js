@@ -181,7 +181,9 @@ function readRoster(response) {
  * is not optional is honesty about which parts arrived, so anything missing is
  * `null` rather than an empty object that reads like an answer.
  */
-export function readSnapshot({ settings, teams, rosters, roster, profile, scoreboard } = {}) {
+export function readSnapshot({
+  settings, teams, rosters, roster, profile, scoreboard, projections,
+} = {}) {
   if (!settings) throw new Error('A snapshot needs at least the league settings.');
 
   const leagueNode = pick(settings.fantasy_content ?? {}, 'league', 'the settings response');
@@ -207,6 +209,43 @@ export function readSnapshot({ settings, teams, rosters, roster, profile, scoreb
   const ownTeamKey = ownGuid
     ? teamList.find((team) => team.managers.some((m) => m.guid === ownGuid))?.teamKey ?? null
     : null;
+
+  /*
+   * YAHOO'S OWN PER-PLAYER PROJECTION, KEYED BY TEAM AND THEN BY PLAYER ID.
+   *
+   * The reader scrapes this off each team's roster page, because Yahoo
+   * publishes it nowhere else -- see the long note in `league-reader.js` for
+   * the probe that established that and for why the extraction happens there.
+   * What arrives is already reduced to `{ teamId, players: [{ id, pts }] }`.
+   *
+   * `id` is Yahoo's own player id and joins exactly: it is the same number the
+   * API writes as the `p.` half of a player key, so nothing here matches on a
+   * name. It is keyed by id rather than by key because a page carries the id
+   * and not the game, and the game is the caller's to know.
+   *
+   * THREE STATES AND THEY ARE NOT THE SAME. `null` is a reader that never
+   * looked -- any copy older than 2026-09-09. A team absent from the map is a
+   * page that would not come. `players: null` from the reader is the column
+   * having gone missing from a page that did come, which is the one that says
+   * Yahoo changed the markup, and it is dropped here so it reads as the second.
+   * None of them is a projection of zero.
+   */
+  const teamKeyById = new Map(teamList.map((team) => [String(team.teamId), team.teamKey]));
+  let projected = null;
+  if (Array.isArray(projections)) {
+    projected = {};
+    for (const entry of projections) {
+      if (!entry || !Array.isArray(entry.players)) continue;
+      const key = teamKeyById.get(String(entry.teamId));
+      if (!key) continue;
+      const held = {};
+      for (const player of entry.players) {
+        const pts = Number(player?.pts);
+        if (player?.id != null && Number.isFinite(pts)) held[String(player.id)] = pts;
+      }
+      projected[key] = held;
+    }
+  }
 
   /*
    * WHO YOU PLAY THIS WEEK, AND WHAT YAHOO PROJECTS EVERY TEAM AT.
@@ -302,6 +341,11 @@ export function readSnapshot({ settings, teams, rosters, roster, profile, scoreb
      */
     matchups,
     opponentTeamKey,
+    /*
+     * Yahoo's own projection per player, by team key and then by player id, or
+     * null where the installed reader never looked for it.
+     */
+    projections: projected,
     teams: teamList,
     rosters: rostersOut,
     // Whether the copy of the reader that posted this can read every roster.

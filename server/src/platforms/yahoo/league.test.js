@@ -205,6 +205,18 @@ const scoreboardResponse = () => ({
   },
 });
 
+/**
+ * What the reader posts after scraping each team's roster page.
+ *
+ * Already reduced: the reader parses the page and sends `{ teamId, players }`
+ * rather than a megabyte of HTML. `id` is Yahoo's own player id, which is the
+ * `p.` half of a player key, so the join here is exact.
+ */
+const projectionsPosted = () => ([
+  { teamId: '7', players: [{ id: '1', pts: 20.65 }, { id: '2', pts: 14.29 }] },
+  { teamId: '1', players: [{ id: '3', pts: 9.5 }] },
+]);
+
 /** The one metadata block that is a plain object rather than a split-up one. */
 const profileResponse = () => ({
   fantasy_content: {
@@ -227,6 +239,7 @@ const full = () => readSnapshot({
   rosters: [rosterResponse()],
   profile: profileResponse(),
   scoreboard: scoreboardResponse(),
+  projections: projectionsPosted(),
 });
 
 test('the league is read out of the first half of a two-part resource', () => {
@@ -585,4 +598,63 @@ test('an opponent needs your own team found first, so no guid means no opponent'
   // The matchups are still read: they are a fact about the league rather than
   // about you, and only the pairing to your key could not be made.
   assert.equal(snap.matchups.length, 1);
+});
+
+test("Yahoo's per-player projection is keyed by team, then by player id", () => {
+  // The reader posts a team *id* and the snapshot keys everything by team
+  // *key*, so this is the one place the two vocabularies meet.
+  const { projections } = full();
+  assert.deepEqual(projections['470.l.111.t.7'], { 1: 20.65, 2: 14.29 });
+  assert.deepEqual(projections['470.l.111.t.1'], { 3: 9.5 });
+});
+
+test('a reader too old to scrape a projection claims none rather than zero', () => {
+  // Any installed copy older than 2026-09-09. Null is "never looked"; an empty
+  // object would be a claim that the league holds no projected players.
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    profile: profileResponse(),
+  });
+  assert.equal(snap.projections, null);
+});
+
+test('a team whose roster page would not come is absent, not empty', () => {
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    profile: profileResponse(),
+    projections: [{ teamId: '7', players: [{ id: '1', pts: 20.65 }] }],
+  });
+  assert.deepEqual(Object.keys(snap.projections), ['470.l.111.t.7']);
+});
+
+test('the Proj column going missing is dropped rather than read as nobody', () => {
+  /*
+   * The reader sends `players: null` when the heading was not on the page,
+   * which is the failure HTML invites: Yahoo renames a column and the scrape
+   * comes back empty. Dropping the team is right, because a team with an empty
+   * map would report every player on it as one Yahoo declined to project.
+   */
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    profile: profileResponse(),
+    projections: [{ teamId: '7', players: null }],
+  });
+  assert.deepEqual(snap.projections, {});
+});
+
+test('a projection for a team this league does not hold is ignored', () => {
+  const snap = readSnapshot({
+    settings: settingsResponse(),
+    teams: teamsResponse(),
+    rosters: [rosterResponse()],
+    profile: profileResponse(),
+    projections: [{ teamId: '99', players: [{ id: '1', pts: 5 }] }],
+  });
+  assert.deepEqual(snap.projections, {});
 });

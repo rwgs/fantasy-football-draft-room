@@ -54,6 +54,22 @@ import { SCOREABLE_POSITIONS } from './sources/components.js';
  * ruled a mean out. Averaging showed Tua Tagovailoa at 13.0 where the desks
  * said 15.29 and 10.75 -- a start and a sit, reported as neither.
  * See `docs/in-season-data-sources.md`.
+ *
+ * MEASURED BETWEEN TWO DESKS AND NOW APPLIED ACROSS THREE, which is stated
+ * rather than quietly retuned. Yahoo joined on 2026-09-09 -- its roster page's
+ * own `Proj Pts`, scraped, and unlike the other two it needs no scoring
+ * because it arrives as this league's points already. Nothing below treats a
+ * third source specially: `spread` is the widest view any one desk holds of
+ * the players being chosen between, which is defined for any number of them,
+ * and `agreed` already means every desk rather than both.
+ *
+ * What genuinely changes is what the two words mean to a reader. A player now
+ * has to clear all three to count as agreed, so that list shrinks and the
+ * disputed one grows, and three desks will disagree more often than two did
+ * for no better reason than that there are more of them. Whether three points
+ * is still the line between a coin flip and a real difference has not been
+ * measured. It wants a week of real numbers before it is moved, and moving it
+ * on a hunch would be worse than leaving it where the measurement put it.
  */
 export const MATERIAL_SPREAD = 3;
 

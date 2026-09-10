@@ -61,6 +61,14 @@ same player.
   app's screen reads, which is where Y9.4 landed rather than in a second
   install. It does not report its build back yet, so a stale reader polls
   perfectly while posting a shape the service has moved on from.
+  It is also the one place in this project that reads a *page* rather than an
+  API. Yahoo publishes a per-player projection on a team's roster page and
+  nowhere on `/fantasy/v2`, so the reader scrapes that column and posts the
+  numbers; the extraction is there rather than in the service because the page
+  is 1.14 MB and there is one per team. HTML has no contract, so it fails loud
+  — a missing column reports nothing found, never nobody projected — and the
+  app reconciles the total against the scoreboard's own. See
+  `docs/in-season-data-sources.md`.
 
 Nothing is generated or built into the tree. `client/dist` is a build output
 and `server/data/cache` is a cache; neither is edited by hand.

@@ -36,6 +36,16 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+/*
+ * A real DOM, for the one thing in the reader that parses a page.
+ *
+ * `DOMParser` is passed in like `document` and the rest, so the source is
+ * still not stubbed -- but a hand-rolled fake would only prove the fake agrees
+ * with itself, and the whole risk in scraping HTML is the markup. So this is a
+ * real parser over markup copied from a live roster page.
+ */
+import { DOMParser } from 'linkedom';
+
 const SRC = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), 'league-reader.js'),
   'utf8',
@@ -61,6 +71,53 @@ const TEAMS = {
   fantasy_content: { league: [{}, { teams: { 0: { team: [[{ team_id: '1' }]] } } }] },
 };
 const ROSTER = { fantasy_content: { team: [[{ team_key: 'nfl.l.1.t.1' }], { roster: {} }] } };
+
+/**
+ * A team's roster page, in the markup a real one uses.
+ *
+ * Copied in shape from a live page on 2026-09-09, including the parts that
+ * make it awkward and that a convenient fixture would leave out:
+ *
+ *   - Two header rows. A group row spans the columns and the names sit in the
+ *     second, so anything reading only the first finds no heading at all.
+ *   - `Fan Pts` immediately before `Proj Pts`, holding an en dash because
+ *     nothing has been played. Off by one and every player reads as
+ *     unprojected.
+ *   - The cell is `<td class="Ta-end Nowrap"><div>20.65</div></td>`, whose
+ *     class several numeric columns share, so the column can only be found by
+ *     its heading.
+ *   - `data-ys-playerid` on a link buried inside the name cell, which is the
+ *     exact join and the reason nothing matches on a name.
+ *   - A player showing a dash, who must come back absent rather than as zero.
+ */
+const projRow = (id, name, proj) => [
+  '<tr>',
+  '<td>QB</td><td>QBBN</td>',
+  '<td class="Alt Ta-start player"><div class="ysf-player-name">',
+  '<a class="name F-link playernote" data-ys-playerid="' + id + '"',
+  ' href="https://sports.yahoo.com/nfl/players/' + id + '">' + name + '</a>',
+  '</div></td>',
+  '<td>10</td>',
+  '<td>&ndash;</td>',
+  '<td class="Ta-end Nowrap"><div>' + proj + '</div></td>',
+  '<td>94%</td>',
+  '</tr>',
+].join('');
+
+const ROSTER_PAGE = [
+  '<!DOCTYPE html><html><body><table><thead>',
+  '<tr><th></th><th></th><th></th><th></th><th>Fantasy</th><th>Trends</th></tr>',
+  '<tr><th>Pos</th><th>Edit</th><th>Offense</th><th>Bye</th>',
+  '<th>Fan Pts</th><th>Proj Pts</th><th>% Start</th></tr>',
+  '</thead><tbody>',
+  projRow('32723', 'Jalen Hurts', '20.65'),
+  projRow('30977', 'Christian McCaffrey', '20.33'),
+  projRow('99999', 'Nobody Projected', '-'),
+  '</tbody></table></body></html>',
+].join('');
+
+/** The same page with the column renamed, which is how Yahoo breaks this. */
+const ROSTER_PAGE_NO_COLUMN = ROSTER_PAGE.replace('Proj Pts', 'Something Else');
 /*
  * The scoreboard, which the reader fetches for two things at once: who you play
  * and Yahoo's own projected total. Its own branch below, before `/teams`, since
@@ -122,6 +179,7 @@ let leagues = 0;
  */
 function reader({
   mode = 'userscript', every = null, advice = ADVICE, reachable = true, scoreboardOk = true,
+  projPage = ROSTER_PAGE,
 } = {}) {
   leagues += 1;
   const league = String(966000000 + leagues);
@@ -159,6 +217,9 @@ function reader({
 
   const location_ = {
     hostname: 'football.fantasysports.yahoo.com',
+    // The roster pages are same-origin with the league page, which is what
+    // lets the reader fetch them with the session the browser already holds.
+    origin: 'https://football.fantasysports.yahoo.com',
     pathname: '/f1/' + league + '/1',
   };
 
@@ -191,6 +252,14 @@ function reader({
     assert.ok(!opts || !opts.headers || !opts.headers.cookie, 'the reader sent a cookie');
     if (at.includes('profile')) return { ok: true, json: async () => PROFILE };
     if (at.includes('/settings')) return { ok: true, json: async () => SETTINGS };
+    /*
+     * The roster page, which is a page and not the API: a different host in
+     * life, and here told apart by the `/f1/` in its path.
+     */
+    if (at.includes('/f1/')) {
+      if (!projPage) return { ok: false, status: 500, text: async () => '' };
+      return { ok: true, text: async () => projPage };
+    }
     if (at.includes('/scoreboard')) {
       if (!scoreboardOk) throw new Error('Yahoo refused the scoreboard');
       return { ok: true, json: async () => SCOREBOARD };
@@ -204,8 +273,8 @@ function reader({
     .replace('__READER_BUILD__', 'testbuild')
     .replace('__READER_MODE__', mode);
 
-  new Function('document', 'window', 'location', 'fetch', stamped)(
-    document_, window_, location_, fetch_,
+  new Function('document', 'window', 'location', 'fetch', 'DOMParser', stamped)(
+    document_, window_, location_, fetch_, DOMParser,
   );
 
   return {
@@ -227,7 +296,7 @@ test('it reads the league on load, without being clicked', async () => {
   const [body] = r.posted;
   // Yahoo's own JSON, unread. Every bit of the interpreting is the service's.
   assert.deepEqual(Object.keys(body).sort(),
-    ['profile', 'rosters', 'scoreboard', 'settings', 'teams']);
+    ['profile', 'projections', 'rosters', 'scoreboard', 'settings', 'teams']);
   assert.equal(body.rosters.length, 1, 'the roster is read per team, so one team is one roster');
   assert.match(r.said(), /Read Test League/);
 });
@@ -390,4 +459,53 @@ test('a scoreboard Yahoo refuses costs the matchup and not the read', () => {
     assert.equal(r.posted[0].scoreboard, null);
     assert.match(r.said(), /Read Test League/);
   });
+});
+
+test("it reads Yahoo's own projection off the roster page", async () => {
+  const r = reader({ every: 0 });
+  await r.settle();
+
+  const [{ projections }] = r.posted;
+  assert.equal(projections.length, 1, 'one team, so one roster page');
+  const [team] = projections;
+  assert.equal(team.teamId, '1');
+  /*
+   * By id and never by name. `data-ys-playerid` is the same number the API
+   * writes as the `p.` half of a player key, so the join is exact -- which is
+   * the whole reason scraping the page was worth doing at all.
+   */
+  assert.deepEqual(team.players, [
+    { id: '32723', pts: 20.65 },
+    { id: '30977', pts: 20.33 },
+  ]);
+});
+
+test('a player Yahoo shows a dash for is absent, and never a zero', async () => {
+  const r = reader({ every: 0 });
+  await r.settle();
+
+  const ids = r.posted[0].projections[0].players.map((p) => p.id);
+  assert.ok(!ids.includes('99999'), 'an unprojected player came back with a number');
+});
+
+test('the column going missing reports nothing found, not nobody projected', async () => {
+  /*
+   * HTML has no contract, so this is the failure that will actually happen:
+   * Yahoo renames a heading and the scrape returns an empty roster. Null says
+   * the column was not there. An empty list would say every player on the team
+   * is unprojected, which reads as a finding about the league.
+   */
+  const r = reader({ every: 0, projPage: ROSTER_PAGE_NO_COLUMN });
+  await r.settle();
+
+  assert.equal(r.posted[0].projections[0].players, null);
+});
+
+test('a roster page that will not come costs that team and not the read', async () => {
+  const r = reader({ every: 0, projPage: null });
+  await r.settle();
+
+  assert.equal(r.posted.length, 1, 'a refused roster page took the whole read with it');
+  assert.deepEqual(r.posted[0].projections, [], 'a page that failed is dropped, not guessed at');
+  assert.match(r.said(), /Read Test League/);
 });

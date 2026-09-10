@@ -362,6 +362,55 @@ async function postSnapshot(id, teams, { old = false } = {}) {
     { name: 'Denver Broncos', team: 'DEN', position: 'DEF', bye: 12 },
   ];
 
+  /*
+   * YAHOO'S OWN PER-PLAYER PROJECTION, THE WAY ITS ROSTER PAGE PRINTS ONE.
+   *
+   * The reader scrapes these off each team's page, so what lands here is what
+   * it posts: a team id and `{ id, pts }` per player. Deterministic rather
+   * than random, so a screenshot is the same twice.
+   *
+   * IT PROJECTS THE KICKER AND THE DEFENCE, WHICH IS THE INTERESTING PART. No
+   * other desk can -- Y9.1 could not reproduce either position's components
+   * from Sleeper or ESPN, so `SCOREABLE_POSITIONS` excludes them and
+   * `startingSeats` gives them no seat. Yahoo publishes the finished number,
+   * so it has one. The seats stay uniform across desks all the same, because
+   * two desks totalling different sets of seats cannot be compared -- which
+   * means Yahoo's own total here is legitimately below what its scoreboard
+   * says, by exactly those two players. The screen says so rather than
+   * flagging it, and this fixture is what puts that sentence on screen.
+   */
+  const skillProj = (t, i) => Number((19.4 - i * 1.4 + t * 0.15).toFixed(2));
+  const unscoredProj = (t, i) => Number((8.6 - i * 1.2 + t * 0.1).toFixed(2));
+
+  const projections = Array.from({ length: teams }, (_, t) => ({
+    teamId: String(t + 1),
+    players: [
+      ...Array.from({ length: HELD }, (_, i) => ({
+        id: String(20000 + t * HELD + i),
+        pts: skillProj(t, i),
+      })),
+      ...UNSCORED.map((p, i) => ({
+        id: String(29000 + t * UNSCORED.length + i),
+        pts: unscoredProj(t, i),
+      })),
+    ],
+  }));
+
+  /*
+   * What Yahoo's scoreboard says the team is projected at, summed from the
+   * very numbers above rather than invented.
+   *
+   * The app cross-checks one against the other, since a column read off a page
+   * has no contract and the published figure is the only thing that can catch
+   * it drifting. A fixture whose two Yahoo numbers had nothing to do with each
+   * other would photograph that check failing every run.
+   */
+  const publishedFor = (t) => Number((
+    Array.from({ length: HELD }, (_, i) => (BENCHED.has(i) ? 0 : skillProj(t, i)))
+      .reduce((a, b) => a + b, 0)
+    + UNSCORED.reduce((n, _p, i) => n + unscoredProj(t, i), 0)
+  ).toFixed(2));
+
   const rosters = Array.from({ length: teams }, (_, t) => ({
     fantasy_content: {
       team: [
@@ -464,6 +513,13 @@ async function postSnapshot(id, teams, { old = false } = {}) {
       // bookmarklet too old to send every roster posts.
       ...(old ? { roster: rosters[0] } : { rosters }),
       /*
+       * Omitted for the stale-reader shot on purpose. A copy that old scrapes
+       * nothing, so that screenshot shows the other half of the Yahoo column:
+       * a published team total under a run of blanks, and the screen saying
+       * why rather than leaving it looking like a desk that failed.
+       */
+      ...(old ? {} : { projections }),
+      /*
        * The second team is the user's, so the screenshot shows the own-team
        * mark landing somewhere other than first. That is the whole point of
        * matching on the guid rather than on a position in the list, and a
@@ -500,7 +556,8 @@ async function postSnapshot(id, teams, { old = false } = {}) {
                             {
                               team_points: { coverage_type: 'week', week: '3', total: '0.00' },
                               team_projected_points: {
-                                coverage_type: 'week', week: '3', total: (95 + t * 3.5).toFixed(2),
+                                coverage_type: 'week', week: '3',
+                                total: publishedFor(t - 1).toFixed(2),
                               },
                             },
                           ],
@@ -643,6 +700,35 @@ async function yahooSeason(browser, viewport) {
    * name is the whole of the check and a count of rosters is not.
    */
   const weekPanel = page.locator('.panel', { has: page.getByRole('heading', { name: 'This week' }) });
+
+  /*
+   * YAHOO IS A THIRD DESK AND NOT A COLUMN OF BLANKS.
+   *
+   * Its numbers are scraped off each team's roster page, which is the only
+   * place Yahoo publishes them, so this is the check that the scrape ran and
+   * the join landed. Three desk blocks rather than two is the cheapest proof
+   * of both: the block only exists for a desk that answered, and a desk only
+   * answers when the per-player numbers reached it.
+   */
+  const deskNames = await page.locator('.season-desk-head b').allInnerTexts();
+  if (!deskNames.map((n) => n.trim()).includes('Yahoo')) {
+    throw new Error('Yahoo is not among the desks: ' + deskNames.join(', '));
+  }
+
+  /*
+   * AND ITS COLUMN RECONCILES WITH YAHOO'S OWN CARD.
+   *
+   * A column read off a page has no contract, so this is the one thing that
+   * can catch it drifting: both sides are Yahoo's arithmetic over the same
+   * players -- the team total it publishes on the scoreboard, and its
+   * per-player numbers for the starters added up -- so they must agree. If
+   * they ever do not, the scrape is reading the wrong column or the wrong
+   * rows, which is precisely the failure this whole approach invites.
+   */
+  const reconciled = await weekPanel.getByText(/matchup card puts this team at/).innerText();
+  if (!/They agree/.test(reconciled)) {
+    throw new Error('the Yahoo column does not reconcile with Yahoo: ' + reconciled);
+  }
   const weekHead = weekPanel.locator('.panel-head');
   await weekHead.getByText('Gridiron Gulls').waitFor({ state: 'visible' });
   if (await weekHead.locator('.chip').count() !== 1) {

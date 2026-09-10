@@ -20,6 +20,7 @@
     "reader:test": "node --test --test-force-exit --test-concurrency=1 userscript/reader.test.mjs"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "linkedom": "^0.18.13"
   }
 }

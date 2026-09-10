@@ -630,6 +630,34 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
   const sleeperScored = scored(sleeper, own.players);
   const espnScored = scored(espn, own.players);
 
+  /*
+   * YAHOO AS A THIRD DESK, AND THE ONE THAT NEEDS NO SCORING.
+   *
+   * The other two publish components and `scoring.js` turns them into this
+   * league's points. Yahoo's number arrives already scored under the league's
+   * own rules -- it is what its roster page prints -- so it bypasses that
+   * module entirely. That is not an oversight of the design the rest of this
+   * file rests on; it is the one source for which the question the design
+   * answers does not arise. It also means `unsupportedRules` has nothing to
+   * report against it: a rule this league scores cannot be missing from a
+   * total Yahoo computed itself.
+   *
+   * Null where the installed reader never scraped it, which is any copy older
+   * than 2026-09-09, and null is how `lineupAdvice` is told a desk did not
+   * answer rather than that it projected nobody.
+   */
+  const yahooFor = (roster) => {
+    const held = snapshot.projections?.[roster.teamKey];
+    if (!held) return null;
+    const points = new Map();
+    for (const player of roster.players) {
+      const value = held[String(player.playerId)];
+      if (typeof value === 'number') points.set(player.playerKey, value);
+    }
+    return points;
+  };
+  const yahooOwn = yahooFor(own);
+
   const slots = resolveSlots(snapshot.slots, vocabulary.value
     ? vocabulary.value.rosterPositions
     : null);
@@ -637,7 +665,7 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
   const advice = lineupAdvice({
     slots,
     players: own.players,
-    sources: { sleeper: sleeperScored.points, espn: espnScored.points },
+    sources: { sleeper: sleeperScored.points, espn: espnScored.points, yahoo: yahooOwn },
     // Nothing known about locks, and said so rather than assumed. Yahoo
     // publishes no kickoff time at any scope and ESPN's is not read yet, so
     // `locksKnown` comes back false and the screen has to say so.
@@ -672,10 +700,11 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
   const teams = (snapshot.rosters ?? []).map((roster) => {
     const bySleeper = scored(sleeper, roster.players);
     const byEspn = scored(espn, roster.players);
+    const yahooPoints = yahooFor(roster);
     const its = lineupAdvice({
       slots,
       players: roster.players,
-      sources: { sleeper: bySleeper.points, espn: byEspn.points },
+      sources: { sleeper: bySleeper.points, espn: byEspn.points, yahoo: yahooPoints },
       locked: null,
       week,
     });
@@ -689,25 +718,31 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
     };
 
     /*
-     * Yahoo's own projection is a TEAM TOTAL AND HAS NO BEST, and the null says
-     * why rather than leaving a reader to wonder. A best lineup is a
-     * re-seating, and a re-seating needs a number against each player; Yahoo
-     * publishes one on its roster page and at no fantasy-v2 path this project
-     * can reach. So there is a total to show and nothing to re-seat, which is a
-     * different thing from a best that happens to equal the total.
+     * TWO YAHOO NUMBERS THAT ARE NOT THE SAME NUMBER, and keeping them apart is
+     * the point. `yahoo` is the desk: the roster page's per-player figures,
+     * seated and totalled exactly as the other two desks are, so it has a best
+     * lineup like theirs. `yahooPublished` is what the scoreboard says the team
+     * is projected at, which Yahoo computed itself.
+     *
+     * They ought to agree, and a screen showing both is the only cross-check
+     * this project has on a scrape of a page with no contract. Folding them
+     * into one field would throw that away and would quietly prefer whichever
+     * happened to be there.
      */
-    const yahoo = yahooProjected.get(roster.teamKey);
+    const published = yahooProjected.get(roster.teamKey);
 
     return {
       teamKey: roster.teamKey,
       points: Object.fromEntries(roster.players.map((player) => [player.playerKey, {
         sleeper: bySleeper.points ? bySleeper.points.get(player.playerKey) ?? null : null,
         espn: byEspn.points ? byEspn.points.get(player.playerKey) ?? null : null,
+        yahoo: yahooPoints ? yahooPoints.get(player.playerKey) ?? null : null,
       }])),
       totals: {
         sleeper: totalsFor('sleeper'),
         espn: totalsFor('espn'),
-        yahoo: yahoo == null ? null : { now: yahoo, best: null },
+        yahoo: totalsFor('yahoo'),
+        yahooPublished: published == null ? null : published,
       },
     };
   });
@@ -741,6 +776,7 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
       points: {
         sleeper: sleeperScored.points ? sleeperScored.points.get(player.playerKey) ?? null : null,
         espn: espnScored.points ? espnScored.points.get(player.playerKey) ?? null : null,
+        yahoo: yahooOwn ? yahooOwn.get(player.playerKey) ?? null : null,
       },
     };
   });
@@ -773,10 +809,23 @@ export async function readLineup(leagueId, { week: wanted } = {}) {
     unsupported: {
       sleeper: unsupportedRules(snapshot.scoring, SLEEPER_SUPPLIES),
       espn: unsupportedRules(snapshot.scoring, ESPN_SUPPLIES),
+      // Empty and not absent. Yahoo's number is this league's own points,
+      // computed by Yahoo under its own rules, so no rule can be missing from
+      // it -- which is a positive statement and not a gap in the answer.
+      yahoo: [],
     },
     // Named, not counted, on the pattern Y8.4 set: a count says a join went
     // wrong and a name says who to go and look at.
-    unprojected: { sleeper: sleeperScored.unmatched, espn: espnScored.unmatched },
+    unprojected: {
+      sleeper: sleeperScored.unmatched,
+      espn: espnScored.unmatched,
+      // Named the same way, and null where the reader never scraped a page:
+      // a desk that did not answer has said nothing about anybody.
+      yahoo: yahooOwn
+        ? own.players.filter((p) => !yahooOwn.has(p.playerKey))
+          .map((p) => p.name || p.playerKey || 'a player with no name')
+        : null,
+    },
     feeds: {
       league: { fetchedAt: snapshot.readAt, stale: false, error: null },
       sleeper: feedAge(sleeper, sleeper.value?.meta),

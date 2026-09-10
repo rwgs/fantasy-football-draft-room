@@ -54,11 +54,39 @@ matters here is the comparison.
 | The stat vocabulary, 108 stats | observed |
 | Week start and end dates | observed, 18 weeks |
 | Raw weekly and season stat values | shape observed, **every value zero — nothing played** |
-| **Projections of any kind** | **none found at any public path** |
+| **Projections, at the public game scope** | **none found at any path** |
+| **Projected team total, league scope** | **observed** — `team_projected_points` on `/league/<key>/scoreboard` |
+| **Projected points per player, league scope** | **observed, on the roster page only** — no API path publishes it |
 | Kickoff times | **none found** |
 
-Yahoo is the source for *what a league is* and for identity within it. It is
-**not** a projection source: nothing public was found that projects a week.
+Yahoo is the source for *what a league is* and for identity within it, and —
+since 2026-09-09 — a projection source too, which the earlier version of this
+section denied. The denial was measured against the **public game scope**, and
+it still holds there: `out=projected_points`, `out=projected_stats` and
+`stats.type=projected_week` are all refused as invalid player resources, both
+without a cookie and, as a signed-in probe confirmed, with one.
+
+What that study could not reach was the **league scope**, which answers 401
+without a session. Two things live there:
+
+- `/league/<key>/scoreboard` carries `team_projected_points` beside
+  `team_points` on every team node. It is the figure on Yahoo's own matchup
+  card. One total per team, nothing per player.
+- The team roster **page** — `/f1/<league>/<team>`, HTML and not an API —
+  prints a `Proj Pts` column per player, already scored under the league's own
+  rules. Nothing on `/fantasy/v2` publishes it, so the league reader scrapes
+  it: the column is found by its heading, and the row joins on
+  `data-ys-playerid`, which is the same number the API writes as the `p.` half
+  of a player key. That join is exact; nothing matches on a name.
+
+The page is 1.14 MB and there is one per team, which is why the reader extracts
+in the browser and posts about 5 KB rather than the HTML. **HTML has no
+contract**, so the app cross-checks the scrape against the scoreboard total:
+both are Yahoo's own arithmetic over the same starters, so a difference means
+the wrong column was read.
+
+Ruled out along the way: `sports.yahoo.com/nfl/players/<id>` is the general
+sports profile and carries no fantasy projection at all.
 
 ## Sleeper
 

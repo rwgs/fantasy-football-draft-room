@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo league reader
 // @namespace    fantasy-football-draft-room
-// @version      1.3.0
+// @version      1.4.0
 // @description  Read your own Yahoo league in season - settings, scoring, teams and rosters - and hand it to the draft room running on your machine. Reads only; never writes to Yahoo.
 // @match        https://*.fantasysports.yahoo.com/f1/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
@@ -404,6 +404,102 @@
     return res.json();
   }
 
+  // ---- Yahoo's own projection ------------------------------------------
+
+  /*
+   * THE ONE THING HERE THAT READS A PAGE INSTEAD OF AN API, and the exception
+   * is argued rather than assumed.
+   *
+   * Yahoo prints a `Proj Pts` column against every player on a team's roster
+   * page and publishes it at no `/fantasy/v2` path at all. That was probed on
+   * 2026-09-09 against a real signed-in league: `out=projected_points` and
+   * `out=projected_stats` are refused as invalid player resources at team and
+   * at league scope alike, and the only projection anywhere in a fantasy-v2
+   * response is `team_projected_points` on the scoreboard, which is a total for
+   * the team and says nothing about who is worth starting. The page is the
+   * only source there is.
+   *
+   * WHY THE EXTRACTION IS HERE AND NOT IN THE SERVICE, which is a departure
+   * from the rule at the top of this file and was decided rather than drifted
+   * into. The rule exists so that a shape Yahoo changes has one place to be
+   * fixed, and that still holds: this is the one place, and `reader.test.mjs`
+   * reaches it with real markup through `linkedom`. What the rule cannot pay
+   * for here is the freight. A roster page is 1.14 MB and there are one per
+   * team, so posting them unread would put about 9 MB on the wire every beat
+   * to re-parse a DOM the browser has already built. This posts about 5 KB.
+   *
+   * A COLUMN THAT IS NOT THERE RETURNS NULL AND NEVER AN EMPTY LIST. HTML has
+   * no contract, so the day Yahoo renames the heading this must report that it
+   * found nothing rather than that nobody is projected -- the second reads as
+   * a league of players with no numbers, which is what a zero would be too.
+   */
+  const PROJ_HEADER = /proj\s*pts/i;
+
+  function projectionsFrom(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const out = [];
+    let sawColumn = false;
+
+    /*
+     * Three tables carry the column, not one -- offence, kickers and defence
+     * are rendered separately -- so every table is looked at and the ones
+     * without the heading are skipped.
+     */
+    for (const table of doc.querySelectorAll('table')) {
+      /*
+       * The column is found by its heading and never by a class. The cell is
+       * `<td class="Ta-end Nowrap">`, which several numeric columns share, so
+       * a class would pick up whichever came first. The heading sits in the
+       * second header row, under a group row that spans it, which is why this
+       * looks for the row that holds it rather than assuming the first.
+       */
+      let at = -1;
+      for (const row of table.querySelectorAll('thead tr')) {
+        const heads = [...row.querySelectorAll('th')];
+        at = heads.findIndex((head) => PROJ_HEADER.test(head.textContent || ''));
+        if (at >= 0) break;
+      }
+      if (at < 0) continue;
+      sawColumn = true;
+
+      for (const row of table.querySelectorAll('tbody tr')) {
+        /*
+         * `data-ys-playerid` is Yahoo's own id for the player and the same
+         * number the API writes as the `p.` half of a player key, so this
+         * joins exactly and nothing here matches on a name.
+         */
+        const held = row.querySelector('[data-ys-playerid]');
+        const id = held && held.getAttribute('data-ys-playerid');
+        const cell = row.querySelectorAll('td')[at];
+        const read = ((cell && cell.textContent) || '').trim();
+        const pts = Number(read);
+        // A dash is what an unprojected player shows, and it is not a zero.
+        if (id && read !== '' && Number.isFinite(pts)) out.push({ id: String(id), pts });
+      }
+    }
+
+    return sawColumn ? out : null;
+  }
+
+  /**
+   * Every team's projections, one roster page each.
+   *
+   * A page that will not come is dropped rather than failing the read: the
+   * snapshot is worth having without it, and the service takes a team missing
+   * from this list as one it knows nothing about rather than one projected at
+   * nothing.
+   */
+  async function readProjections(leagueId, teamIds) {
+    const one = async (teamId) => {
+      const res = await fetch(location.origin + '/f1/' + leagueId + '/' + teamId,
+        { credentials: 'include' });
+      if (!res.ok) throw new Error('the roster page answered ' + res.status);
+      return { teamId: String(teamId), players: projectionsFrom(await res.text()) };
+    };
+    const answered = await Promise.all(teamIds.map((id) => one(id).catch(() => null)));
+    return answered.filter(Boolean);
+  }
+
   // ---- The run ----------------------------------------------------------
 
   async function run() {
@@ -479,16 +575,25 @@
       // reads of the same league give the same list. A roster that would not
       // come is a null here and is named at the end: it is worth saying and not
       // worth failing for, since everything else read is still worth having.
-      const answered = await Promise.all(teamIds.map(
-        (id) => readJson('/team/' + leagueKey + '.t.' + id + '/roster').catch(() => null),
-      ));
+      /*
+       * The rosters and the projections together, because they come from two
+       * different hosts -- the API and the league's own pages -- and a browser
+       * queues per host, so running them apart would serialise two queues that
+       * do not contend.
+       */
+      const [answered, projections] = await Promise.all([
+        Promise.all(teamIds.map(
+          (id) => readJson('/team/' + leagueKey + '.t.' + id + '/roster').catch(() => null),
+        )),
+        readProjections(where.leagueId, teamIds).catch(() => []),
+      ]);
       const rosters = answered.filter(Boolean);
       const missing = teamIds.filter((id, at) => !answered[at]);
 
       const res = await fetch(SERVICE + '/api/yahoo/league/' + where.leagueId + '/snapshot', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ settings, teams, rosters, profile, scoreboard }),
+        body: JSON.stringify({ settings, teams, rosters, profile, scoreboard, projections }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || ('the service answered ' + res.status));
