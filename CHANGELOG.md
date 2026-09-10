@@ -14,8 +14,10 @@ fixed.
 
 **The week's advice, over Yahoo's own league page.** The reader's panel now
 shows what the app makes of the league it just read: what each desk would start
-and bench, what the lineup scores now against the best one available, who both
-desks agree on, and the one player they do not. It is the same endpoint the
+and bench, what the lineup scores now against the best one available, and the
+player they do not agree on. Only that last half of the comparison, because it
+is the only part that is a decision and the panel is small; who both desks start
+is most of the roster and stays on the app's screen. It is the same endpoint the
 app's screen reads, so the two agree by construction rather than by care.
 
 It sits in the panel the reader already draws rather than being a second thing

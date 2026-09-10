@@ -367,9 +367,10 @@ test('it paints the advice the app would show, off the same endpoint', async () 
   assert.doesNotMatch(said, /bench Travis Etienne Jr\./);
   // And a desk with a relocation is not reported as leaving the lineup alone.
   assert.doesNotMatch(said, /leaves the lineup as it is/);
-  // And the two halves of the disagreement, the same way the screen puts them.
-  assert.match(said, /Both desks start Chase Brown/);
+  // And the disagreement, the same way the screen puts it. Only that half: who
+  // both desks start is most of the roster and stays on the app's screen.
   assert.match(said, /disagree about Omarion Hampton RB or Ashton Jeanty W\/R\/T/);
+  assert.doesNotMatch(said, /Both desks start|Chase Brown/);
   /*
    * The locks caution belongs here more than on the app's screen, because this
    * panel is on the page where the moves get made and Yahoo publishes no
@@ -420,7 +421,7 @@ test('a name out of Yahoo cannot put markup into the panel', async () => {
    * about it.
    */
   const advice = structuredClone(ADVICE);
-  advice.advice.agreed = [{ player: '<img src=x onerror="alert(1)">', slot: 'RB' }];
+  advice.advice.disputed[0].picks[0].player = '<img src=x onerror="alert(1)">';
   const r = reader({ every: 0, advice });
   await r.settle();
 

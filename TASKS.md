@@ -2454,6 +2454,12 @@ calculation and need neither a browser nor a real league.
     second copy with nothing checking they agree with the app's, exactly as the
     draft take line already is. `reader.test.mjs` pins the panel against the
     endpoint's shape, not against the screen.
+  - **Narrowed the same day, on the owner's request:** the panel no longer names
+    who both desks start. Only the disagreement is a decision, and the agreement
+    line was most of the roster in a panel 380px wide. It stays on the app's
+    screen where there is room for it, and the endpoint still returns it, so
+    nothing below this changes but the one line. `@version` moved to 1.4.1,
+    because an installed copy updates on that alone.
   - Dependencies or blockers: Y9.3 for the endpoint, Y8.7 for the panel that
     holds this.
 

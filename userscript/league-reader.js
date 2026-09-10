@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo league reader
 // @namespace    fantasy-football-draft-room
-// @version      1.4.0
+// @version      1.4.1
 // @description  Read your own Yahoo league in season - settings, scoring, teams and rosters - and hand it to the draft room running on your machine. Reads only; never writes to Yahoo.
 // @match        https://*.fantasysports.yahoo.com/f1/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
@@ -233,12 +233,10 @@
         + moves + moved + '</div>';
     }).join('');
 
-    // Who both desks start, and who they do not. The second is the decision;
-    // the first is why the rest of the roster is not in this list.
-    const agreed = advice.agreed && advice.agreed.length
-      ? line('Both desks start ' + advice.agreed.map((a) => esc(a.player)).join(', ') + '.',
-        '#6b7370')
-      : '';
+    // Only who the desks do not agree about, because that alone is a decision.
+    // Who they both start is said on the app's screen and not here: it is most
+    // of the roster, and it crowds out the one line worth reading in a panel
+    // this size.
     const disputed = advice.disputed && advice.disputed.length
       ? line('They disagree about ' + advice.disputed.map((row) => row.picks
         .map((pick) => esc(pick.player || 'nobody') + (pick.slot ? ' ' + esc(pick.slot) : ''))
@@ -258,7 +256,7 @@
       + ' white-space:normal">'
       + line('<b style="color:#e8e6e3">This week</b>'
         + (got.week ? ' <span style="color:#6b7370">week ' + esc(got.week) + '</span>' : ''))
-      + desks + agreed + disputed + locks
+      + desks + disputed + locks
       + '</div>';
   }
 
