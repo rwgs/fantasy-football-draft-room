@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yahoo league reader
 // @namespace    fantasy-football-draft-room
-// @version      1.4.1
+// @version      1.4.2
 // @description  Read your own Yahoo league in season - settings, scoring, teams and rosters - and hand it to the draft room running on your machine. Reads only; never writes to Yahoo.
 // @match        https://*.fantasysports.yahoo.com/f1/*
 // @downloadURL  http://127.0.0.1:5178/userscript/yahoo-league-reader.user.js
