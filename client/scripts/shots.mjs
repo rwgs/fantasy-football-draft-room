@@ -613,9 +613,13 @@ async function yahooSeason(browser, viewport) {
    * and importing them needs a posted draft room. Nothing about a draft is
    * seeded here, which is the point.
    */
+  const seeded = [
+    STORE,
+    { mode: 'assistant', savedLeagues: [], activeLeagueId: null, seasonLeagueId: id },
+  ];
   await page.addInitScript(([key, state]) => {
     localStorage.setItem(key, JSON.stringify(state));
-  }, [STORE, { mode: 'assistant', savedLeagues: [], activeLeagueId: null, seasonLeagueId: id }]);
+  }, seeded);
 
   await page.goto(APP, { waitUntil: 'domcontentloaded' });
   const open = page.getByRole('button', { name: 'My league in season' });
@@ -920,6 +924,53 @@ async function yahooSeason(browser, viewport) {
   if (!limits.includes('locked')) {
     throw new Error('the advice does not say whether locks are known: ' + limits.slice(0, 400));
   }
+
+  /*
+   * AND THE SAME SCREEN OPENED THE WAY IT IS OPENED EVERY TIME AFTER THE FIRST.
+   *
+   * Everything above pressed Read. The masthead is the other way in and the
+   * ordinary one -- the league is already set and the service already holds a
+   * reading of it, so opening the screen is the whole of the journey -- and it
+   * asked for the league without the week. That renders every rival's roster
+   * and none of the user's own team, which is named in the week's panel and
+   * nowhere else, so the screen looked like a league with the reader missing
+   * from it and the advice absent rather than pending.
+   *
+   * A FRESH PAGE RATHER THAN NAVIGATING BACK, because the app holds the last
+   * answer in state. Going back to setup and in again would show the week's
+   * panel whatever the masthead had asked for, so it could not fail.
+   */
+  const opened = await browser.newPage({ viewport });
+  opened.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  opened.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  await opened.addInitScript(([key, state]) => {
+    localStorage.setItem(key, JSON.stringify(state));
+  }, seeded);
+  await opened.goto(APP, { waitUntil: 'domcontentloaded' });
+  const reopen = opened.getByRole('button', { name: 'My league in season' });
+  await reopen.waitFor({ state: 'visible', timeout: 60000 });
+  await reopen.click();
+
+  const openedWeek = opened.locator('.panel', {
+    has: opened.getByRole('heading', { name: 'This week' }),
+  });
+  await openedWeek.locator('.panel-head').getByText('Gridiron Gulls')
+    .waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  await opened.screenshot({ path: join(OUT, 'season-opened.png'), fullPage: true });
+  console.log('  season-opened.png');
+  /*
+   * And once the desks answer, the roster has moved up rather than being shown
+   * twice: the same pair of criteria the Read path is held to above, checked
+   * again here because this way in reaches them by a different route.
+   */
+  await opened.locator('.season-desk').first().waitFor({ state: 'visible', timeout: ROOM_WAIT });
+  const openedMarks = await opened.locator('.season-roster-head .chip')
+    .filter({ hasText: 'yours' }).count();
+  if (openedMarks) {
+    throw new Error('opened from the masthead, the own roster is listed among the rivals, '
+      + openedMarks + ' marked');
+  }
+  await opened.close();
 
   return { page, errors };
 }

@@ -994,6 +994,27 @@ export default function App() {
     setSeasonHeld(await fetchSeasonLeagues('yahoo').then((r) => r.leagues).catch(() => []));
   }, []);
 
+  /**
+   * Everything the in-season screen shows: the league, this week's advice, and
+   * which leagues the service holds.
+   *
+   * ONE FUNCTION BECAUSE THERE ARE TWO WAYS IN, and they drifted. The masthead
+   * asked for the league alone, so opening the screen on a league already read
+   * rendered every rival's roster and none of the user's own team, which is
+   * named in the week's panel and nowhere else: the reader's own roster and the
+   * advice both looked absent rather than pending, and pressing Read was the
+   * only way to see them.
+   *
+   * The three go out together rather than in turn, so the league renders
+   * without waiting on two projection desks and the advice lands under it when
+   * it arrives.
+   */
+  const readSeason = useCallback((leagueId?: string) => {
+    void loadSeason(leagueId);
+    void loadLineup(leagueId);
+    void loadSeasonHeld();
+  }, [loadSeason, loadLineup, loadSeasonHeld]);
+
   // How far along the draft is goes stale by the minute once it opens, so it is
   // read when you ask for it and whenever the league changes under it.
   useEffect(() => {
@@ -1166,8 +1187,10 @@ export default function App() {
             title="Your Yahoo league as it stands: every roster, the slots and the scoring."
             onClick={() => {
               setScreen('season');
-              void loadSeasonHeld();
-              if (seasonLeagueId) void loadSeason();
+              // A league already chosen is read on the way in. Without one
+              // there is nothing to read, and the picker is what is needed.
+              if (seasonLeagueId) readSeason();
+              else void loadSeasonHeld();
             }}
           >
             My league in season
@@ -1529,13 +1552,7 @@ export default function App() {
           lineup={lineup?.leagueId === seasonLeagueId ? lineup.read : null}
           lineupLoading={lineupBusy}
           lineupError={lineupError}
-          onRead={(id) => {
-            // Both at once, so the league renders without waiting on two
-            // projection desks and the advice lands under it when it arrives.
-            void loadSeason(id);
-            void loadLineup(id);
-            void loadSeasonHeld();
-          }}
+          onRead={readSeason}
           onBack={() => setScreen('setup')}
         />
       )}

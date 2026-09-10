@@ -162,6 +162,15 @@ written down as unknowable and which Yahoo publishes outright.
 
 ### Fixed
 
+**Your own team is there when the in-season screen opens.** Reported from the
+app: opening the league from the masthead listed every rival's roster and not
+the reader's own, and the week's advice was missing rather than pending.
+Clicking the league in the picker, or pressing Read, brought both in - which is
+the tell, because those are the other way into the same screen. Your own roster
+is shown once, at the top, inside the week's panel, and that panel waits on a
+second request the masthead never made. Both ways in now ask for the same three
+things, so neither can render half a screen again.
+
 **A player the advice moves is moved, not benched and started.** The third
 round of one defect, reported from a real board each time, and the last two
 were fixes that did not go far enough. Where the best lineup keeps a player but
