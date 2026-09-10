@@ -118,6 +118,49 @@ const ROSTER_PAGE = [
 
 /** The same page with the column renamed, which is how Yahoo breaks this. */
 const ROSTER_PAGE_NO_COLUMN = ROSTER_PAGE.replace('Proj Pts', 'Something Else');
+
+/**
+ * ANOTHER MANAGER'S ROSTER PAGE, WHICH IS NOT THE SAME PAGE.
+ *
+ * Measured on 2026-09-10 against a real league, and the difference is one
+ * attribute: `<th colspan="2">Action</th>` where the user's own page carries a
+ * single `Edit`. So a body row here holds one more cell than its header row
+ * holds headings, and a reader counting headings lands one column to the left,
+ * on `Fan Pts`.
+ *
+ * WHICH IS WHY FAN PTS HERE IS A NUMBER AND NOT A DASH. The fixture above has
+ * an en dash there, faithfully, because nothing had kicked off when it was
+ * copied -- and that is exactly what let this through: off by one read as
+ * every player unprojected, which looks like a league nobody has numbers for
+ * rather than like a bug. Once a game has been played the same slip posts a
+ * player's actual score as his projection. A fixture that cannot tell the two
+ * columns apart cannot catch either.
+ */
+const rivalRow = (id, name, fan, proj) => [
+  '<tr>',
+  '<td>QB</td>',
+  '<td class="Ta-start player"><div class="ysf-player-name">',
+  '<a class="name F-link playernote" data-ys-playerid="' + id + '"',
+  ' href="https://sports.yahoo.com/nfl/players/' + id + '">' + name + '</a>',
+  '</div></td>',
+  '<td class="Alt Bdrstart"></td><td class="Ta-c"></td>',
+  '<td>10</td>',
+  '<td class="Ta-end Nowrap pts">' + fan + '</td>',
+  '<td class="Alt Ta-end Nowrap"><div>' + proj + '</div></td>',
+  '<td>94%</td>',
+  '</tr>',
+].join('');
+
+const RIVAL_PAGE = [
+  '<!DOCTYPE html><html><body><table><thead>',
+  '<tr><th></th><th></th><th></th><th>Fantasy</th><th>Trends</th></tr>',
+  '<tr><th>Pos</th><th>Offense</th><th colspan="2">Action</th><th>Bye</th>',
+  '<th>Fan Pts</th><th>Proj Pts</th><th>% Start</th></tr>',
+  '</thead><tbody>',
+  rivalRow('32723', 'Jalen Hurts', '12.82', '20.65'),
+  rivalRow('30977', 'Christian McCaffrey', '&ndash;', '20.33'),
+  '</tbody></table></body></html>',
+].join('');
 /*
  * The scoreboard, which the reader fetches for two things at once: who you play
  * and Yahoo's own projected total. Its own branch below, before `/teams`, since
@@ -487,6 +530,22 @@ test('a player Yahoo shows a dash for is absent, and never a zero', async () => 
 
   const ids = r.posted[0].projections[0].players.map((p) => p.id);
   assert.ok(!ids.includes('99999'), 'an unprojected player came back with a number');
+});
+
+test("a column a heading spans two of is still the column read", async () => {
+  /*
+   * The rival page, where `Action` spans two cells. Both players must come
+   * back with the number under `Proj Pts` -- and the first of them is the
+   * check that matters, because his `Fan Pts` is a number too: a reader one
+   * column out posts 12.82 here and looks entirely healthy doing it.
+   */
+  const r = reader({ every: 0, projPage: RIVAL_PAGE });
+  await r.settle();
+
+  assert.deepEqual(r.posted[0].projections[0].players, [
+    { id: '32723', pts: 20.65 },
+    { id: '30977', pts: 20.33 },
+  ]);
 });
 
 test('the column going missing reports nothing found, not nobody projected', async () => {

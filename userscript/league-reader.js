@@ -451,11 +451,35 @@
        * second header row, under a group row that spans it, which is why this
        * looks for the row that holds it rather than assuming the first.
        */
+      /*
+       * COUNTED IN COLUMNS AND NOT IN CELLS, which is a distinction Yahoo
+       * charges for. `<th colspan="2">Action</th>` sits between `Offense` and
+       * `Bye` on another manager's roster page, so a body row there holds one
+       * more cell than its header row holds headings, and the nth heading is
+       * not the nth cell. Counting headings put this one column to the left,
+       * onto `Fan Pts` -- which before kickoff is an en dash for everybody, so
+       * a whole league read as unprojected, and after kickoff is a real number,
+       * so the few players who had played were posted with their actual score
+       * standing in for a projection. Measured on 2026-09-10 against a real
+       * league: seventeen of seventeen on the user's own page, which has no
+       * such heading, and one or two per rival.
+       */
       let at = -1;
+      let columns = 0;
       for (const row of table.querySelectorAll('thead tr')) {
-        const heads = [...row.querySelectorAll('th')];
-        at = heads.findIndex((head) => PROJ_HEADER.test(head.textContent || ''));
-        if (at >= 0) break;
+        // The attribute rather than the `colSpan` property: this has to give
+        // the same answer under the DOM the browser builds and under the one
+        // `reader.test.mjs` parses, and only the attribute is common to both.
+        const span = (head) => Number(head.getAttribute('colspan')) || 1;
+        let across = 0;
+        for (const head of row.querySelectorAll('th')) {
+          if (at < 0 && PROJ_HEADER.test(head.textContent || '')) at = across;
+          across += span(head);
+        }
+        if (at >= 0) {
+          columns = across;
+          break;
+        }
       }
       if (at < 0) continue;
       sawColumn = true;
@@ -468,8 +492,12 @@
          */
         const held = row.querySelector('[data-ys-playerid]');
         const id = held && held.getAttribute('data-ys-playerid');
-        const cell = row.querySelectorAll('td')[at];
-        const read = ((cell && cell.textContent) || '').trim();
+        const cells = row.querySelectorAll('td');
+        // A row that is not as wide as its own header is a row this cannot
+        // line up, so nothing is read off it rather than something from
+        // whichever column the count happened to land on.
+        if (cells.length !== columns) continue;
+        const read = ((cells[at] && cells[at].textContent) || '').trim();
         const pts = Number(read);
         // A dash is what an unprojected player shows, and it is not a zero.
         if (id && read !== '' && Number.isFinite(pts)) out.push({ id: String(id), pts });
