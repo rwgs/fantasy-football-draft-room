@@ -1,6 +1,6 @@
 # Draft Room
 
-Free, and MIT licensed. Built by [@AFantasyKing](https://x.com/AFantasyKing).
+Free, and MIT licensed. Built on the initial work by [ItsTitle](https://github.com/ItsTitle).
 What changed and when is in [CHANGELOG.md](CHANGELOG.md).
 
 A fantasy football draft tool with two modes. **Mock draft** simulates a room
