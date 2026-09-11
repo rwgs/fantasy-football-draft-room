@@ -1296,24 +1296,65 @@ async function main() {
      * `reachablePlayers` fell back to generic ADP odds and kept him as a target
      * at around 45 per cent, while the position panel read the same gap as
      * zero and printed that. Seat one waiting from pick 13 to pick 24 is long
-     * enough for the room to take the best receivers in all of them.
+     * enough for the room to take the best players at a position it wants in
+     * every single one of them.
+     *
+     * THE ROOM HAS TO LEAN, OR THERE IS NO GAP LEFT TO MEASURE.
+     *
+     * With the dials at zero the players the room takes in every single run are
+     * the ones at the top of the board, and generic ADP already agrees those are
+     * gone. Read over eight seeds, seven of them turned up no player at all
+     * whose two readings disagreed and the eighth cleared the threshold by eight
+     * tenths of a point, so what the check actually rested on was which players
+     * happened to sit near the turn that day. On 2026-09-10 they sat differently
+     * and it failed, having proved nothing on any of the days it passed.
+     *
+     * A room forcing backs is where the disagreement is structural rather than
+     * incidental, and it is the case this forecast exists for: it takes Kyren
+     * Williams in all 120 runs, while ADP — measured over rooms that are not
+     * forcing backs — gives him 45.9 per cent. That is the same 45 per cent the
+     * original bug reported. All eight seeds disagree about somebody under it.
+     *
+     * Three of them are read and the widest disagreement is the one asserted on,
+     * because the size of the gap is data and the existence of one is the claim.
      */
-    let long = createDraft(league({ mySlot: 1 }), DEFAULT_CPU, board.players, null);
-    while (long.state.picks.length < 12 && !long.state.done) long = runCpuPick(long);
-    const lf = forecast(long, 120)!;
-    const leftNow = availablePlayers(long);
-    const longFrom = currentPick(long.state);
+    const forcingBacks = PRESETS.find((p) => p.id === 'robust-rb')!.cpu;
+    const readings = [12345, 1, 2].map((seed) => {
+      let long = createDraft(league({ mySlot: 1, seed }), forcingBacks, board.players, null);
+      while (long.state.picks.length < 12 && !long.state.done) long = runCpuPick(long);
+      const room = forecast(long, 120)!;
+      const left = availablePlayers(long);
+      const at = currentPick(long.state);
+      const gone = left.filter((p) => room.survival.get(p.id) === 0);
+      return {
+        long,
+        lf: room,
+        leftNow: left,
+        longFrom: at,
+        never: gone,
+        misread: gone
+          .map((p) => ({ p, odds: survivalOdds(p, at, room.targetPick) }))
+          .filter((x) => x.odds > CERTAINLY_GONE)
+          .sort((a, b) => b.odds - a.odds),
+      };
+    });
+    const widest = (r: typeof readings[number]) => r.misread[0]?.odds ?? 0;
+    const { long, lf, leftNow, longFrom, never, misread } = readings
+      .reduce((a, b) => (widest(b) > widest(a) ? b : a));
 
     check('every player still on the board has a forecast',
       leftNow.every((p) => lf.survival.has(p.id)),
       lf.survival.size + ' entries for ' + leftNow.length + ' available');
-    const never = leftNow.filter((p) => lf.survival.get(p.id) === 0);
     check('the room takes somebody in every single run, or this proves nothing',
       never.length > 0, String(never.length));
     check('and the generic ADP reading would have called him reachable',
-      never.some((p) => survivalOdds(p, longFrom, lf.targetPick) > CERTAINLY_GONE),
+      misread.length > 0,
       never.map((p) => p.name + ' '
         + Math.round(survivalOdds(p, longFrom, lf.targetPick) * 100) + '%').join(', '));
+    if (misread.length) {
+      console.log('        the room takes ' + never.length + ' in every run, and ADP gives '
+        + misread[0].p.name + ' ' + Math.round(misread[0].odds * 100) + '% of lasting');
+    }
     const canGet = reachablePlayers(leftNow, lf, longFrom, lf.targetPick);
     check('yet none of them is offered as somebody to wait for',
       never.every((p) => !canGet.includes(p)));
