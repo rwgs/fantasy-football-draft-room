@@ -11,6 +11,9 @@ ranking file, and dials for how hard the computer teams lean on each position.
 mirroring every pick onto the board so your rankings and availability always
 face the actual room.
 
+When the draft is over, a Yahoo league can be read in season as well, and the
+app will put this week's best legal lineup beside the one you have set.
+
 ---
 
 ## Run it
@@ -112,6 +115,14 @@ appended to. Say which manager you are once and your slot follows automatically
 when Sleeper draws the order. A real pick of a player this board does not rank
 still owns its slot, so the board never drifts out of line with the room.
 
+**Your league after the draft, and this week's lineup.** A Yahoo league can be
+read in season — every roster, the slots it starts, the exact scoring — and the
+app puts the best legal lineup your roster can field beside the one you have
+set. It names the swaps: which seat, who comes out, who goes in, what the
+difference scores. Three desks answer separately rather than as one blended
+number, because a mean hides the disagreement that is the whole point. See
+[Reading a league in season](#reading-a-league-in-season).
+
 **An anonymity toggle.** One button in the masthead replaces league names,
 league IDs, team names and every manager's Sleeper name on screen, for
 screenshots and streams. It is a display filter: nothing stored changes, and it turns off
@@ -175,10 +186,13 @@ take a click meant for the draft, and it never touches Yahoo's own page.
 
 ### Reading a league in season
 
-Groundwork, and honest about it: the service can be handed your Yahoo league
-outside a draft — the settings, the scoring, every team, and your own roster —
-but nothing in the app displays it yet. What works today is the reading and the
-route that keeps it.
+Your Yahoo league can be read outside a draft — the settings, the scoring, every
+team, and your own roster — and shown on a screen of its own. Press **My league
+in season** on the settings screen. It is a fourth screen rather than a third
+mode: the mode badge says how a *draft* runs, and this is not a draft.
+
+The reading itself has to come from your own browser, because Yahoo answers a
+session cookie and this service never holds one.
 
 Open <http://127.0.0.1:5178/league-reader>, which offers the same reader two
 ways. Drag the bookmarklet to your bookmarks bar and it reads once, when you
@@ -204,11 +218,48 @@ service can never do it alone, and clicking it on any other tab reaches nothing.
 No cookie, token or crumb is sent anywhere; every request it makes is a GET, and
 it changes nothing in your league.
 
-Nothing refreshes on its own — click it again when you want a fresh reading.
+The bookmarklet refreshes nothing on its own — click it again when you want a
+fresh reading. The userscript does that for you, on its own beat, which is what
+makes a lineup you change in Yahoo reach the app without being fetched by hand.
+Either way the app holds nothing about a league nobody has opened: the session
+that makes any of this work lives in your browser and never here.
+
 What the reading covers, and what it does not, is in
 [docs/yahoo-in-season-data.md](docs/yahoo-in-season-data.md). What the four
 upstream feeds publish for weekly advice, and which of them can support it, is
 in [docs/in-season-data-sources.md](docs/in-season-data-sources.md).
+
+### This week's lineup
+
+Under the league sits the one part of this app that recommends anything: the
+best legal lineup your roster can field, beside the one you have set, with the
+swaps between them named — which seat, who comes out, who goes in, and what the
+difference scores. Every roster in the league is scored the same way, with the
+team you are playing this week first.
+
+**Three desks answer separately.** Sleeper's projections, ESPN's, and Yahoo's
+own, each with its own column and its own best lineup. They are not averaged: a
+mean once showed a player at 13.0 where the desks said 15.29 and 10.75, which is
+a number none of them holds and a disagreement buried rather than reported. What
+they agree on is most of the roster and needs no argument; the player they split
+on is the decision, so that is what the reader's panel shows.
+
+**The best lineup is not the best players.** Filling seats with the best
+available player loses points quietly. A league starting one flex and one
+receiver, holding a 20-point receiver, an 18-point back and a 10-point receiver,
+puts the 20 in the flex because the flex fits him and comes first — then has
+nowhere to put the back, and scores 30 where 38 was there. Nothing about that
+lineup looks wrong. So the seating is solved rather than sorted, and the answer
+is checked against every legal lineup for small rosters rather than asserted.
+Where two best lineups tie, the one reached in the fewest moves wins.
+
+**What it cannot tell you sits next to what it can.** A projection is scored
+under your league's own rules, and where a rule cannot be scored it refuses to
+guess rather than quietly dropping it. A starter no desk projects is named,
+because he is the reason the total reads as it does. And **Yahoo publishes no
+kickoff time at any scope**, so nothing here knows whether a player has already
+locked — check each move before you set it. Nothing in this app sets a lineup;
+that stays your own action in Yahoo.
 
 ### If no picks appear
 
@@ -290,6 +341,10 @@ with the board open beside it before you rely on it in a draft that counts.
 
 ## Where the numbers come from
 
+Every one of these is free and none of them asks for a key.
+
+**For the draft board:**
+
 | | Source | What it gives | Key |
 |---|---|---|---|
 | ADP | [Sleeper](https://sleeper.com) | About 530 ranked players, per scoring format | none |
@@ -297,6 +352,19 @@ with the board open beside it before you rely on it in a draft that counts.
 | Draft rank | [ESPN](https://fantasy.espn.com) | An editorial rank, set by people rather than measured. Abstains on kickers and defences | none |
 | ADP | Your own Yahoo draft room | What the people you are actually drafting against do. Needs the bridge, and only during a draft | none |
 | Projected points | Rotowire, through Sleeper | Season points in standard, half PPR and PPR | none |
+
+**For the week, in season:**
+
+| | Source | What it gives | Key |
+|---|---|---|---|
+| Weekly projection | [Sleeper](https://sleeper.com) | Per-player statistics, scored under your league's own rules | none |
+| Weekly projection | [ESPN](https://fantasy.espn.com) | The same, from a second desk that can disagree | none |
+| Weekly projection | Your own Yahoo roster pages | Yahoo's own number, read by the league reader. Published on the page and nowhere in the API | none |
+| Player pool | Yahoo | Injury status, bye weeks and ownership, with a weekly delta. Needs no session — this half of Yahoo's API is public | none |
+
+Your league itself is the exception to that list: it needs your Yahoo session,
+which lives in your browser and never here, so it arrives only when the reader
+sends it.
 
 **You choose which of them price the board, and how.** Tick any combination in
 the settings, or over a live draft without restarting it, and pick whether they
@@ -523,18 +591,30 @@ draft-room/
 │       ├── names.js         when two records name the same player
 │       ├── rankings.js      reads a ranking file from anywhere
 │       ├── cache.js         six hour disk cache, serves stale on failure
-│       ├── sources/         the ADP and projection feeds
-│       │   ├── ffc.js       Fantasy Football Calculator: ADP per league size
-│       │   ├── sleeper.js   projections, and a deeper pool
-│       │   └── espnRanks.js the editorial draft rank
+│       ├── lineup.js        the best legal lineup, and the swaps that reach it
+│       ├── bridge.js        what the service stamps into what it hands out
+│       ├── yahooJson.js     the dialect both halves of Yahoo's API answer in
+│       ├── sources/         the feeds, for the draft and for the week
+│       │   ├── ffc.js                Fantasy Football Calculator: ADP per size
+│       │   ├── sleeper.js            season projections, and a deeper pool
+│       │   ├── espnRanks.js          the editorial draft rank
+│       │   ├── components.js         a stat line, before a league scores it
+│       │   ├── sleeperProjections.js this week, from Sleeper
+│       │   ├── espnProjections.js    this week, from a second desk
+│       │   └── yahooPlayers.js       the pool: injuries, byes, ownership
 │       └── platforms/       one directory per league site, five methods each
 │           ├── index.js     the registry. An explicit list, not a scan
 │           ├── sleeper/     index.js, league.js, draft.js — pulled from a feed
-│           └── yahoo/       index.js, frames.js, room.js, league.js — pushed in
+│           └── yahoo/       pushed in from your own browser, never pulled
+│               ├── index.js, frames.js, room.js   the draft room
+│               ├── league.js, inSeason.js         the league, outside a draft
+│               └── scoring.js       its rules, as categories and modifiers
 ├── userscript/              runs on Yahoo's page, not served from here
 │   ├── yahoo-draft-bridge.user.js   carries the room's frames to the service
 │   ├── draft-panel.js               the board's reading, over the draft room
-│   └── league-reader.js             reads a Yahoo league in season, on a beat
+│   ├── league-reader.js             reads a Yahoo league in season, on a beat
+│   ├── bridge.test.mjs              the bridge against a fake room
+│   └── reader.test.mjs              the reader against a fake league
 └── client/                  React and TypeScript, built with Vite
     └── src/
         ├── config.ts        your leagues and your name, read from the env
@@ -549,8 +629,10 @@ draft-room/
         │   ├── forecast.ts  this room played forward, and which way it leans
         │   ├── value.ts     what waiting one turn costs, position by position
         │   ├── grade.ts     the two numbers at the end
+        │   ├── live.ts      a real draft, mirrored onto the board
         │   └── selftest.ts  the checks, run against live data
-        └── components/      setup, draft, board, pool, roster, results, notes
+        └── components/      setup, draft, board, pool, roster, results, notes,
+                             and the league in season
 ```
 
 The draft runs in the browser. A pick has to land the instant you click it, and
@@ -583,6 +665,8 @@ can replay it offline.
 | `npm run typecheck` | TypeScript, app and tests |
 | `npm run engine:test` | run the draft engine against a live board |
 | `npm run server:test` | the data service's own internals |
+| `npm run bridge:test` | the Yahoo bridge against a fake draft room. Needs nothing running |
+| `npm run reader:test` | the league reader against a fake league. Needs nothing running |
 | `npm run shots` | drive the app in a browser and photograph it. Needs `npm run dev` |
 
 ---
@@ -664,3 +748,21 @@ cp client/fixtures.example.json client/fixtures.local.json
 
 Without that file those three blocks report themselves skipped and every other
 check still runs.
+
+`npm run server:test` covers what no endpoint can show — two requests racing for
+one cold cache key, a league's scoring read out of its categories and modifiers,
+and the best lineup checked against every legal lineup for small rosters rather
+than asserted. It talks to nothing and needs no service running.
+
+`npm run bridge:test` and `npm run reader:test` run the two userscripts for
+real, against a fake `WebSocket`, a fake `fetch` and a fake Yahoo page, so the
+frame the assertions read is the frame the bridge puts on the wire. They exist
+because the userscripts were the one part of this project no check touched and a
+live draft was the only thing that had ever exercised them. Both are slow for
+their size, because each case waits out the script's own beat.
+
+What none of them can see is the browser: the userscript manager, and whether
+the copy installed there is the current one. The app answers the second — the
+service stamps a build into the copy it serves, the running bridge reports it
+back, and the masthead says when it is behind. Check that before a draft rather
+than reading captures after one.

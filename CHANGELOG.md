@@ -30,6 +30,59 @@ player has already locked is not known, and each move wants checking before it
 is set. Nothing here sets a lineup; that stays your action in the page
 underneath.
 
+**This week's lineup, and what changing it is worth.** The in-season screen
+puts the best legal lineup your roster can field beside the one you have
+actually set, and names the swaps between them: which seat, who comes out, who
+goes in, and what the difference scores. Three desks answer separately rather
+than as one blended number — Sleeper's projections, ESPN's, and Yahoo's own —
+because a mean showed a player at 13.0 where the desks said 15.29 and 10.75,
+which is a number no desk holds and a disagreement hidden rather than reported.
+Every roster in the league is scored the same way, with the team you are playing
+this week first.
+
+**Best-player-first is not the best lineup, and the difference is invisible.**
+Filling seats with the best available player loses points silently: a league
+starting one flex and one receiver, holding a 20-point receiver, an 18-point
+back and a 10-point receiver, puts the 20 in the flex because the flex comes
+first and fits, and strands the back at 30 points where 38 was available.
+Nothing about the 30 looks wrong. The lineup is instead solved as a matroid,
+where the test for adding a player is whether the whole set can still be seated
+rather than whether a seat is free — the shuffle that moves the receiver out of
+the flex. `lineup.test.js` enumerates every legal lineup for small rosters and
+checks the answer against the true maximum, so the optimum is proved rather
+than asserted, and runs the naive greedy on the trap above to watch it lose.
+Where several best lineups tie, the one reached in the fewest moves wins, and a
+player who only changes seat is reported as moved rather than as benched and
+started.
+
+**Every limit sits next to the thing it limits**, because this is the one screen
+in the project that recommends anything. A projection is scored under your
+league's own rules, joining Yahoo's categories to its modifiers rather than
+reading a label, and where a rule cannot be scored it refuses to guess. A
+starter no desk projects is named, since that is the reason the total is what it
+is. A slot nothing on the roster can legally fill says so. And Yahoo publishes
+no kickoff time at any scope, so whether a player has already locked is simply
+not known — which matters most in the reader's own panel, since that is the page
+where the moves get made. Nothing here sets a lineup.
+
+**Yahoo is a third desk, from its own roster pages.** Yahoo publishes a
+per-player projection on a team's roster page and nowhere in its API, so the
+reader scrapes that column in the browser that already has the page and posts
+the numbers; the extraction is there rather than in the service because the page
+is 1.14 MB and there is one per team. HTML has no contract, so it fails loud —
+a missing column reports nothing found, never nobody projected — and the league
+scoreboard's own team total is kept beside it as the one thing that can catch
+the scrape drifting. Where only that published total arrived, Yahoo still heads
+a column, carrying a team total under a run of blanks rather than disappearing.
+
+**The userscripts are tested against a fake room and a fake league.**
+`npm run bridge:test` loads the bridge for real and runs it against a fake
+`WebSocket`, a fake `fetch` and a fake room URL, so the frame the assertions
+read is the frame it puts on the wire; `npm run reader:test` does the same for
+the league reader. Both were the part of this project no check touched, where a
+live draft had been the only thing that ever exercised them. Neither needs a
+service running.
+
 **The league reader can keep itself current.** It installs as a userscript now
 as well as a bookmarklet, from the same file and the same page: pick the
 bookmarklet for one reading when you click it, or the userscript to have your
@@ -53,11 +106,20 @@ running. The reader does not yet report its build back the way the bridge does;
 until it can, a stale one polls perfectly while posting a shape the service has
 moved on from. See `DECISIONS.md`, 2026-09-09.
 
-**A Yahoo league can be read outside a draft, though nothing shows it yet.**
-Groundwork for in-season advice, and worth stating plainly: the service can now
-be handed your league — the settings, the exact scoring, every team, and your
-own roster — but no screen displays any of it. What exists is the reading and
-the route that keeps it.
+**A Yahoo league can be read outside a draft, and shown.** The service can be
+handed your league — the settings, the exact scoring, every team, and your own
+roster — and **My league in season** on the settings screen puts it on a screen
+of its own. A fourth screen rather than a third mode, because the mode badge
+says how a *draft* runs and this is not a draft, so the draft flow is untouched
+and this sits beside it.
+
+What that screen shows is what was read and how old it is, before anything
+built on it is worth reading: every roster against the slots the league
+actually starts, each player's bye, injury status and ownership, and the age of
+each feed behind them. Every absence says which absence it is — a player the
+pool never matched reads "not in the pool" rather than as a blank column, a
+feed that failed says so rather than showing an age, and a league nobody has
+read is offered the reader instead of rendering as an empty league.
 
 Yahoo's league pages turned out to stop short of what was needed: settings,
 team and player pages fetch no JSON at all and arrive as a megabyte of
@@ -144,17 +206,16 @@ run straight from the repository still works unmodified.
 reading is, so a stale one is visible during the draft rather than hidden behind
 a fresh one.
 
-**Yahoo's player data now arrives without a browser, though nothing shows it
-yet.** More in-season groundwork, and it makes the privacy boundary sharper
-rather than looser. Yahoo's API turns out to have two halves that do not
-authenticate alike: anything about *your league* needs your session cookie, and
-anything about *players in general* needs nothing at all. So the pool — all 2888
-of them, with injury status, bye weeks and an ownership percentage carrying a
-weekly delta — is now an ordinary feed the service fetches and caches for
-itself, alongside Fantasy Football Calculator, Sleeper and ESPN. Your league
-still never leaves your browser except as parsed data you asked it to send. The
-rule was "no credentials in the service"; it now reads "the service fetches what
-needs no credentials, and touches nothing that does".
+**Yahoo's player data now arrives without a browser.** It makes the privacy
+boundary sharper rather than looser. Yahoo's API turns out to have two halves
+that do not authenticate alike: anything about *your league* needs your session
+cookie, and anything about *players in general* needs nothing at all. So the
+pool — all 2888 of them, with injury status, bye weeks and an ownership
+percentage carrying a weekly delta — is now an ordinary feed the service
+fetches and caches for itself, alongside Fantasy Football Calculator, Sleeper
+and ESPN. Your league still never leaves your browser except as parsed data you
+asked it to send. The rule was "no credentials in the service"; it now reads
+"the service fetches what needs no credentials, and touches nothing that does".
 
 It also picks up the vocabularies a league's own settings have to be read
 against, which includes the full list of flex slots — something this project had
@@ -840,8 +901,7 @@ drafting rather than a simulation, about half the seats live throughout, so a
 live room's timing, its seats dropping to autopick, and catching up after a
 reload have all been watched working. What has not been seen is a league someone
 configured: keepers, traded picks, your own roster and scoring rules, any format
-but a 14 team snake. The userscript itself still has no automated test. Run a
-mock beside the board before trusting it.
+but a 14 team snake. Run a mock beside the board before trusting it.
 
 ---
 
